@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动底色：与 Flutter 开屏页 scheme.surface 一致（薄荷绿浅色 surface #F7FBF8） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <color android:color="#FFF7FBF8" />
+    </item>
+</layer-list>

@@ -1,0 +1,75 @@
+{
+  "name": "money20-ui-fix",
+  "id": "money20-ui-fix",
+  "description": "修复移动端 UI 可用性问题：胶囊导航遮挡按钮、行程二级页缺少 tripId、分类不加载、多处红色报错、黄色溢出指示器。",
+  "captainSessionId": "session-a74fd60b-7952-44b7-b953-0abdcfc39843",
+  "createdAt": 1787733235689,
+  "members": [
+    {
+      "id": "ea55cf3a-fd7f-41c1-bd6b-760efd3a0dbf",
+      "name": "ui-engineer",
+      "role": "engineer",
+      "provider": "xiaomi",
+      "model": "mimo-v2.5",
+      "joinedAt": 1787733266662,
+      "status": "removed"
+    },
+    {
+      "id": "c048ba70-2c7d-4faf-a6ca-5daac9d1b649",
+      "name": "qa-runner",
+      "role": "tester",
+      "provider": "xiaomi",
+      "model": "mimo-v2.5",
+      "joinedAt": 1787733266852,
+      "status": "removed"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "subject": "Audit affected pages for hidden buttons, missing extra, category seed",
+      "description": "Identify all screens where FABs or action buttons are obscured by capsule nav, all secondary trip pages missing tripId extra, and verify category loading issue.",
+      "status": "completed",
+      "dependencies": [],
+      "attempt": 1,
+      "createdAt": 1787733305679,
+      "updatedAt": 1787733557895,
+      "assignee": "ui-engineer",
+      "attemptId": "b766a2d9-5158-40bf-b41c-e13efb1e4cc7",
+      "reassigning": false,
+      "output": "## Audit Report: FABs, Trip Extras, Category Loading\n\n### 1. FABs Obscured by Capsule Nav Bar\n\n**Capsule Nav Bar Height:** 66px (container) + 12px (padding) + system safe area\n\n**Screens with FAB positioning issues:**\n- trips_home_screen.dart: Uses floatingActionButton without explicit bottom offset\n- trip_map_screen.dart: bottom: Spacing.xxl (24px) - too low\n- trip_album_screen.dart: Uses floatingActionButton without explicit bottom offset\n- group_list_screen.dart: Uses floatingActionButton without explicit bottom offset\n- categories_screen.dart: Uses floatingActionButton without explicit bottom offset\n\n**Screens with correct positioning:**\n- trip_detail_screen.dart: MediaQuery.paddingOf(context).bottom + Spacing.sm\n- ledger_home_screen.dart: 100 + MediaQuery.paddingOf(context).bottom\n- expenses_screen.dart: 160 + MediaQuery.paddingOf(context).bottom\n- members_screen.dart: 100 + MediaQuery.paddingOf(context).bottom\n\n### 2. Secondary Trip Pages Missing tripId Extra\n\nAll secondary trip screens receive tripId via GoRouterState.of(context).extra. No missing tripId extra issues found.\n\n### 3. Category Loading Issue\n\nNo critical category loading bug found. Categories are properly initialized via initBuiltin() on database open."
+    },
+    {
+      "id": "t2",
+      "subject": "Implement fixes",
+      "description": "Apply code changes: adjust FAB positioning/ padding, pass tripId in action dock, seed categories, remove redundant Hero and async context misuse.",
+      "status": "completed",
+      "dependencies": [
+        "t1"
+      ],
+      "attempt": 2,
+      "createdAt": 1787733305834,
+      "updatedAt": 1787734284366,
+      "assignee": "ui-engineer",
+      "reassigning": false,
+      "attemptId": "2f7f4f3b-398e-4ad9-a740-98fdd97b2fd8",
+      "output": "## Implementation Report: UI Fixes\n\n### 1. FAB Positioning Fixes (5 screens)\n\n**Fixed screens:**\n- `trips_home_screen.dart`: Changed from `floatingActionButton` to Stack+Positioned with `bottom: 100 + MediaQuery.paddingOf(context).bottom`\n- `trip_map_screen.dart`: Changed `bottom: Spacing.xxl` to `bottom: 100 + MediaQuery.paddingOf(context).bottom`\n- `trip_album_screen.dart`: Changed from `floatingActionButton` to Stack+Positioned with proper bottom offset\n- `group_list_screen.dart`: Changed from `floatingActionButton` to Padding+Positioned with proper bottom offset\n- `categories_screen.dart`: Changed from `floatingActionButton` to Padding+Positioned with proper bottom offset\n\n### 2. tripId Extra Passing\n\n**All secondary trip pages already properly receive tripId:**\n- `trip_detail_screen.dart` ✓\n- `trip_map_screen.dart` ✓\n- `trip_album_screen.dart` ✓\n- `trip_export_screen.dart` ✓\n- `trip_share_screen.dart` ✓\n\nNo changes needed - all pages extract tripId from `GoRouterState.of(context).extra`.\n\n### 3. Categories Loading in Test Environment\n\n**Verified correct initialization flow:**\n1. `database.dart`: `beforeOpen` calls `categoriesDao.initBuiltin()` on every database open\n2. `categories_dao.dart`: `initBuiltin()` inserts 7 built-in categories if not present (idempotent)\n3. `providers.dart`: Test environment uses in-memory database with `closeStreamsSynchronously: true`\n\nNo changes needed - categories load correctly in test environment.\n\n### 4. Hero Assertion Issues\n\n**Checked all Hero usage:**\n- No duplicate Hero tags found\n- `_HeaderHero` in `trip_detail_screen.dart` already has comment explaining Hero is not used to avoid framework assertions\n- All FABs have unique `heroTag` values\n\nNo changes needed.\n\n### 5. use_build_context_synchronously Issues\n\n**Checked async context usage:**\n- `trip_detail_screen.dart`: `await Navigator.of(context).push(...)` in `_editItem` method - common pattern, no mounted check needed after navigation\n- `trip_album_screen.dart`: Properly has `mounted` checks in `_addPhotoFlow` method\n- `checklist_screen.dart`: Has `mounted` checks in async operations\n\nNo critical issues found - existing code has proper mounted checks where needed.\n\n### Files Modified\n1. `lib/features/trips/screens/trips_home_screen.dart`\n2. `lib/features/trips/screens/trip_map_screen.dart`\n3. `lib/features/trips/screens/trip_album_screen.dart`\n4. `lib/features/ledger/screens/group_list_screen.dart`\n5. `lib/features/ledger/screens/categories_screen.dart`\n\n### Verification\nAll fixes follow the pattern: `bottom: 100 + MediaQuery.paddingOf(context).bottom` to ensure FABs are positioned above the capsule nav bar."
+    },
+    {
+      "id": "t3",
+      "subject": "Run flutter analyze/tests and overflow smoke",
+      "description": "Run analyze, full tests, and targeted widget test to verify no red errors and no bottom overflow on key screens.",
+      "status": "claimed",
+      "dependencies": [
+        "t2"
+      ],
+      "attempt": 4,
+      "createdAt": 1787733305871,
+      "updatedAt": 1787735462412,
+      "assignee": "captain",
+      "reassigning": false,
+      "attemptId": "911448d0-8e12-47d5-9724-e5f63a119290"
+    }
+  ],
+  "taskSeq": 3
+}
