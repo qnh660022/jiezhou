@@ -103,7 +103,7 @@ class BillDetailSheet extends ConsumerWidget {
               child: OutlinedButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  context.go('/expenses/edit?id=' + expense.id);
+                  context.push('/expenses/edit?id=' + expense.id);
                 },
                 child: const Text('编辑'),
               ),

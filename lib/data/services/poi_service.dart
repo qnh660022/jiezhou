@@ -22,6 +22,9 @@ enum PoiSource {
 
   /// 高德地图 place/text 官方检索（需配置 key，中文 POI 最全，返回 GCJ02 坐标经内部转 WGS84）
   amap,
+
+  /// 腾讯地图地点搜索（需配置 key，返回 GCJ02 坐标经内部转 WGS84）
+  qq,
 }
 
 /// 单条地点检索结果（纯数据类，UI 直接消费）

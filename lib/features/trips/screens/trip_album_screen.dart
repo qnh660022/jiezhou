@@ -240,7 +240,10 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
       ),
           Positioned(
             right: Spacing.xl,
-            bottom: 88 + MediaQuery.paddingOf(context).bottom,
+            bottom: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.actionButtonOffset,
+            ),
             child: FloatingActionButton.small(
               heroTag: 'fab-album-add',
               onPressed: _addPhotoFlow,

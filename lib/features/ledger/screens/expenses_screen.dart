@@ -137,16 +137,22 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         LedgerLargeHeader(title: '消费', actions: [
+          if (context.canPop())
+            HeaderIconButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              tooltip: '返回',
+              onTap: () => context.pop(),
+            ),
           HeaderIconButton(
             icon: Icons.donut_small_rounded,
             tooltip: '统计图表',
-            onTap: () => context.go('/expenses/stats'),
+            onTap: () => context.push('/expenses/stats'),
           ),
           HeaderIconButton(
             icon: Icons.balance_rounded,
             tooltip: 'AA 结算',
             badgeCount: unsettledAsync.value ?? 0,
-            onTap: () => context.go('/expenses/settle'),
+            onTap: () => context.push('/expenses/settle'),
           ),
           HeaderIconButton(
             icon: Icons.ios_share_rounded,
@@ -207,7 +213,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     Positioned(
                       left: Spacing.xl,
                       right: Spacing.xl,
-                      bottom: 156 + MediaQuery.paddingOf(context).bottom,
+                      // 合计栏下移贴近底部（避开悬浮胶囊栏即可），减少对滚动账单的遮挡。
+                      bottom: AppBottomLayout.withSafeArea(
+                        context,
+                        AppBottomLayout.actionButtonOffset,
+                      ),
                       child: _TotalBar(
                         totalCents: totalCents,
                         count: filtered.length,
@@ -215,15 +225,19 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       ),
                     ),
                     Positioned(
-                      right: Spacing.xl + Spacing.sm,
-                      bottom: 88 + MediaQuery.paddingOf(context).bottom,
+                      right: Spacing.xl,
+                      // 记一笔按钮浮在合计栏正上方，二者不重叠。
+                      bottom: AppBottomLayout.withSafeArea(
+                        context,
+                        AppBottomLayout.totalBarOffset,
+                      ),
                       child: FloatingActionButton.extended(
                         heroTag: 'fab-expense-add',
                         backgroundColor: scheme.primary,
                         foregroundColor: scheme.onPrimary,
                         onPressed: () {
                           HapticFeedback.lightImpact();
-                          context.go('/expenses/edit');
+                          context.push('/expenses/edit');
                         },
                         icon: const Icon(Icons.add_card_rounded),
                         label: const Text('记一笔'),
@@ -298,7 +312,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         title: anyAtAll ? '没找到匹配的账单' : '一笔都还没记',
         message: anyAtAll ? '换个筛选条件试试' : '点「记一笔」，花销从此有迹可循',
         actionLabel: anyAtAll ? null : '记一笔',
-        onAction: anyAtAll ? null : () => context.go('/expenses/edit'),
+        onAction: anyAtAll ? null : () => context.push('/expenses/edit'),
       );
     }
 
@@ -328,7 +342,14 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             ),
           ),
         ],
-        const SliverToBoxAdapter(child: SizedBox(height: 210)),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.contentTail,
+            ),
+          ),
+        ),
       ],
     );
   }

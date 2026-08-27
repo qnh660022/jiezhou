@@ -42,7 +42,9 @@ Future<T?> showDraggableSheet<T>({
         minChildSize: minChildSize,
         maxChildSize: maxChildSize,
         snap: true,
-        snapSizes: [minChildSize, initialChildSize],
+        // 允许用户从初始高度继续上划到最大高度，长操作菜单不会被
+        // initialChildSize 卡住；内容列表仍需使用 builder 提供的 controller。
+        snapSizes: [minChildSize, initialChildSize, maxChildSize],
         builder: (context, scrollController) {
           return SheetContainer(
             scrollController: scrollController,

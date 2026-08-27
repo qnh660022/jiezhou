@@ -20,6 +20,10 @@ class PrefsRepository {
   Future<Map<String,double>> getCurrencyRates() async { final s=(await _sp).getString("currency_rates"); if (s==null) return {}; final m=jsonDecode(s) as Map; return m.map((k,v)=>MapEntry(k as String,(v as num).toDouble())); }
   Future<void> setCurrencyRates(Map<String,double> r) async => (await _sp).setString("currency_rates", jsonEncode(r));
 
+  /// AI 助手配置（OpenAI 兼容接口）：{baseUrl, apiKey, model}，未配置时 baseUrl 为空串。
+  Future<Map<String,dynamic>> getAiConfig() async { final s=(await _sp).getString("ai_config"); if (s==null) return {"baseUrl":"","apiKey":"","model":""}; return jsonDecode(s) as Map<String,dynamic>; }
+  Future<void> setAiConfig(Map<String,dynamic> c) async => (await _sp).setString("ai_config", jsonEncode(c));
+
   Future<Map<String,dynamic>> getMapConfig() async { final s=(await _sp).getString("map_config"); if (s==null) return {"provider":"none","key":""}; return jsonDecode(s) as Map<String,dynamic>; }
 
   /// 预算预警总开关：关闭后红点与预警中心都不再提示（默认开启）。

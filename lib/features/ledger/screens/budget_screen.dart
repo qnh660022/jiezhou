@@ -21,7 +21,19 @@ class BudgetScreen extends ConsumerStatefulWidget {
 class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   final _amountController = TextEditingController();
   bool _enabled = false;
-  bool _synced = false;
+  String? _syncedGroupId;
+
+  @override
+  void initState() {
+    super.initState();
+    // 首帧从当前团加载预算：build 之前直接回填，避免在 build 中 setState。
+    _applyGroup(ref.read(activeGroupProvider).value);
+    // 团状态可能异步才就绪，或在别处被切换：变化时再同步表单。
+    ref.listen<AsyncValue<LedgerGroupView?>>(activeGroupProvider, (prev, next) {
+      final g = next.value;
+      if (g != null) setState(() => _applyGroup(g));
+    });
+  }
 
   @override
   void dispose() {
@@ -29,17 +41,14 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     super.dispose();
   }
 
-  void _syncFromGroup() {
-    if (_synced) return;
-    final g = ref.read(activeGroupProvider).value;
-    if (g == null) return;
-    _synced = true;
-    setState(() {
-      _enabled = g.budgetEnabled;
-      final c = g.budgetCents ?? 0;
-      _amountController.text =
-          c <= 0 ? '' : (c % 100 == 0 ? (c ~/ 100).toString() : (c ~/ 100).toString() + '.' + (c % 100).toString().padLeft(2, '0'));
-    });
+  /// 把已保存的团预算回填到表单；仅在團 id 变化时执行一次。
+  void _applyGroup(LedgerGroupView? g) {
+    if (g == null || _syncedGroupId == g.id) return;
+    _syncedGroupId = g.id;
+    _enabled = g.budgetEnabled;
+    final c = g.budgetCents ?? 0;
+    _amountController.text =
+        c <= 0 ? '' : (c % 100 == 0 ? (c ~/ 100).toString() : (c ~/ 100).toString() + '.' + (c % 100).toString().padLeft(2, '0'));
   }
 
   Future<void> _save() async {
@@ -62,7 +71,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
 
   @override
   Widget build(BuildContext context) {
-    _syncFromGroup();
     final scheme = Theme.of(context).colorScheme;
     final statusAsync = ref.watch(budgetStatusProvider);
     final membersCount = (ref.watch(membersProvider).value ?? const <LedgerMemberView>[]).length;
@@ -119,6 +127,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                               children: [
                                 TextField(
                                   controller: _amountController,
+                                  onChanged: (_) => setState(() {}),
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   style: AppTextStyles.money(context, fontSize: AppFontSizes.headline),
                                   inputFormatters: [

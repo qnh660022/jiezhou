@@ -89,12 +89,15 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
               onAction: _createTrip,
             );
           }
-          return _buildGroups(trips);
+          return _buildGroups(context, trips);
         },
       ),
           Positioned(
             right: Spacing.xl,
-            bottom: 76 + MediaQuery.paddingOf(context).bottom,
+            bottom: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.actionButtonOffset,
+            ),
             child: FloatingActionButton.extended(
               heroTag: 'fab-create-trip',
               backgroundColor: scheme.primary,
@@ -110,7 +113,7 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
     );
   }
 
-  Widget _buildGroups(List<Trip> trips) {
+  Widget _buildGroups(BuildContext context, List<Trip> trips) {
     final today = todayEpochDay();
     final ongoing = <Trip>[];
     final upcoming = <Trip>[];
@@ -183,9 +186,15 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
       controller: _scroll,
       slivers: [
         SliverPadding(
-          // 底部留白统一 120（胶囊底栏 + FAB 补偿），对齐 members/group_list
-          padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.xs, Spacing.xl,
-              Spacing.huge * 2 + Spacing.xxl),
+          padding: EdgeInsets.fromLTRB(
+            Spacing.xl,
+            Spacing.xs,
+            Spacing.xl,
+            AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.contentTail,
+            ),
+          ),
           sliver: SliverList(delegate: SliverChildListDelegate(children)),
         ),
       ],
@@ -232,7 +241,11 @@ class _TripCard extends ConsumerWidget {
       context: context,
       initialChildSize: 0.5,
       minChildSize: 0.36,
-      builder: (sheetContext, _) => _TripOpsSheet(trip: trip, pageContext: context),
+      builder: (sheetContext, scrollController) => _TripOpsSheet(
+        trip: trip,
+        pageContext: context,
+        scrollController: scrollController,
+      ),
     );
   }
 
@@ -463,8 +476,11 @@ class _ArchivedRow extends ConsumerWidget {
         context: context,
         initialChildSize: 0.5,
         minChildSize: 0.36,
-        builder: (sheetContext, _) =>
-            _TripOpsSheet(trip: trip, pageContext: context),
+        builder: (sheetContext, scrollController) => _TripOpsSheet(
+          trip: trip,
+          pageContext: context,
+          scrollController: scrollController,
+        ),
       ),
       child: SectionCard(
         color: scheme.surfaceContainerLow,
@@ -510,10 +526,15 @@ class _ArchivedRow extends ConsumerWidget {
 
 /// 行程长按操作抽屉：编辑 / 复制 / 专有备份 / 归档 / 删除（删除二次确认）
 class _TripOpsSheet extends ConsumerWidget {
-  const _TripOpsSheet({required this.trip, required this.pageContext});
+  const _TripOpsSheet({
+    required this.trip,
+    required this.pageContext,
+    required this.scrollController,
+  });
 
   final Trip trip;
   final BuildContext pageContext;
+  final ScrollController scrollController;
 
   void _toast(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
@@ -524,11 +545,10 @@ class _TripOpsSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.read(tripsRepoProvider);
-    return Padding(
+    return ListView(
+      controller: scrollController,
       padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      children: [
           Row(
             children: [
               Container(
@@ -662,7 +682,6 @@ class _TripOpsSheet extends ConsumerWidget {
             },
           ),
         ],
-      ),
     );
   }
 }

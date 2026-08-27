@@ -13,7 +13,7 @@ import '../../ledger/ledger_providers.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  static const String _appVersion = 'v2.0.0';
+  static const String _appVersion = 'v2.1.0';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,10 +88,19 @@ class ProfileScreen extends ConsumerWidget {
             onTap: () => context.push('/ledger/groups'),
           ),
         ),
+        _StaggerIn(
+          index: 5,
+          child: _ProfileTile(
+            icon: Icons.smart_toy_outlined,
+            title: 'AI 设置',
+            subtitle: '配置 AI 助手使用的模型服务',
+            onTap: () => context.push('/ai/settings'),
+          ),
+        ),
         // 数据与隐私分组
         const SectionHeader(title: '数据与隐私'),
         _StaggerIn(
-          index: 5,
+          index: 6,
           child: _ProfileTile(
             icon: Icons.shield_outlined,
             title: '隐私说明',

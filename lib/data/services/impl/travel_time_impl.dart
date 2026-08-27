@@ -16,24 +16,25 @@ class TravelTimeServiceImpl implements TravelTimeService {
   String? _qqKey;
   String? _amapKey;
   String _provider = 'none';
-  bool _configLoaded = false;
 
-  /// 懒加载 mapConfig（仅首次调用时读一次 SP，后续复用）
+  /// 每次调用都重新读取配置，保存 Key 后当前进程立即使用新配置。
   Future<void> _ensureConfigLoaded() async {
-    if (_configLoaded || _prefsRepo == null) return;
+    _qqKey = null;
+    _amapKey = null;
+    _provider = 'none';
+    if (_prefsRepo == null) return;
     try {
       final cfg = await _prefsRepo!.getMapConfig();
       _provider = (cfg['provider'] as String?) ?? 'none';
       final key = (cfg['key'] as String?)?.trim() ?? '';
+      if (key.isEmpty) return;
       if (_provider == 'qq') {
-        _qqKey = key.isEmpty ? null : key;
+        _qqKey = key;
       } else if (_provider == 'amap') {
-        _amapKey = key.isEmpty ? null : key;
+        _amapKey = key;
       }
     } catch (_) {
       // 读取失败保持默认 none
-    } finally {
-      _configLoaded = true;
     }
   }
 
@@ -94,7 +95,7 @@ class TravelTimeServiceImpl implements TravelTimeService {
         break;
     }
     try {
-      await _dio.get(
+      final response = await _dio.get(
         url,
         queryParameters: params,
         options: Options(
@@ -102,7 +103,12 @@ class TravelTimeServiceImpl implements TravelTimeService {
           receiveTimeout: const Duration(seconds: 3),
         ),
       );
-      return true;
+      final data = response.data;
+      if (data is Map && data['status'] is num) {
+        return data['status'] == 0 || data['status'] == '1';
+      }
+      return response.statusCode != null &&
+          response.statusCode! >= 200 && response.statusCode! < 300;
     } catch (_) {
       return false;
     }

@@ -22,7 +22,7 @@ void main() {
     expect(find.text('旅途助手'), findsWidgets);
   });
 
-  testWidgets('底栏切换到消费 Tab', (tester) async {
+  testWidgets('底栏切换到 AI Tab', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
 
@@ -34,9 +34,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('消费'));
+    await tester.tap(find.text('AI'));
     await tester.pumpAndSettle();
 
-    expect(find.text('消费'), findsWidgets);
+    // AI 聊天页标题；未配置服务时显示引导空状态
+    expect(
+      find.text('AI 助手').evaluate().isNotEmpty ||
+          find.text('AI 管家还没上线').evaluate().isNotEmpty,
+      isTrue,
+    );
   });
 }

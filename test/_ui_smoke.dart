@@ -1,10 +1,13 @@
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:travel_assistant/router.dart' as app;
 import 'package:travel_assistant/data/providers.dart';
+import 'package:travel_assistant/theme/theme_provider.dart';
 import 'package:travel_assistant/data/db/database.dart';
 import 'package:travel_assistant/core/uid.dart';
 import 'package:drift/drift.dart' show Value;
@@ -16,7 +19,12 @@ void main() {
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: [
+      // 与 main.dart 相同的注入方式，避免 Splash/主题读取时抛 UnimplementedError
+      sharedPreferencesProvider.overrideWithValue(
+        await SharedPreferences.getInstance(),
+      ),
+    ]);
     addTearDown(container.dispose);
     final trips = container.read(tripsRepoProvider);
     final ledger = container.read(ledgerRepoProvider);
@@ -62,19 +70,25 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
 
     Future<void> go(String loc) async {
+      // ignore: avoid_print
+      print('SMOKE_GO $loc');
       app.appRouter.go(loc);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 650));
     }
 
     Future<void> push(String loc, [Object? extra]) async {
-      await app.appRouter.push(loc, extra: extra);
+      // ignore: avoid_print
+      print('SMOKE_PUSH $loc');
+      // push 的 Future 要等路由被弹出才完成，冒烟扫描只需进帧渲染，不能 await。
+      unawaited(app.appRouter.push(loc, extra: extra));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
     }
 
     await go('/trips');
     await go('/checklist');
+    await go('/ai');
     await go('/ledger');
     await go('/expenses');
     await go('/profile');

@@ -18,20 +18,25 @@ class PoiServiceImpl implements PoiService {
   static const _ua = "TravelAssistant2/2.0";
 
   String? _amapKey;
-  bool _configLoaded = false;
+  String? _qqKey;
 
-  /// 懒加载高德 key（仅当 prefs 可用时读一次）
+  /// 每次搜索都重新读取配置，确保用户刚保存的 Key 在当前进程立即生效。
   Future<void> _ensureConfigLoaded() async {
-    if (_configLoaded || _prefsRepo == null) return;
+    _amapKey = null;
+    _qqKey = null;
+    if (_prefsRepo == null) return;
     try {
       final cfg = await _prefsRepo!.getMapConfig();
-      if ((cfg['provider'] as String?) == 'amap') {
-        final key = (cfg['key'] as String?)?.trim() ?? '';
-        _amapKey = key.isEmpty ? null : key;
+      final provider = (cfg['provider'] as String?) ?? 'none';
+      final key = (cfg['key'] as String?)?.trim() ?? '';
+      if (key.isEmpty) return;
+      if (provider == 'amap') {
+        _amapKey = key;
+      } else if (provider == 'qq') {
+        _qqKey = key;
       }
-    } catch (_) {}
-    finally {
-      _configLoaded = true;
+    } catch (_) {
+      // 配置读取失败时保留离线/公共服务兜底。
     }
   }
 
@@ -125,7 +130,8 @@ class PoiServiceImpl implements PoiService {
 
   @override
   Future<List<PoiResult>> search(String keyword) async {
-    if (keyword.trim().isEmpty) return [];
+    final query = keyword.trim();
+    if (query.isEmpty) return [];
     await _ensureConfigLoaded();
 
     final results = <PoiResult>[];
@@ -133,9 +139,9 @@ class PoiServiceImpl implements PoiService {
 
     // 1) 内置离线库（种子数据）——永远在最前
     for (final p in kBuiltinPois) {
-      if (p.name.contains(keyword) || p.city.contains(keyword)) {
-        final key = "${p.name}|${p.lat.toStringAsFixed(3)}";
-        if (seen.add("${results.length}$key")) {
+      if (p.name.contains(query) || p.city.contains(query) || p.address.contains(query)) {
+        final key = "${p.name}|${p.lat.toStringAsFixed(3)}|${p.lng.toStringAsFixed(3)}";
+        if (seen.add(key)) {
           results.add(PoiResult(
             name: p.name,
             address: "${p.city} ${p.address}",
@@ -148,13 +154,55 @@ class PoiServiceImpl implements PoiService {
       }
     }
 
-    // 2) 高德官方 place/text（配置 key 时优先，中文 POI 覆盖最全）
+    // 2) 腾讯官方地点搜索（配置腾讯 Key 时使用官方中文 POI）
+    if (_qqKey != null) {
+      try {
+        final r = await _dio.get(
+          "https://apis.map.qq.com/ws/place/v1/search",
+          queryParameters: {
+            "keyword": query,
+            "page_size": 8,
+            "page_index": 1,
+            "key": _qqKey!,
+          },
+          options: Options(
+            headers: {"User-Agent": _ua},
+            sendTimeout: const Duration(seconds: 5),
+            receiveTimeout: const Duration(seconds: 5),
+          ),
+        );
+        if (r.data["status"] == 0 && r.data["data"] is List) {
+          for (final p in r.data["data"] as List) {
+            if (p is! Map) continue;
+            final name = p["title"]?.toString() ?? "";
+            final location = p["location"];
+            if (name.isEmpty || location is! Map) continue;
+            final gcjLat = (location["lat"] as num?)?.toDouble();
+            final gcjLng = (location["lng"] as num?)?.toDouble();
+            if (gcjLat == null || gcjLng == null) continue;
+            final wgs = _gcjToWgs(gcjLat, gcjLng);
+            final dedupeKey = "$name|${wgs.wgsLat.toStringAsFixed(3)}|${wgs.wgsLng.toStringAsFixed(3)}";
+            if (!seen.add(dedupeKey)) continue;
+            results.add(PoiResult(
+              name: name,
+              address: p["address"]?.toString() ?? "",
+              lat: wgs.wgsLat,
+              lng: wgs.wgsLng,
+              icon: '📍',
+              source: PoiSource.qq,
+            ));
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3) 高德官方 place/text（配置 key 时优先，中文 POI 覆盖最全）
     if (_amapKey != null) {
       try {
         final r = await _dio.get(
           "https://restapi.amap.com/v3/place/text",
           queryParameters: {
-            "keywords": keyword,
+            "keywords": query,
             "key": _amapKey!,
             "citylimit": "true",
             "offset": 8,
@@ -203,7 +251,7 @@ class PoiServiceImpl implements PoiService {
     try {
       final r = await _dio.get(
         "https://photon.komoot.io/api",
-        queryParameters: {"q": keyword, "limit": 8},
+        queryParameters: {"q": query, "limit": 8},
         options: Options(
           headers: {"User-Agent": _ua},
           sendTimeout: const Duration(seconds: 5),
@@ -216,8 +264,9 @@ class PoiServiceImpl implements PoiService {
         if (g == null || pr == null) continue;
         final name = pr["name"] as String? ?? "";
         if (name.isEmpty) continue;
-        final lat = g[1] as double;
-        final lng = g[0] as double;
+        if (g is! List || g.length < 2 || g[0] is! num || g[1] is! num) continue;
+        final lat = (g[1] as num).toDouble();
+        final lng = (g[0] as num).toDouble();
         final dedupeKey = "$name|${lat.toStringAsFixed(3)}";
         if (seen.any((s) => s.contains(dedupeKey))) continue;
         seen.add(dedupeKey);
@@ -232,13 +281,15 @@ class PoiServiceImpl implements PoiService {
       }
     } catch (_) {}
 
-    // 4) Open-Meteo Geocoding（城市/行政区级兜底，results < 3 时触发）
-    if (results.length < 3) {
+    // 4) Open-Meteo Geocoding（城市/行政区级兜底，results < 5 时触发）
+    // 内置离线库对常见目的地名可能命中 3 条以上，若仍卡在 `<3` 会让在线
+    // 城市级结果从不触发（大陆网络下 Photon 常不可达，在线来源只剩它兜底）。
+    if (results.length < 5) {
       try {
         final r = await _dio.get(
           "https://geocoding-api.open-meteo.com/v1/search",
           queryParameters: {
-            "name": keyword,
+            "name": query,
             "language": "zh",
             "count": 8,
             "format": "json",

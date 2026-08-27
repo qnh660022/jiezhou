@@ -53,9 +53,24 @@ class _MapSettingsScreenState extends ConsumerState<MapSettingsScreen> {
   }
 
   Future<void> _testConnection() async {
-    setState(() { _testing = true; _hasTested = false; });
+    // 测试当前输入，而不是 SharedPreferences 中可能尚未保存的旧 Key。
+    await ref.read(prefsRepoProvider).setMapConfig({
+      'provider': _provider,
+      'key': _keyCtrl.text.trim(),
+    });
+    if (!mounted) return;
+    setState(() {
+      _testing = true;
+      _hasTested = false;
+    });
     final ok = await ref.read(travelTimeServiceProvider).pingProvider();
-    if (mounted) setState(() { _testing = false; _testResult = ok; _hasTested = true; });
+    if (mounted) {
+      setState(() {
+        _testing = false;
+        _testResult = ok;
+        _hasTested = true;
+      });
+    }
   }
 
   @override

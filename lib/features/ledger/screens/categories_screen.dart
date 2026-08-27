@@ -51,9 +51,15 @@ class CategoriesScreen extends ConsumerWidget {
                 }
 
                 return ListView(
-                  // 底部留白统一 120（FAB 页），同时消除魔法数
-                  padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md,
-                      Spacing.xl, Spacing.huge * 2 + Spacing.xxl),
+                  padding: EdgeInsets.fromLTRB(
+                    Spacing.xl,
+                    Spacing.md,
+                    Spacing.xl,
+                    AppBottomLayout.withSafeArea(
+                      context,
+                      AppBottomLayout.contentTail,
+                    ),
+                  ),
                   children: [
                     StaggerIn(index: 0, child: _BuiltinGrid(builtin: builtin)),
                     const SizedBox(height: Spacing.lg),
@@ -71,7 +77,10 @@ class CategoriesScreen extends ConsumerWidget {
       floatingActionButton: Padding(
         padding: EdgeInsets.only(
           right: Spacing.xl,
-          bottom: 88 + MediaQuery.paddingOf(context).bottom,
+          bottom: AppBottomLayout.withSafeArea(
+            context,
+            AppBottomLayout.actionButtonOffset,
+          ),
         ),
         child: FloatingActionButton.extended(
           heroTag: 'fab-category-add',

@@ -299,8 +299,11 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
         // "Insert transport" FAB
         if (!_pickMode && points.length >= 2)
           Positioned(
-            bottom: 88 + MediaQuery.paddingOf(context).bottom,
-            right: Spacing.lg,
+            bottom: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.actionButtonOffset,
+            ),
+            right: Spacing.xl,
             child: FloatingActionButton.extended(
               heroTag: 'map-insert-transport',
               onPressed: () => _insertTransportBetweenPoints(trip, points),

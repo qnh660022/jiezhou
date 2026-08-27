@@ -87,6 +87,99 @@ class LedgerHomeScreen extends ConsumerWidget {
 }
 
 // ---------------------------------------------------------------------------
+// 消费入口快捷行（原「消费」Tab 并入账本后的门面）
+// ---------------------------------------------------------------------------
+
+class _QuickActions extends ConsumerWidget {
+  const _QuickActions({required this.unsettled});
+
+  final int unsettled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ActionTile(
+              icon: Icons.receipt_long_rounded,
+              label: '全部账单',
+              onTap: () => context.push('/expenses'),
+            ),
+          ),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: _ActionTile(
+              icon: Icons.donut_small_rounded,
+              label: '统计图表',
+              onTap: () => context.push('/expenses/stats'),
+            ),
+          ),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: _ActionTile(
+              icon: Icons.balance_rounded,
+              label: 'AA 结算',
+              badgeCount: unsettled > 0 ? unsettled : null,
+              onTap: () => context.push('/expenses/settle'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.badgeCount,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final int? badgeCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.brightness == Brightness.dark
+          ? scheme.surfaceContainerHigh
+          : scheme.surfaceContainerLowest,
+      borderRadius: AppRadius.card,
+      child: InkWell(
+        borderRadius: AppRadius.card,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: Spacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Badge(
+                isLabelVisible: badgeCount != null,
+                label: Text('$badgeCount'),
+                child: Icon(icon, size: 26, color: scheme.primary),
+              ),
+              const SizedBox(height: Spacing.xs),
+              Text(label, style: TextStyle(fontSize: AppFontSizes.caption)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 有团状态主体
 // ---------------------------------------------------------------------------
 
@@ -134,29 +227,38 @@ class _LedgerBody extends ConsumerWidget {
             ref.invalidate(settlementsProvider);
           },
           child: ListView(
-            padding: EdgeInsets.only(bottom: 140 + MediaQuery.paddingOf(context).bottom),
+            padding: EdgeInsets.only(
+              bottom: AppBottomLayout.withSafeArea(
+                context,
+                AppBottomLayout.contentTail,
+              ),
+            ),
             children: [
               if (showOverBudgetBanner)
                 StaggerIn(index: 0, child: _OverBudgetBanner(budget: budget)),
               StaggerIn(index: showOverBudgetBanner ? 1 : 0, child: _GlassGroupCard(group: _currentGroup(ref, groupId), members: members, unsettled: unsettled)),
               StaggerIn(index: showOverBudgetBanner ? 2 : 1, child: _BudgetCard(budget: budget)),
-              StaggerIn(index: 2, child: _BalanceBoard(board: board)),
-              StaggerIn(index: 3, child: _RecentBills(expenses: recentExpenses.take(5).toList(), members: members)),
+              StaggerIn(index: 2, child: _QuickActions(unsettled: unsettled)),
+              StaggerIn(index: 3, child: _BalanceBoard(board: board)),
+              StaggerIn(index: 4, child: _RecentBills(expenses: recentExpenses.take(5).toList(), members: members)),
               if (trips.isNotEmpty)
-                StaggerIn(index: 4, child: _LinkedTrips(trips: trips.where((t) => !t.archived).toList())),
+                StaggerIn(index: 5, child: _LinkedTrips(trips: trips.where((t) => !t.archived).toList())),
             ],
           ),
         ),
         Positioned(
           right: Spacing.xl,
-          bottom: 76 + MediaQuery.paddingOf(context).bottom,
+          bottom: AppBottomLayout.withSafeArea(
+            context,
+            AppBottomLayout.actionButtonOffset,
+          ),
           child: FloatingActionButton.extended(
             heroTag: 'fab-ledger-add',
             backgroundColor: Theme.of(context).colorScheme.primary,
             foregroundColor: Theme.of(context).colorScheme.onPrimary,
             onPressed: () {
               HapticFeedback.lightImpact();
-              context.go('/expenses/edit');
+              context.push('/expenses/edit');
             },
             icon: const Icon(Icons.edit_note_rounded),
             label: const Text('记一笔'),
@@ -272,7 +374,7 @@ class _UnsettledBadge extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () {
         HapticFeedback.selectionClick();
-        context.go('/expenses/settle');
+        context.push('/expenses/settle');
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: Spacing.sm + 2, vertical: 5),
@@ -329,7 +431,7 @@ class _BudgetCard extends StatelessWidget {
           borderRadius: AppRadius.card,
           onTap: () {
             HapticFeedback.selectionClick();
-            context.go('/expenses/budget');
+            context.push('/expenses/budget');
           },
           child: Padding(
             padding: const EdgeInsets.all(Spacing.xl),
@@ -641,7 +743,7 @@ class _BillTileState extends ConsumerState<_BillTile> {
 
   void _openEdit() {
     HapticFeedback.selectionClick();
-    context.go('/expenses/edit?id=' + widget.expense.id);
+    context.push('/expenses/edit?id=' + widget.expense.id);
   }
 
   Future<void> _confirmDelete() async {

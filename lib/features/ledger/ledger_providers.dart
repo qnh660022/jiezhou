@@ -287,6 +287,14 @@ final tripsInGroupProvider = StreamProvider<List<TripCardView>>((ref) {
       );
 });
 
+/// 全部行程（不区分是否关联旅行团）——AI 行程工具用，便于处理独立行程。
+final allTripsProvider = StreamProvider<List<TripCardView>>((ref) {
+  return ref.watch(tripsRepoProvider).watchAll().map(
+        (l) => l.map(tripCardViewOf).toList()
+          ..sort((a, b) => a.startEpochDay - b.startEpochDay),
+      );
+});
+
 /// 某行程下的安排（expense_edit 二级联动下拉）
 final tripItemsProvider =
     StreamProvider.family<List<TripItemOption>, String>((ref, tripId) {
@@ -327,7 +335,11 @@ final memberBoardProvider = Provider<AsyncValue<List<MemberStatView>>>((ref) {
   final expenses = ref.watch(expensesProvider);
   return _combine2(members, expenses, () {
     final ms = members.value ?? const <LedgerMemberView>[];
-    final es = expenses.value ?? const <ExpenseRecord>[];
+    // “谁付了多少”表达当前仍待 AA 结算的应收/应付，必须与结算页
+    // 使用同一口径；已完成结算的账单不再重复计入当前净额。
+    final es = (expenses.value ?? const <ExpenseRecord>[])
+        .where((e) => e.settledRoundId == null)
+        .toList();
     final paid = StatsCalculator.paidByMember(es);
     final share = StatsCalculator.shareByMember(es);
     return [

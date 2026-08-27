@@ -59,7 +59,15 @@ class GroupListScreen extends ConsumerWidget {
                       onAction: () => context.pushNamed('group-edit'),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, 120),
+                      padding: EdgeInsets.fromLTRB(
+                        Spacing.xl,
+                        Spacing.md,
+                        Spacing.xl,
+                        AppBottomLayout.withSafeArea(
+                          context,
+                          AppBottomLayout.contentTail,
+                        ),
+                      ),
                       itemCount: groups.length,
                       itemBuilder: (context, i) {
                         final g = groups[i];
@@ -127,7 +135,10 @@ class GroupListScreen extends ConsumerWidget {
       floatingActionButton: Padding(
         padding: EdgeInsets.only(
           right: Spacing.xl,
-          bottom: 88 + MediaQuery.paddingOf(context).bottom,
+          bottom: AppBottomLayout.withSafeArea(
+            context,
+            AppBottomLayout.actionButtonOffset,
+          ),
         ),
         child: FloatingActionButton.extended(
           heroTag: 'fab-group-add',

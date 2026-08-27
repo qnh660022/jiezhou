@@ -159,26 +159,20 @@ class LedgerRepository {
           ..orderBy([(s) => OrderingTerm.desc(s.createdAt)]))
         .watch()
         .map((list) => list.map((s) {
-      // 解析 transfersJson：每条 {from, to, cents, done}。
-      // 历史脏数据 / 单元素 JSON 字符串拼接的老格式都做兜底，避免 UI 永远 0 笔。
-      final transfers = <TransferRecord>[];
-      try {
-        final raw = jsonDecode(s.transfersJson);
-        if (raw is List) {
-          for (final it in raw) {
-            if (it is! Map) continue;
-            final from = (it['from'] as String?) ?? '';
-            final to = (it['to'] as String?) ?? '';
-            final cents = (it['cents'] as num?)?.toInt() ?? 0;
-            final done = (it['done'] as bool?) ?? false;
-            if (from.isNotEmpty && to.isNotEmpty && cents > 0) {
-              transfers.add(TransferRecord(from: from, to: to, cents: cents, done: done));
-            }
-          }
-        }
-      } catch (_) {
-        // 历史脏数据：保持空 list，让 UI 给出"开始新轮"提示
-      }
+      // 统一兼容标准 List、单个 Map、元素被再次 JSON 编码的历史格式。
+      // 解析失败时只丢弃坏元素，不把整轮结算伪装成“待转 0 笔”。
+      final transfers = [
+        for (final it in _decodeTransferMaps(s.transfersJson))
+          if (_transferFrom(it).isNotEmpty &&
+              _transferTo(it).isNotEmpty &&
+              _transferCents(it) > 0)
+            TransferRecord(
+              from: _transferFrom(it),
+              to: _transferTo(it),
+              cents: _transferCents(it),
+              done: _transferDone(it),
+            ),
+      ];
       return Settlement(
         id: s.id,
         groupId: s.groupId,
@@ -258,7 +252,18 @@ class LedgerRepository {
     );
     return created;
   }
-  Future<void> markTransferDone(String sid, int index, bool done) async { final s=await (db.select(db.settlements)..where((x)=>x.id.equals(sid))).getSingleOrNull(); if(s==null) return; final list=jsonDecode(s.transfersJson) as List; if(index<0||index>=list.length) return; list[index]["done"]=done; await (db.update(db.settlements)..where((x)=>x.id.equals(sid))).write(SettlementsCompanion(transfersJson:Value(jsonEncode(list)))); }
+  Future<void> markTransferDone(String sid, int index, bool done) async {
+    final s = await (db.select(db.settlements)
+          ..where((x) => x.id.equals(sid)))
+        .getSingleOrNull();
+    if (s == null) return;
+    final list = _decodeTransferMaps(s.transfersJson);
+    if (index < 0 || index >= list.length) return;
+    list[index]['done'] = done;
+    await (db.update(db.settlements)..where((x) => x.id.equals(sid))).write(
+      SettlementsCompanion(transfersJson: Value(jsonEncode(list))),
+    );
+  }
   Future<void> completeSettlement(String sid) async { final s=await (db.select(db.settlements)..where((x)=>x.id.equals(sid))).getSingleOrNull(); if(s==null) return; final eids=jsonDecode(s.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(sid))); } await (db.update(db.settlements)..where((x)=>x.id.equals(sid))).write(SettlementsCompanion(status:Value("completed"),completedAt:Value(DateTime.now().millisecondsSinceEpoch))); }
   Future<void> undoLastSettlement(String gid) async { final s=await (db.select(db.settlements)..where((x)=>x.groupId.equals(gid)&x.status.equals("completed"))..orderBy([(x)=>OrderingTerm.desc(x.createdAt)])).get(); if(s.isEmpty) return; final last=s.first; final eids=jsonDecode(last.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(null))); } await (db.delete(db.settlements)..where((x)=>x.id.equals(last.id))).go(); }
 
@@ -620,7 +625,32 @@ class LedgerRepository {
   static const kShareModeNames = {'equal','portions','custom'};
 
   // === 辅助 ===
-  Map<String,int> _computeBalances(List<Expense> expenses) { final b=<String,int>{}; for(final e in expenses) { if(e.settledRoundId!=null) continue; if(e.type=="prepay") continue; try { final payers=jsonDecode(e.payersJson) as List; for(final p in payers) { final mid=p["memberId"]??""; final cents=(p["cents"]??0) as int; b[mid]=(b[mid]??0)+cents; } final shares=jsonDecode(e.sharesJson) as List; for(final s in shares) { final mid=s["memberId"]??""; final cents=(s["cents"]??0) as int; b[mid]=(b[mid]??0)-cents; } } catch(_){} } return b; }
+  Map<String, int> _computeBalances(List<Expense> expenses) {
+    final balances = <String, int>{};
+    for (final e in expenses) {
+      if (e.settledRoundId != null || e.type == 'prepay') continue;
+      _addShareJson(balances, e.payersJson, 1);
+      _addShareJson(balances, e.sharesJson, -1);
+    }
+    return balances;
+  }
+
+  void _addShareJson(Map<String, int> balances, String json, int sign) {
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is! List) return;
+      for (final item in decoded) {
+        if (item is! Map) continue;
+        final memberId = item['memberId'];
+        if (memberId is! String || memberId.isEmpty) continue;
+        final cents = _asIntOrNull(item['cents']) ?? 0;
+        if (cents == 0) continue;
+        balances[memberId] = (balances[memberId] ?? 0) + sign * cents;
+      }
+    } catch (_) {
+      // 单条账单格式异常不应影响同团其他账单的结算。
+    }
+  }
   List<Map<String,dynamic>> _minTransferPlan(Map<String,int> balances) {
     final owes = [for(final e in balances.entries.where((e)=>e.value<0)) {"id":e.key,"amt":-e.value}];
     final gets = [for(final e in balances.entries.where((e)=>e.value>0)) {"id":e.key,"amt":e.value}];
@@ -644,6 +674,47 @@ class LedgerRepository {
 
 /// 宽松取整：num 直接转，纯数字字符串尝试解析，其余 null
 int? _asIntOrNull(Object? v) => v is num ? v.toInt() : (v is String ? int.tryParse(v) : null);
+
+/// 结算转账记录的宽松解码器：兼容标准数组、单个对象、嵌套 JSON 字符串。
+List<Map<String, dynamic>> _decodeTransferMaps(String json) {
+  final output = <Map<String, dynamic>>[];
+
+  void append(Object? value) {
+    if (value is String) {
+      try {
+        append(jsonDecode(value));
+      } catch (_) {}
+      return;
+    }
+    if (value is List) {
+      for (final item in value) append(item);
+      return;
+    }
+    if (value is Map) {
+      output.add(value.cast<String, dynamic>());
+    }
+  }
+
+  try {
+    append(jsonDecode(json));
+  } catch (_) {}
+  return output;
+}
+
+String _transferFrom(Map<String, dynamic> item) =>
+    (item['from'] ?? item['fromMemberId'])?.toString() ?? '';
+
+String _transferTo(Map<String, dynamic> item) =>
+    (item['to'] ?? item['toMemberId'])?.toString() ?? '';
+
+int _transferCents(Map<String, dynamic> item) => _asIntOrNull(item['cents']) ?? 0;
+
+bool _transferDone(Map<String, dynamic> item) {
+  final value = item['done'];
+  if (value is bool) return value;
+  if (value is String) return value.toLowerCase() == 'true' || value == '1';
+  return false;
+}
 
 /// 空串/ null 时回退到兜底值
 String _nonEmpty(String? v, String fallback) {

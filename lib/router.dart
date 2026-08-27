@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'features/ai/screens/ai_chat_screen.dart';
+import 'features/ai/screens/ai_settings_screen.dart';
 import 'features/checklist/screens/checklist_screen.dart';
 import 'features/checklist/screens/item_edit_screen.dart';
 import 'features/ledger/screens/budget_screen.dart';
@@ -30,7 +32,8 @@ import 'shared/widgets/floating_capsule_nav_bar.dart';
 
 /// 应用根路由表：
 /// `/` 开屏页（顶层）+ 5 个 Tab 分支（StatefulShellRoute.indexedStack 保持各分支状态）
-/// /trips /checklist /ledger /expenses /profile
+/// /ai /checklist /trips /ledger /profile
+/// `/expenses` 子树为顶层全屏路由（从账本页打开，不占 Tab）
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
   routes: buildAppRoutes(),
@@ -47,6 +50,36 @@ List<RouteBase> buildAppRoutes() => [
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) => HomeShell(shell: navigationShell),
       branches: [
+        // ============ AI 助手 ============
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/ai',
+            name: 'ai',
+            builder: (context, state) => const AiChatScreen(),
+            routes: [
+              GoRoute(
+                path: 'settings',
+                name: 'ai-settings',
+                builder: (context, state) => const AiSettingsScreen(),
+              ),
+            ],
+          ),
+        ]),
+        // ============ 清单 ============
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/checklist',
+            name: 'checklist',
+            builder: (context, state) => const ChecklistScreen(),
+            routes: [
+              GoRoute(
+                path: 'item-edit',
+                name: 'item-edit',
+                builder: (context, state) => const ItemEditScreen(),
+              ),
+            ],
+          ),
+        ]),
         // ============ 行程 ============
         StatefulShellBranch(routes: [
           GoRoute(
@@ -92,21 +125,6 @@ List<RouteBase> buildAppRoutes() => [
             ],
           ),
         ]),
-        // ============ 清单 ============
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/checklist',
-            name: 'checklist',
-            builder: (context, state) => const ChecklistScreen(),
-            routes: [
-              GoRoute(
-                path: 'item-edit',
-                name: 'item-edit',
-                builder: (context, state) => const ItemEditScreen(),
-              ),
-            ],
-          ),
-        ]),
         // ============ 账本（群组） ============
         StatefulShellBranch(routes: [
           GoRoute(
@@ -130,41 +148,6 @@ List<RouteBase> buildAppRoutes() => [
                 path: 'members',
                 name: 'members',
                 builder: (context, state) => const MembersScreen(),
-              ),
-            ],
-          ),
-        ]),
-        // ============ 消费 ============
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/expenses',
-            name: 'expenses',
-            builder: (context, state) => const ExpensesScreen(),
-            routes: [
-              GoRoute(
-                path: 'edit',
-                name: 'expense-edit',
-                builder: (context, state) => const ExpenseEditScreen(),
-              ),
-              GoRoute(
-                path: 'stats',
-                name: 'stats',
-                builder: (context, state) => const StatsScreen(),
-              ),
-              GoRoute(
-                path: 'settle',
-                name: 'settle',
-                builder: (context, state) => const SettleScreen(),
-              ),
-              GoRoute(
-                path: 'budget',
-                name: 'budget',
-                builder: (context, state) => const BudgetScreen(),
-              ),
-              GoRoute(
-                path: 'categories',
-                name: 'categories',
-                builder: (context, state) => const CategoriesScreen(),
               ),
             ],
           ),
@@ -196,6 +179,40 @@ List<RouteBase> buildAppRoutes() => [
         ]),
       ],
     ),
+    // ============ 消费账单流（顶层全屏，从账本页打开） ============
+    GoRoute(
+      path: '/expenses',
+      name: 'expenses',
+      // 页面自身无 Scaffold（原为 Tab 壳内嵌），顶层打开时在此补 Material 祖先
+      builder: (context, state) => const Scaffold(body: ExpensesScreen()),
+      routes: [
+        GoRoute(
+          path: 'edit',
+          name: 'expense-edit',
+          builder: (context, state) => const ExpenseEditScreen(),
+        ),
+        GoRoute(
+          path: 'stats',
+          name: 'stats',
+          builder: (context, state) => const StatsScreen(),
+        ),
+        GoRoute(
+          path: 'settle',
+          name: 'settle',
+          builder: (context, state) => const SettleScreen(),
+        ),
+        GoRoute(
+          path: 'budget',
+          name: 'budget',
+          builder: (context, state) => const BudgetScreen(),
+        ),
+        GoRoute(
+          path: 'categories',
+          name: 'categories',
+          builder: (context, state) => const CategoriesScreen(),
+        ),
+      ],
+    ),
 ];
 
 /// 底部外壳：承载 5 分支导航壳 + 悬浮胶囊底栏
@@ -205,10 +222,10 @@ class HomeShell extends StatelessWidget {
   final StatefulNavigationShell shell;
 
   static const List<CapsuleTabItem> _tabs = [
-    CapsuleTabItem(emoji: '🧳', label: '行程'),
+    CapsuleTabItem(emoji: '🤖', label: 'AI'),
     CapsuleTabItem(emoji: '📋', label: '清单'),
+    CapsuleTabItem(emoji: '🧳', label: '行程'),
     CapsuleTabItem(emoji: '💰', label: '账本'),
-    CapsuleTabItem(emoji: '🧾', label: '消费'),
     CapsuleTabItem(emoji: '👤', label: '我的'),
   ];
 

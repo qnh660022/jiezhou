@@ -153,12 +153,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
       context: context,
       initialChildSize: 0.52,
       minChildSize: 0.38,
-      builder: (sheetContext, _) => Padding(
+      builder: (sheetContext, scrollController) => ListView(
+        controller: scrollController,
         padding:
             const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        children: [
             Text('「${item.name}」',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -265,8 +264,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 
   // ============ 一键入账 ============
@@ -646,23 +644,9 @@ class _DetailBody extends ConsumerWidget {
     );
     final progress =
         tripProgress(status, trip.startEpochDay, trip.endEpochDay, today);
-    return Scaffold(
-      // 全局外壳 extendBody 会把悬浮胶囊导航叠在内容上方：
-      // 这里在系统安全区之外额外抬高约 88px，避开悬浮胶囊底栏
-      floatingActionButton: Padding(
-        padding: EdgeInsets.only(
-            bottom: 88 + MediaQuery.paddingOf(context).bottom),
-        child: FloatingActionButton.extended(
-          heroTag: 'fab-add-item-detail',
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          foregroundColor: Theme.of(context).colorScheme.onPrimary,
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
-          onPressed: () => onAddItem(context, null),
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('添加安排'),
-        ),
-      ),
-      body: CustomScrollView(
+    return Stack(
+      children: [
+        CustomScrollView(
       controller: scrollController,
       slivers: [
         SliverToBoxAdapter(child: _HeaderHero(trip: trip, status: status, scrollController: scrollController)),
@@ -712,10 +696,31 @@ class _DetailBody extends ConsumerWidget {
         // 尾部留白：内容可从悬浮胶囊导航下方穿过，末尾垫高保证最后一条可达
         SliverToBoxAdapter(
           child: SizedBox(
-              height: MediaQuery.paddingOf(context).bottom + Spacing.huge),
+            height: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.contentTail,
+            ),
+          ),
+        ),
+        ],
+      ),
+      Positioned(
+          right: Spacing.xl,
+          bottom: AppBottomLayout.withSafeArea(
+            context,
+            AppBottomLayout.actionButtonOffset,
+          ),
+          child: FloatingActionButton.extended(
+            heroTag: 'fab-add-item-detail',
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+            onPressed: () => onAddItem(context, null),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('添加安排'),
+          ),
         ),
       ],
-      ),
     );
   }
 

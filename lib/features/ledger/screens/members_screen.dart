@@ -20,7 +20,9 @@ class MembersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final membersAsync = ref.watch(membersProvider);
-    final groupId = ref.watch(activeGroupIdProvider).value;
+    // 用已解析的当前团取 id：比裸 activeGroupId 流更稳，
+    // 避免刚建团/切团后流尚未同步导致 FAB 禁用或页面异常。
+    final groupId = ref.watch(activeGroupProvider).value?.id;
     final expenses = ref.watch(expensesProvider).value ?? const <ExpenseRecord>[];
 
     return Scaffold(
@@ -41,7 +43,15 @@ class MembersScreen extends ConsumerWidget {
                     ],
                   )
                 : membersAsync.when(
-                    loading: () => const SizedBox.shrink(),
+                    loading: () => ListView(
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(Spacing.xl),
+                      children: const [
+                        SkeletonListTile(),
+                        SkeletonListTile(),
+                        SkeletonListTile(),
+                      ],
+                    ),
                     error: (e, _) =>
                         const EmptyState(emoji: '😵', title: '成员加载失败'),
                     data: (list) {
@@ -53,8 +63,15 @@ class MembersScreen extends ConsumerWidget {
                         );
                       }
                       return ListView(
-                        padding: const EdgeInsets.fromLTRB(
-                            Spacing.xl, Spacing.md, Spacing.xl, 120),
+                        padding: EdgeInsets.fromLTRB(
+                          Spacing.xl,
+                          Spacing.md,
+                          Spacing.xl,
+                          AppBottomLayout.withSafeArea(
+                            context,
+                            AppBottomLayout.contentTail,
+                          ),
+                        ),
                         children: [
                           StaggerIn(index: 0, child: PalettePreview()),
                           const SizedBox(height: Spacing.lg),
@@ -74,7 +91,10 @@ class MembersScreen extends ConsumerWidget {
           ),
           Positioned(
             right: Spacing.xl,
-            bottom: 88 + MediaQuery.paddingOf(context).bottom,
+            bottom: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.actionButtonOffset,
+            ),
             child: FloatingActionButton.extended(
               heroTag: 'fab-member-add',
               onPressed: groupId == null

@@ -28,6 +28,28 @@ abstract final class Spacing {
   static const double huge = 48;
 }
 
+/// 悬浮胶囊底栏上的操作控件统一避让值。
+/// HomeShell 使用 extendBody，页面内容会延伸到导航栏后方，所有浮动按钮
+/// 必须使用同一套 inset，避免在不同页面出现上下跳动或被底栏遮挡。
+abstract final class AppBottomLayout {
+  // 统一 FAB 底部：整体下移贴近底部，跨页面使用同一套 inset。
+  // 仍略高于底部悬浮胶囊栏（约 74 + safe），避免被其遮挡。
+  static const double actionButtonOffset = 80;
+
+  /// 消费页底部合计栏的估算高度，用于让浮于其上的 FAB 不与之重叠。
+  static const double totalBarHeight = 58;
+
+  /// 有底部合计栏的页面（消费页）：FAB 上移到合计栏正上方所需底部偏移。
+  static const double totalBarOffset =
+      actionButtonOffset + totalBarHeight + Spacing.sm;
+
+  /// 内容底部预留：清掉下方悬浮控件（合计栏 + FAB）的总占用，结算后词典项不被遮挡。
+  static const double contentTail = totalBarOffset + actionButtonOffset;
+
+  static double withSafeArea(BuildContext context, double value) =>
+      value + MediaQuery.paddingOf(context).bottom;
+}
+
 /// 字体层级：34 / 28 / 22 / 17 / 15 / 13，大标题一律粗体
 abstract final class AppFontSizes {
   static const double display = 34; // 页面大标题
