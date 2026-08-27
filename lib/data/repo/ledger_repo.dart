@@ -38,6 +38,9 @@ class LedgerRepository {
   Future<Group?> getGroup(String id) async { final l=await (db.select(db.groups)..where((g)=>g.id.equals(id))).get(); return l.firstOrNull; }
   Future<Group> addGroup(String name, String icon) async { final id=newId("group"); final now=DateTime.now().millisecondsSinceEpoch; await db.into(db.groups).insert(GroupsCompanion(id:Value(id),name:Value(name),icon:Value(icon),createdAt:Value(now),updatedAt:Value(now))); return (await getGroup(id))!; }
   Future<void> updateGroup(String id, String name, String icon) async { await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(name:Value(name),icon:Value(icon),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); }
+
+  /// 结束团（软归档）：只打标记，数据全部保留可改，可随时恢复。
+  Future<void> archiveGroup(String id, bool archived) async { await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(archived:Value(archived),archivedAtMs:Value(archived ? DateTime.now().millisecondsSinceEpoch : null),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); }
   /// 删团级联：事务内依次清理 账单→结算→成员→团，并把关联行程的 groupId 置 null。
   ///
   /// 若删除的正是当前激活团：自动切换到剩余团中 createdAt 最新的一个（走 setActiveGroup

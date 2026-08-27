@@ -62,6 +62,7 @@ LedgerGroupView groupViewOf(Group g) => LedgerGroupView(
       name: g.name,
       icon: g.icon,
       budgetEnabled: g.budgetEnabled,
+      archived: g.archived,
       budgetCents: g.budgetCents,
     );
 
@@ -551,6 +552,10 @@ Future<void> updateGroupInfo(
 
 Future<void> deleteGroup(WidgetRef ref, String groupId) =>
     ref.read(ledgerRepoProvider).deleteGroup(groupId);
+
+/// 结束团 / 恢复团（软归档，数据保留）
+Future<void> archiveGroup(WidgetRef ref, String groupId, bool archived) =>
+    ref.read(ledgerRepoProvider).archiveGroup(groupId, archived);
 
 /// 切换当前团并落盘
 Future<void> activateGroup(WidgetRef ref, String groupId) =>

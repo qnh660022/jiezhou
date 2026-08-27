@@ -10,11 +10,13 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/secondary_button.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
+import '../../../data/providers.dart';
 import '../widgets/category_icon_box.dart';
 import '../widgets/member_avatar.dart';
 
@@ -61,6 +63,11 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   void initState() {
     super.initState();
     _dateEpochDay = todayEpochDay();
+    // 后台同步真实汇率（12h 节流，失败静默），成功后刷新汇率缓存
+    Future(() async {
+      final updated = await ref.read(exchangeRateServiceProvider).refreshIfStale();
+      if (updated && mounted) ref.invalidate(currencyRatesProvider);
+    });
   }
 
   @override
@@ -557,6 +564,38 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
               );
             }),
             const SizedBox(height: Spacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: SecondaryButton(
+                    label: '拉取最新汇率',
+                    icon: Icons.currency_exchange_rounded,
+                    onPressed: () async {
+                      final ok = await ref
+                          .read(exchangeRateServiceProvider)
+                          .refreshIfStale(force: true);
+                      final rates = ok
+                          ? await ref.read(prefsRepoProvider).getCurrencyRates()
+                          : null;
+                      final fresh = rates?[c.code];
+                      if (fresh != null && sheetContext.mounted) {
+                        controller.text = fresh.toStringAsFixed(4);
+                        setSheetState(() {});
+                      }
+                      if (sheetContext.mounted) {
+                        ScaffoldMessenger.of(sheetContext).showSnackBar(SnackBar(
+                          content: Text(ok
+                              ? '已更新为最新汇率'
+                              : '拉取失败，检查网络后重试或手动输入'),
+                        ));
+                      }
+                      if (ok && mounted) ref.invalidate(currencyRatesProvider);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: Spacing.md),
             PrimaryButton(
               label: '用这个汇率',
               expanded: true,
@@ -977,6 +1016,11 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     return _SectionCard(
       title: '分类',
       subtitle: '内置分类之外，可在「分类管理」自定义',
+      action: TextButton.icon(
+        onPressed: () => context.pushNamed('categories'),
+        icon: const Icon(Icons.tune_rounded, size: 16),
+        label: const Text('管理'),
+      ),
       child: categories.isEmpty
           ? SkeletonBox(height: 120, radius: AppRadius.inputValue)
           : GridView.count(
@@ -1088,11 +1132,12 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
 
 /// 大区块卡容器
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, this.subtitle, required this.child});
+  const _SectionCard({required this.title, this.subtitle, required this.child, this.action});
 
   final String title;
   final String? subtitle;
   final Widget child;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -1108,7 +1153,13 @@ class _SectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: Theme.of(context).textTheme.titleSmall),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                if (action != null) action!,
+              ],
+            ),
             if (subtitle != null) ...[
               const SizedBox(height: 2),
               Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),

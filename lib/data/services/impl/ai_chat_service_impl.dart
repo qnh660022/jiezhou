@@ -26,6 +26,7 @@ class AiChatServiceImpl implements AiChatService {
     required List<AiMessage> messages,
     List<AiToolDefinition> tools = const [],
     double temperature = 0.4,
+    int? maxTokens,
   }) async {
     final baseUrl = (config['baseUrl'] as String? ?? '').trim();
     final apiKey = (config['apiKey'] as String? ?? '').trim();
@@ -49,6 +50,7 @@ class AiChatServiceImpl implements AiChatService {
           'messages': [for (final m in messages) m.toJson()],
           'temperature': temperature,
           'stream': false,
+          if (maxTokens != null) 'max_tokens': maxTokens,
           if (tools.isNotEmpty)
             'tools': [for (final t in tools) t.toJson()],
         },

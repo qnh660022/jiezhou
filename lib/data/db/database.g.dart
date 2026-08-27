@@ -62,6 +62,32 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
+    'archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("archived" IN (0, 1))',
+    ),
+    defaultValue: Constant(false),
+  );
+  static const VerificationMeta _archivedAtMsMeta = const VerificationMeta(
+    'archivedAtMs',
+  );
+  @override
+  late final GeneratedColumn<int> archivedAtMs = GeneratedColumn<int>(
+    'archived_at_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -91,6 +117,8 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
     icon,
     budgetEnabled,
     budgetCents,
+    archived,
+    archivedAtMs,
     createdAt,
     updatedAt,
   ];
@@ -143,6 +171,21 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
         ),
       );
     }
+    if (data.containsKey('archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
+      );
+    }
+    if (data.containsKey('archived_at_ms')) {
+      context.handle(
+        _archivedAtMsMeta,
+        archivedAtMs.isAcceptableOrUnknown(
+          data['archived_at_ms']!,
+          _archivedAtMsMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -188,6 +231,14 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
         DriftSqlType.int,
         data['${effectivePrefix}budget_cents'],
       ),
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}archived'],
+      )!,
+      archivedAtMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}archived_at_ms'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -211,6 +262,8 @@ class Group extends DataClass implements Insertable<Group> {
   final String icon;
   final bool budgetEnabled;
   final int? budgetCents;
+  final bool archived;
+  final int? archivedAtMs;
   final int createdAt;
   final int updatedAt;
   const Group({
@@ -219,6 +272,8 @@ class Group extends DataClass implements Insertable<Group> {
     required this.icon,
     required this.budgetEnabled,
     this.budgetCents,
+    required this.archived,
+    this.archivedAtMs,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -231,6 +286,10 @@ class Group extends DataClass implements Insertable<Group> {
     map['budget_enabled'] = Variable<bool>(budgetEnabled);
     if (!nullToAbsent || budgetCents != null) {
       map['budget_cents'] = Variable<int>(budgetCents);
+    }
+    map['archived'] = Variable<bool>(archived);
+    if (!nullToAbsent || archivedAtMs != null) {
+      map['archived_at_ms'] = Variable<int>(archivedAtMs);
     }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
@@ -246,6 +305,10 @@ class Group extends DataClass implements Insertable<Group> {
       budgetCents: budgetCents == null && nullToAbsent
           ? const Value.absent()
           : Value(budgetCents),
+      archived: Value(archived),
+      archivedAtMs: archivedAtMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(archivedAtMs),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -262,6 +325,8 @@ class Group extends DataClass implements Insertable<Group> {
       icon: serializer.fromJson<String>(json['icon']),
       budgetEnabled: serializer.fromJson<bool>(json['budgetEnabled']),
       budgetCents: serializer.fromJson<int?>(json['budgetCents']),
+      archived: serializer.fromJson<bool>(json['archived']),
+      archivedAtMs: serializer.fromJson<int?>(json['archivedAtMs']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -275,6 +340,8 @@ class Group extends DataClass implements Insertable<Group> {
       'icon': serializer.toJson<String>(icon),
       'budgetEnabled': serializer.toJson<bool>(budgetEnabled),
       'budgetCents': serializer.toJson<int?>(budgetCents),
+      'archived': serializer.toJson<bool>(archived),
+      'archivedAtMs': serializer.toJson<int?>(archivedAtMs),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -286,6 +353,8 @@ class Group extends DataClass implements Insertable<Group> {
     String? icon,
     bool? budgetEnabled,
     Value<int?> budgetCents = const Value.absent(),
+    bool? archived,
+    Value<int?> archivedAtMs = const Value.absent(),
     int? createdAt,
     int? updatedAt,
   }) => Group(
@@ -294,6 +363,8 @@ class Group extends DataClass implements Insertable<Group> {
     icon: icon ?? this.icon,
     budgetEnabled: budgetEnabled ?? this.budgetEnabled,
     budgetCents: budgetCents.present ? budgetCents.value : this.budgetCents,
+    archived: archived ?? this.archived,
+    archivedAtMs: archivedAtMs.present ? archivedAtMs.value : this.archivedAtMs,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -308,6 +379,10 @@ class Group extends DataClass implements Insertable<Group> {
       budgetCents: data.budgetCents.present
           ? data.budgetCents.value
           : this.budgetCents,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      archivedAtMs: data.archivedAtMs.present
+          ? data.archivedAtMs.value
+          : this.archivedAtMs,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -321,6 +396,8 @@ class Group extends DataClass implements Insertable<Group> {
           ..write('icon: $icon, ')
           ..write('budgetEnabled: $budgetEnabled, ')
           ..write('budgetCents: $budgetCents, ')
+          ..write('archived: $archived, ')
+          ..write('archivedAtMs: $archivedAtMs, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -334,6 +411,8 @@ class Group extends DataClass implements Insertable<Group> {
     icon,
     budgetEnabled,
     budgetCents,
+    archived,
+    archivedAtMs,
     createdAt,
     updatedAt,
   );
@@ -346,6 +425,8 @@ class Group extends DataClass implements Insertable<Group> {
           other.icon == this.icon &&
           other.budgetEnabled == this.budgetEnabled &&
           other.budgetCents == this.budgetCents &&
+          other.archived == this.archived &&
+          other.archivedAtMs == this.archivedAtMs &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -356,6 +437,8 @@ class GroupsCompanion extends UpdateCompanion<Group> {
   final Value<String> icon;
   final Value<bool> budgetEnabled;
   final Value<int?> budgetCents;
+  final Value<bool> archived;
+  final Value<int?> archivedAtMs;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -365,6 +448,8 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     this.icon = const Value.absent(),
     this.budgetEnabled = const Value.absent(),
     this.budgetCents = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.archivedAtMs = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -375,6 +460,8 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     this.icon = const Value.absent(),
     this.budgetEnabled = const Value.absent(),
     this.budgetCents = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.archivedAtMs = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -388,6 +475,8 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     Expression<String>? icon,
     Expression<bool>? budgetEnabled,
     Expression<int>? budgetCents,
+    Expression<bool>? archived,
+    Expression<int>? archivedAtMs,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -398,6 +487,8 @@ class GroupsCompanion extends UpdateCompanion<Group> {
       if (icon != null) 'icon': icon,
       if (budgetEnabled != null) 'budget_enabled': budgetEnabled,
       if (budgetCents != null) 'budget_cents': budgetCents,
+      if (archived != null) 'archived': archived,
+      if (archivedAtMs != null) 'archived_at_ms': archivedAtMs,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -410,6 +501,8 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     Value<String>? icon,
     Value<bool>? budgetEnabled,
     Value<int?>? budgetCents,
+    Value<bool>? archived,
+    Value<int?>? archivedAtMs,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -420,6 +513,8 @@ class GroupsCompanion extends UpdateCompanion<Group> {
       icon: icon ?? this.icon,
       budgetEnabled: budgetEnabled ?? this.budgetEnabled,
       budgetCents: budgetCents ?? this.budgetCents,
+      archived: archived ?? this.archived,
+      archivedAtMs: archivedAtMs ?? this.archivedAtMs,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -444,6 +539,12 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     if (budgetCents.present) {
       map['budget_cents'] = Variable<int>(budgetCents.value);
     }
+    if (archived.present) {
+      map['archived'] = Variable<bool>(archived.value);
+    }
+    if (archivedAtMs.present) {
+      map['archived_at_ms'] = Variable<int>(archivedAtMs.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -464,6 +565,8 @@ class GroupsCompanion extends UpdateCompanion<Group> {
           ..write('icon: $icon, ')
           ..write('budgetEnabled: $budgetEnabled, ')
           ..write('budgetCents: $budgetCents, ')
+          ..write('archived: $archived, ')
+          ..write('archivedAtMs: $archivedAtMs, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -5637,6 +5740,8 @@ typedef $$GroupsTableCreateCompanionBuilder = GroupsCompanion Function({
   Value<String> icon,
   Value<bool> budgetEnabled,
   Value<int?> budgetCents,
+  Value<bool> archived,
+  Value<int?> archivedAtMs,
   required int createdAt,
   required int updatedAt,
   Value<int> rowid,
@@ -5647,6 +5752,8 @@ typedef $$GroupsTableUpdateCompanionBuilder = GroupsCompanion Function({
   Value<String> icon,
   Value<bool> budgetEnabled,
   Value<int?> budgetCents,
+  Value<bool> archived,
+  Value<int?> archivedAtMs,
   Value<int> createdAt,
   Value<int> updatedAt,
   Value<int> rowid,
@@ -5744,6 +5851,16 @@ class $$GroupsTableFilterComposer
 
   ColumnFilters<int> get budgetCents => $composableBuilder(
     column: $table.budgetCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get archivedAtMs => $composableBuilder(
+    column: $table.archivedAtMs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5867,6 +5984,16 @@ class $$GroupsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get archivedAtMs => $composableBuilder(
+    column: $table.archivedAtMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -5903,6 +6030,14 @@ class $$GroupsTableAnnotationComposer
 
   GeneratedColumn<int> get budgetCents => $composableBuilder(
     column: $table.budgetCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<int> get archivedAtMs => $composableBuilder(
+    column: $table.archivedAtMs,
     builder: (column) => column,
   );
 
@@ -6025,6 +6160,8 @@ class $$GroupsTableTableManager
                 Value<String> icon = const Value.absent(),
                 Value<bool> budgetEnabled = const Value.absent(),
                 Value<int?> budgetCents = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<int?> archivedAtMs = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -6034,6 +6171,8 @@ class $$GroupsTableTableManager
                 icon: icon,
                 budgetEnabled: budgetEnabled,
                 budgetCents: budgetCents,
+                archived: archived,
+                archivedAtMs: archivedAtMs,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -6045,6 +6184,8 @@ class $$GroupsTableTableManager
                 Value<String> icon = const Value.absent(),
                 Value<bool> budgetEnabled = const Value.absent(),
                 Value<int?> budgetCents = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<int?> archivedAtMs = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -6054,6 +6195,8 @@ class $$GroupsTableTableManager
                 icon: icon,
                 budgetEnabled: budgetEnabled,
                 budgetCents: budgetCents,
+                archived: archived,
+                archivedAtMs: archivedAtMs,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

@@ -70,7 +70,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('旅途助手'), findsWidgets);
-    expect(find.text('v2.0.0'), findsWidgets);
+    expect(find.text('v2.1.0'), findsWidgets);
     expect(find.text('功能亮点'), findsOneWidget);
     expect(find.text('数据与隐私'), findsOneWidget);
     expect(find.text('开源致谢'), findsOneWidget);

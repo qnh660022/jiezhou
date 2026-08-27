@@ -47,6 +47,7 @@ class LedgerGroupView {
     required this.name,
     required this.icon,
     required this.budgetEnabled,
+    this.archived = false,
     this.budgetCents,
   });
 
@@ -54,6 +55,9 @@ class LedgerGroupView {
   final String name;
   final String icon;
   final bool budgetEnabled;
+
+  /// 团已结束（软归档）：数据保留可改，可随时恢复
+  final bool archived;
   final int? budgetCents;
 }
 

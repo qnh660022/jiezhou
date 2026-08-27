@@ -6,12 +6,14 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/date_utils.dart';
+import '../../../core/uid.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
 import '../../../data/services/weather_service.dart';
 import '../../../domain/models.dart';
 import '../../../domain/trip_bill_linker.dart';
 import '../../ledger/ledger_providers.dart';
+import '../trip_template_store.dart';
 
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
@@ -1630,7 +1632,7 @@ class _QuickActionsCard extends StatelessWidget {
   }
 }
 
-/// 「更多」抽屉：收纳使用频率较低的 PDF / 海报入口，保持主工具行精简
+/// 「更多」抽屉：收纳使用频率较低的 PDF / 海报 / 模板入口，保持主工具行精简
 void _openMoreSheet(BuildContext context, String tripId) {
   HapticFeedback.selectionClick();
   showDraggableSheet(
@@ -1646,6 +1648,16 @@ void _openMoreSheet(BuildContext context, String tripId) {
           Text('更多操作',
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: AppFontSizes.bodyLarge)),
           const SizedBox(height: Spacing.md),
+          ListTile(
+            leading: const Icon(Icons.inventory_2_outlined),
+            title: const Text('存为行程模板'),
+            subtitle: const Text('保存安排结构，之后可一键复用'),
+            contentPadding: EdgeInsets.zero,
+            onTap: () async {
+              Navigator.of(ctx).pop();
+              await _saveAsTemplate(context, tripId);
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.picture_as_pdf_rounded),
             title: const Text('导出 PDF'),
@@ -1668,6 +1680,43 @@ void _openMoreSheet(BuildContext context, String tripId) {
       ),
     ),
   );
+}
+
+/// 把行程安排存为模板（结构快照，同名覆盖）
+Future<void> _saveAsTemplate(BuildContext context, String tripId) async {
+  final container = ProviderScope.containerOf(context);
+  final repo = container.read(tripsRepoProvider);
+  final trip = await repo.getById(tripId);
+  if (trip == null) return;
+  final items = await repo.getItems(tripId);
+  if (items.isEmpty) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('行程还没有安排，先加点内容再存模板吧')));
+    return;
+  }
+  await saveTemplate(TripTemplate(
+    id: newId('tpl'),
+    name: trip.name,
+    destination: trip.destination,
+    emoji: trip.emoji,
+    createdAtMs: DateTime.now().millisecondsSinceEpoch,
+    items: [
+      for (final i in items)
+        TripTemplateItem(
+          day: (i.dateEpochDay - trip.startEpochDay) + 1,
+          name: i.name,
+          type: i.type,
+          startTimeMin: i.startTimeMin,
+          costCents: i.costCents,
+          address: i.address,
+          note: i.note,
+        ),
+    ],
+  ));
+  if (context.mounted) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('「${trip.name}」已存为模板（${items.length} 条安排）')));
+  }
 }
 
 /// 详情加载骨架

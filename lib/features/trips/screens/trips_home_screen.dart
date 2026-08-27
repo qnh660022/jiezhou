@@ -61,6 +61,11 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
         scrollController: _scroll,
         actions: [
           IconButton(
+            tooltip: '行程模板库',
+            onPressed: () => context.push('/trips/templates'),
+            icon: const Icon(Icons.inventory_2_outlined),
+          ),
+          IconButton(
             tooltip: '地图服务设置',
             onPressed: _openMapSettings,
             icon: const Icon(Icons.tune_rounded),

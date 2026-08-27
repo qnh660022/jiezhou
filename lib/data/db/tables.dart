@@ -8,6 +8,9 @@ class Groups extends Table {
   TextColumn get icon => text().withDefault(Constant("📁"))();
   BoolColumn get budgetEnabled => boolean().withDefault(Constant(false))();
   IntColumn get budgetCents => integer().nullable()();
+  // 团归档（结束团）：软标记，数据不锁死，可随时恢复继续记账
+  BoolColumn get archived => boolean().withDefault(Constant(false))();
+  IntColumn get archivedAtMs => integer().nullable()();
   IntColumn get createdAt => integer()();
   IntColumn get updatedAt => integer()();
   @override Set<Column> get primaryKey => {id};

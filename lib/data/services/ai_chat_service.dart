@@ -109,11 +109,13 @@ abstract class AiChatService {
   ///
   /// [config] 为 {baseUrl, apiKey, model}；网络失败或非 2xx 抛
   /// [AiChatException]，由调用层转成气泡里的错误提示。
+  /// [maxTokens] 限制单次回复长度（省 token、防跑飞），null 表示不限制。
   Future<AiChatResult> chat({
     required Map<String, dynamic> config,
     required List<AiMessage> messages,
     List<AiToolDefinition> tools = const [],
     double temperature = 0.4,
+    int? maxTokens,
   });
 }
 

@@ -1161,35 +1161,56 @@ Future<void> _openGroupSwitcher(BuildContext context, WidgetRef ref) async {
             child: Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: OutlinedButton(
                     onPressed: () {
                       Navigator.of(sheetContext).pop();
                       context.pushNamed('group-list');
                     },
-                    icon: const Icon(Icons.list_alt_rounded, size: 18),
-                    label: const Text('全部'),
+                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.list_alt_rounded, size: 17),
+                        SizedBox(width: 4),
+                        Flexible(child: Text('全部', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: Spacing.md),
+                const SizedBox(width: Spacing.sm),
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: OutlinedButton(
                     onPressed: () {
                       Navigator.of(sheetContext).pop();
                       context.pushNamed('members');
                     },
-                    icon: const Icon(Icons.people_alt_rounded, size: 18),
-                    label: const Text('成员'),
+                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.people_alt_rounded, size: 17),
+                        SizedBox(width: 4),
+                        Flexible(child: Text('成员', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: Spacing.md),
+                const SizedBox(width: Spacing.sm),
                 Expanded(
-                  child: FilledButton.icon(
+                  child: FilledButton(
                     onPressed: () {
                       Navigator.of(sheetContext).pop();
                       context.pushNamed('group-edit');
                     },
-                    icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                    label: const Text('新建'),
+                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_circle_outline_rounded, size: 17),
+                        SizedBox(width: 4),
+                        Flexible(child: Text('新建', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
                   ),
                 ),
               ],

@@ -11,6 +11,7 @@ import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/widgets/stagger_in.dart';
 import '../ai_chat_providers.dart';
+import '../widgets/ai_cards.dart';
 
 /// AI 助手聊天页
 class AiChatScreen extends ConsumerStatefulWidget {
@@ -27,8 +28,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
   static const _suggestions = [
     '帮我记一笔午饭 45 元，我付的钱大家平摊',
     '这个月谁还欠钱？',
-    '统计一下最近 7 天我们花了多少',
     '帮我建一个成都 5 日游行程',
+    '查一下清单还缺什么没带',
     '把预算设为 5000 元',
   ];
 
@@ -160,7 +161,7 @@ class _WelcomeCard extends StatelessWidget {
                       style: TextStyle(fontWeight: FontWeight.w800, fontSize: AppFontSizes.bodyLarge)),
                   SizedBox(height: Spacing.xs),
                   Text(
-                    '可以让我记账、查余额、排行程、改设置。我只能操作本应用内的数据。',
+                    '可以让我记账、查余额、排行程、管清单、改设置。我只能操作本应用内的数据。',
                     style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant),
                   ),
                 ],
@@ -246,7 +247,9 @@ class _TurnBubble extends StatelessWidget {
             ),
           Align(
             alignment: turn.isUser ? Alignment.centerRight : Alignment.centerLeft,
-            child: Container(
+            child: turn.cardType != null && turn.cardData != null
+                ? AiCardView(type: turn.cardType!, data: turn.cardData!)
+                : Container(
               constraints: BoxConstraints(maxWidth: MediaQuery.widthOf(context) * 0.78),
               padding: const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: Spacing.md),
               decoration: BoxDecoration(

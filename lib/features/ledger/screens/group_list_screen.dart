@@ -15,6 +15,7 @@ import '../../../theme/tokens.dart';
 import '../../../export/share_helper.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
+import '../widgets/group_summary_sheet.dart';
 import '../widgets/stagger_in.dart';
 
 /// 旅行团管理：切换、新建入口、专有 .tav 备份导入导出。
@@ -109,7 +110,9 @@ class GroupListScreen extends ConsumerWidget {
                                 ),
                                 title: Text(g.name, style: Theme.of(context).textTheme.titleSmall),
                                 subtitle: Text(
-                                  g.budgetEnabled ? '预算已开启 · 目标 ¥' + _yuan(g.budgetCents ?? 0) : '轻点切换为当前团',
+                                  g.archived
+                                      ? '已结束 · 数据保留，可随时恢复'
+                                      : g.budgetEnabled ? '预算已开启 · 目标 ¥' + _yuan(g.budgetCents ?? 0) : '轻点切换为当前团',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                                 trailing: Row(
@@ -184,6 +187,24 @@ class GroupListScreen extends ConsumerWidget {
               },
             ),
             ListTile(
+              leading: Icon(g.archived
+                  ? Icons.unarchive_rounded
+                  : Icons.flag_rounded),
+              title: Text(g.archived ? '恢复为进行中的团' : '结束团（生成总结）'),
+              subtitle: Text(g.archived
+                  ? '继续记账、结算，回到正常状态'
+                  : '展示本轮总结，数据保留可随时修改'),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                if (g.archived) {
+                  await archiveGroup(ref, g.id, false);
+                } else {
+                  await showGroupSummarySheet(context, ref, g,
+                      onConfirmed: () => archiveGroup(ref, g.id, true));
+                }
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.edit_outlined),
               title: const Text('编辑名称与图标'),
               onTap: () {
@@ -208,10 +229,51 @@ class GroupListScreen extends ConsumerWidget {
                 }
               },
             ),
+            const SizedBox(height: Spacing.sm),
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded,
+                  color: Theme.of(context).colorScheme.error),
+              title: Text('删除旅行团',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              subtitle: const Text('连同该团全部账单、成员与结算一并删除，不可恢复'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _confirmDeleteGroup(context, ref, g);
+              },
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteGroup(
+      BuildContext context, WidgetRef ref, LedgerGroupView g) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除旅行团？'),
+        content: Text('确定删除「${g.name}」吗？该团的全部账单、成员与结算记录将一并删除，且无法恢复。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    HapticFeedback.lightImpact();
+    await deleteGroup(ref, g.id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('已删除「${g.name}」')));
+    }
   }
 
   // ---------------------------------------------------------------------------

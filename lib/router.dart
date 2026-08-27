@@ -27,6 +27,7 @@ import 'features/trips/screens/trip_edit_screen.dart';
 import 'features/trips/screens/trip_export_screen.dart';
 import 'features/trips/screens/trip_map_screen.dart';
 import 'features/trips/screens/trip_share_screen.dart';
+import 'features/trips/screens/trip_templates_screen.dart';
 import 'features/trips/screens/trips_home_screen.dart';
 import 'shared/widgets/floating_capsule_nav_bar.dart';
 
@@ -121,6 +122,11 @@ List<RouteBase> buildAppRoutes() => [
                 path: 'map-settings',
                 name: 'map-settings',
                 builder: (context, state) => const MapSettingsScreen(),
+              ),
+              GoRoute(
+                path: 'templates',
+                name: 'trip-templates',
+                builder: (context, state) => const TripTemplatesScreen(),
               ),
             ],
           ),

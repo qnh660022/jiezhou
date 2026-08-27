@@ -15,11 +15,13 @@ import "services/flight_service.dart";
 import "services/weather_service.dart";
 import "services/travel_time_service.dart";
 import "services/ai_chat_service.dart";
+import "services/exchange_rate_service.dart";
 import "services/impl/poi_service_impl.dart";
 import "services/impl/flight_service_impl.dart";
 import "services/impl/weather_service_impl.dart";
 import "services/impl/travel_time_impl.dart";
 import "services/impl/ai_chat_service_impl.dart";
+import "services/impl/exchange_rate_service_impl.dart";
 
 /// 数据库单例。
 /// flutter_test 环境（FLUTTER_TEST 环境变量由测试运行时注入）下改用内存库：
@@ -50,6 +52,7 @@ final flightServiceProvider = Provider<FlightService>((_) => FlightServiceImpl()
 final weatherServiceProvider = Provider<WeatherService>((_) => WeatherServiceImpl());
 final travelTimeServiceProvider = Provider<TravelTimeService>((r) => TravelTimeServiceImpl(prefsRepo: r.read(prefsRepoProvider)));
 final aiChatServiceProvider = Provider<AiChatService>((r) => AiChatServiceImpl());
+final exchangeRateServiceProvider = Provider<ExchangeRateService>((r) => ExchangeRateServiceImpl(r.read(prefsRepoProvider)));
 
 /// AI 助手配置（baseUrl/apiKey/model），改动后 invalidate 使聊天页重新读取。
 final aiConfigProvider = FutureProvider<Map<String, dynamic>>((r) => r.read(prefsRepoProvider).getAiConfig());
