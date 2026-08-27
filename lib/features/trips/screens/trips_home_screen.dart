@@ -1,5 +1,8 @@
 // 🧳 行程首页（Tab 根）：五态状态机分组 + 渐变封面大卡（Hero/视差/进度条）
 // 数据访问集中区 —— 按 t2 命名假设编写，T2 落地后如签名有出入统一在此校正：
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/date_utils.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
+import '../../../export/share_helper.dart';
 
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/section_header.dart';
@@ -504,7 +508,7 @@ class _ArchivedRow extends ConsumerWidget {
   }
 }
 
-/// 行程长按操作抽屉：编辑 / 复制 / 归档 / 删除（删除二次确认）
+/// 行程长按操作抽屉：编辑 / 复制 / 专有备份 / 归档 / 删除（删除二次确认）
 class _TripOpsSheet extends ConsumerWidget {
   const _TripOpsSheet({required this.trip, required this.pageContext});
 
@@ -573,6 +577,54 @@ class _TripOpsSheet extends ConsumerWidget {
               HapticFeedback.lightImpact();
               await repo.copyTrip(trip.id);
               if (pageContext.mounted) _toast(pageContext, '已创建副本');
+            },
+          ),
+          SheetActionTile(
+            icon: Icons.save_alt_rounded,
+            label: '导出行程备份（.tat）',
+            subtitle: '行程、安排、照片记录与清单一并保存',
+            onTap: () async {
+              Navigator.of(context).pop();
+              try {
+                final bytes = await repo.exportTripBackupBytes(trip.id);
+                final base = trip.name
+                    .replaceAll(RegExp(r'[\\/:*?"<>|\\r\\n\\t]'), '_')
+                    .trim();
+                await shareFile(
+                  bytes,
+                  '${base.isEmpty ? '行程' : base}_backup.tat',
+                  'application/x-travel-assistant-trip',
+                );
+              } catch (_) {
+                if (pageContext.mounted) _toast(pageContext, '备份失败，稍后再试');
+              }
+            },
+          ),
+          SheetActionTile(
+            icon: Icons.file_open_rounded,
+            label: '导入行程备份（.tat）',
+            subtitle: '恢复为一个新的独立行程，不覆盖当前行程',
+            onTap: () async {
+              Navigator.of(context).pop();
+              try {
+                final result = await FilePicker.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['tat'],
+                  withData: true,
+                );
+                if (result.isEmpty) return;
+                final picked = result.single;
+                final path = picked.path;
+                if (path == null) throw const FormatException();
+                final bytes = await File(path).readAsBytes();
+                if (bytes.isEmpty) throw const FormatException();
+                final imported = await repo.importTripBackupBytes(bytes);
+                if (pageContext.mounted) {
+                  _toast(pageContext, '已导入「${imported.trip}」：安排${imported.items} · 清单${imported.checklist}');
+                }
+              } catch (_) {
+                if (pageContext.mounted) _toast(pageContext, '行程备份读取失败');
+              }
             },
           ),
           SheetActionTile(

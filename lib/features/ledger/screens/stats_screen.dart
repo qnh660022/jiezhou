@@ -77,7 +77,7 @@ class StaggeredSection extends StatefulWidget {
 class _StaggeredSectionState extends State<StaggeredSection>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 520))..forward();
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
 
   late final Animation<double> _animation = CurvedAnimation(
     parent: _controller,
@@ -87,6 +87,14 @@ class _StaggeredSectionState extends State<StaggeredSection>
       curve: Curves.easeOutCubic,
     ),
   );
+
+  @override
+  void initState() {
+    super.initState();
+    // forward 从字段初始化挪到 initState，避免 widget 在 build 期间被立即
+    // 替换/卸载时 controller 撞 unmount（framework.dart '_dependents.isEmpty'）
+    _controller.forward();
+  }
 
   @override
   void dispose() {

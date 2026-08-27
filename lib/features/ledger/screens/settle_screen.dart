@@ -65,7 +65,14 @@ class SettleScreen extends ConsumerWidget {
                               child: _StartRoundCard(
                                 onStart: () async {
                                   HapticFeedback.lightImpact();
-                                  await startSettlement(ref, groupId);
+                                  final created = await startSettlement(ref, groupId);
+                                  if (!context.mounted) return;
+                                  // 余额已平衡 / 无未结账单时，createSettlement 返回 null 不入库
+                                  if (!created) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('当前没有需要结算的账单 🎉')),
+                                    );
+                                  }
                                 },
                               ),
                             )
@@ -209,7 +216,12 @@ class _ActiveRound extends ConsumerWidget {
         ),
         const SizedBox(height: Spacing.sm),
         for (var i = 0; i < settlement.transfers.length; i++)
+          // 用稳定 key 让 Element 树可重建时正确复用旧 state（round 状态切换时
+          // 长度/顺序不变会被原样保留），避免 framework.dart
+          // '_dependents.isEmpty: is not true' 断言（出现在 controller 在
+          // 未 list 上的 forward/unmount 时序错配场景）。
           TransferRow(
+            key: ValueKey('tr-${settlement.id}-$i'),
             index: i,
             transfer: settlement.transfers[i],
             fromMember: memberOf(settlement.transfers[i].from),
@@ -265,8 +277,7 @@ class TransferRow extends StatefulWidget {
 class _TransferRowState extends State<TransferRow>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
-        ..forward();
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
 
   /// 箭头入场：elasticOut 弹簧感
   late final Animation<double> _spring = CurvedAnimation(
@@ -275,6 +286,15 @@ class _TransferRowState extends State<TransferRow>
   );
 
   bool _bouncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 把 forward 从字段初始化阶段挪到 initState：避免 widget 在 build 期间
+    // 被立刻替换/卸载时 controller forward 调度撞上 unmount（会触发
+    // framework.dart '_dependents.isEmpty: is not true' 断言）。
+    _controller.forward();
+  }
 
   @override
   void dispose() {

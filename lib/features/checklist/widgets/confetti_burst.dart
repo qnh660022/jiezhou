@@ -50,6 +50,8 @@ class _ConfettiBurstState extends State<ConfettiBurst>
   @override
   void initState() {
     super.initState();
+    // forward 从字段初始化挪到 initState：避免 build 期间立即 replace/unmount
+    // 时 controller 撞上 unmount（framework.dart '_dependents.isEmpty'）。
     _controller.forward();
   }
 

@@ -29,6 +29,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -507,9 +508,12 @@ Future<void> deleteExpense(WidgetRef ref, String expenseId) =>
 Future<void> setExpenseSettled(WidgetRef ref, ExpenseRecord expense, bool settled) =>
     ref.read(ledgerRepoProvider).setExpenseSettled(expense.id, settled);
 
-/// 新建一轮结算（替换旧进行中）
-Future<void> startSettlement(WidgetRef ref, String groupId) =>
-    ref.read(ledgerRepoProvider).createSettlement(groupId);
+/// 新建一轮结算（替换旧进行中）。
+/// 返回是否真的创建了新轮：false 表示余额已平衡无需结算（也帮助 UI 给提示）。
+Future<bool> startSettlement(WidgetRef ref, String groupId) async {
+  final created = await ref.read(ledgerRepoProvider).createSettlement(groupId);
+  return created != null;
+}
 
 /// 逐笔确认 / 反悔
 Future<void> toggleTransfer(WidgetRef ref, String settlementId, int index, bool done) =>
@@ -568,15 +572,31 @@ Future<void> rememberRate(WidgetRef ref, String code, double rate) async {
   ref.invalidate(currencyRatesProvider);
 }
 
-/// 导入团 JSON（粘贴文本 / 文件），返回人类可读的重映射统计摘要
+/// 导出团专有备份(.tav)，返回 (字节, 文件名)
+Future<(Uint8List, String)> exportGroupBackup(WidgetRef ref, String gid) async {
+  final bytes = await ref.read(ledgerRepoProvider).exportGroupBackupBytes(gid);
+  final g = await ref.read(ledgerRepoProvider).getGroup(gid);
+  final name = _safeFileBase(g?.name ?? '团');
+  return (bytes, '${name}_backup.tav');
+}
+
+/// 从 .tav 文件字节导入团备份
+Future<String> importGroupBackupFile(WidgetRef ref, Uint8List bytes) async {
+  final report = await ref.read(ledgerRepoProvider).importGroupBackupBytes(bytes);
+  return summarizeImportReport(report);
+}
+
+/// 导入团（旧 JSON 文本粘贴），返回人类可读摘要
 Future<String> importGroupFromText(WidgetRef ref, String jsonText) async {
   final report = await ref.read(ledgerRepoProvider).importGroupJson(jsonText);
   return summarizeImportReport(report);
 }
 
-/// 导出团 JSON 文本（分享 / 剪贴板）
-Future<String> exportGroupToText(WidgetRef ref, String groupId) =>
-    ref.read(ledgerRepoProvider).exportGroupJson(groupId);
+/// 安全文件名基线（去掉路径分隔等非法字符）
+String _safeFileBase(String raw) {
+  final cleaned = raw.replaceAll(RegExp(r'[\\/:*?"<>|\r\n\t]'), '_').trim();
+  return cleaned.isEmpty ? 'backup' : cleaned;
+}
 
 /// CSV 导出文本
 String buildCsvText({

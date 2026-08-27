@@ -25,6 +25,9 @@ Future<T?> showDraggableSheet<T>({
 }) {
   return showModalBottomSheet<T>(
     context: context,
+    // 使用根 Navigator，确保抽屉盖在 HomeShell 的悬浮底栏之上。
+    // 否则分支 Navigator 的 modal 会被 bottomNavigationBar 遮住。
+    useRootNavigator: true,
     isScrollControlled: true,
     useSafeArea: true,
     enableDrag: enableDrag,

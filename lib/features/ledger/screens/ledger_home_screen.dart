@@ -1065,7 +1065,7 @@ Future<void> _openGroupSwitcher(BuildContext context, WidgetRef ref) async {
                       context.pushNamed('group-list');
                     },
                     icon: const Icon(Icons.list_alt_rounded, size: 18),
-                    label: const Text('全部团'),
+                    label: const Text('全部'),
                   ),
                 ),
                 const SizedBox(width: Spacing.md),
@@ -1087,7 +1087,7 @@ Future<void> _openGroupSwitcher(BuildContext context, WidgetRef ref) async {
                       context.pushNamed('group-edit');
                     },
                     icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                    label: const Text('新建团'),
+                    label: const Text('新建'),
                   ),
                 ),
               ],

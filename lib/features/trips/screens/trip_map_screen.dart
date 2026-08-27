@@ -12,12 +12,10 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/uid.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
-import '../../../data/services/poi_service.dart';
 import '../../../data/services/travel_time_service.dart';
 
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
-import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
@@ -42,6 +40,17 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
   Stream<Trip?>? _tripStream;
   Stream<List<TripItem>>? _itemsStream;
 
+  /// 地图服务商配置（启动时读取一次，之后跟随 prefs 流变更失效重读）。
+  Map<String, dynamic> _mapConfig = const {'provider': 'none', 'key': ''};
+  bool _configLoaded = false;
+
+  /// 是否配置了可用 key：腾讯/高德需非空 key 才允许打开地图。
+  bool get _hasMapKey {
+    final provider = _mapConfig['provider'] as String? ?? 'none';
+    final key = (_mapConfig['key'] as String? ?? '').trim();
+    return provider != 'none' && key.isNotEmpty;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_tripId == null) {
@@ -60,6 +69,11 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
         body: const Center(child: Text('未找到行程')),
       );
     }
+
+    // 启动时一次性读取配置；若未配置可用的腾讯/高德 key，则直接拦截，
+    // 避免 flutter_map 空跑（瓦片加载失败、坐标系校对失败、坐标非法等情况
+    // 在中国大陆最常见）。地点搜索（poi_service）走 Photon/高德占位实现，
+    // 与本屏独立，不受影响。
     return Scaffold(
       appBar: GlassAppBar(
         title: _pickMode ? '地图选点' : '行程地图',
@@ -75,20 +89,41 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
             ),
         ],
       ),
-      body: StreamBuilder<Trip?>(
-        stream: _tripStream ??= ref.read(tripsRepoProvider).watchTrip(tripId),
-        builder: (context, tripSnap) {
-          final trip = tripSnap.data;
-          if (trip == null) return const Center(child: Text('行程不存在'));
-          return StreamBuilder<List<TripItem>>(
-            stream: _itemsStream ??= ref.read(tripsRepoProvider).watchItems(tripId),
-            builder: (context, itemsSnap) {
-              final items = itemsSnap.data ?? const <TripItem>[];
-              return _buildBody(trip, items);
-            },
-          );
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _configLoaded
+            ? Future.value(_mapConfig)
+            : ref.read(prefsRepoProvider).getMapConfig(),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+          }
+          if (snap.hasData && !_configLoaded) {
+            _mapConfig = snap.data ?? const {'provider': 'none', 'key': ''};
+            _configLoaded = true;
+          }
+          if (!_hasMapKey) {
+            return _MapKeyMissingView(pickMode: _pickMode);
+          }
+          return _buildMap(tripId);
         },
       ),
+    );
+  }
+
+  Widget _buildMap(String tripId) {
+    return StreamBuilder<Trip?>(
+      stream: _tripStream ??= ref.read(tripsRepoProvider).watchTrip(tripId),
+      builder: (context, tripSnap) {
+        final trip = tripSnap.data;
+        if (trip == null) return const Center(child: Text('行程不存在'));
+        return StreamBuilder<List<TripItem>>(
+          stream: _itemsStream ??= ref.read(tripsRepoProvider).watchItems(tripId),
+          builder: (context, itemsSnap) {
+            final items = itemsSnap.data ?? const <TripItem>[];
+            return _buildBody(trip, items);
+          },
+        );
+      },
     );
   }
 
@@ -358,6 +393,52 @@ class _MapPoint {
   const _MapPoint(this.item, this.latlng);
   final TripItem item;
   final LatLng latlng;
+}
+
+/// 未配置地图 Key 时的引导页：说明原因 + 一键跳设置。
+/// 不破坏外部"地点搜索"路径（poi_service 走免 key 的 Photon / Open-Meteo，
+/// 与本屏独立，故无需在搜索入口处也拦截）。
+class _MapKeyMissingView extends StatelessWidget {
+  const _MapKeyMissingView({required this.pickMode});
+
+  final bool pickMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('🗺️', style: TextStyle(fontSize: 56)),
+            const SizedBox(height: Spacing.lg),
+            Text(
+              pickMode ? '地图选点需要先配置 Key' : '行程地图需要先配置 Key',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: Spacing.sm),
+            Text(
+              '在「我的 → 地图服务设置」里填写腾讯地图或高德地图 Key 后即可打开。\n地点搜索不受影响，可继续使用。',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppFontSizes.caption,
+                color: scheme.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: Spacing.xl),
+            FilledButton.icon(
+              onPressed: () => GoRouter.of(context).push('/trips/map-settings'),
+              icon: const Icon(Icons.settings_rounded, size: 18),
+              label: const Text('去配置 Key'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// WGS-84（GPS / OSM / 本 App 存储约定）→ GCJ-02（火星坐标，GeoQ/高德/腾讯底图坐标系）。

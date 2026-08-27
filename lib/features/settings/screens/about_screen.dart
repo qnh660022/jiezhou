@@ -80,7 +80,7 @@ class AboutScreen extends StatelessWidget {
                   _FeatureRow(emoji: '💰', text: '多人 AA 记账：分摊、结算一目了然'),
                   _FeatureRow(emoji: '⏰', text: '预算预警：超支自动提醒'),
                   _FeatureRow(emoji: '🗺️', text: '地图与天气：行程可视化与出行参考'),
-                  _FeatureRow(emoji: '📤', text: 'PDF / JSON 导出，账单 CSV 随时带走'),
+                  _FeatureRow(emoji: '📤', text: 'PDF / .tav / .tat 导出，账单 CSV 随时带走'),
                 ],
               ),
             ),

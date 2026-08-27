@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -5,18 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
+import '../../../export/share_helper.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/stagger_in.dart';
 
-/// 👥 旅行团管理：切换、新建入口、JSON 导入导出。
+/// 旅行团管理：切换、新建入口、专有 .tav 备份导入导出。
 class GroupListScreen extends ConsumerWidget {
   const GroupListScreen({super.key});
 
@@ -30,7 +31,7 @@ class GroupListScreen extends ConsumerWidget {
         title: '旅行团管理',
         actions: [
           IconButton(
-            tooltip: '导入 JSON',
+            tooltip: '导入团备份',
             onPressed: () => _importSheet(context, ref),
             icon: const Icon(Icons.file_download_outlined),
           ),
@@ -180,18 +181,18 @@ class GroupListScreen extends ConsumerWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.ios_share_rounded),
-              title: const Text('导出 JSON（分享 / 复制）'),
+              leading: const Icon(Icons.save_alt_rounded),
+              title: const Text('导出团备份（.tav）'),
+              subtitle: const Text('团、账单、成员、结算、行程一并保存'),
               onTap: () async {
                 Navigator.of(sheetContext).pop();
                 try {
-                  final text = await exportGroupToText(ref, g.id);
-                  await Clipboard.setData(ClipboardData(text: text));
-                  await Share.share(text, subject: g.name + ' 的账本 JSON');
+                  final (bytes, filename) = await exportGroupBackup(ref, g.id);
+                  await shareFile(bytes, filename, 'application/x-travel-assistant-group');
                 } catch (_) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context)
-                        .showSnackBar(const SnackBar(content: Text('导出失败，稍后再试')));
+                        .showSnackBar(const SnackBar(content: Text('备份失败，稍后再试')));
                   }
                 }
               },
@@ -218,7 +219,7 @@ class GroupListScreen extends ConsumerWidget {
         children: [
           Text('导入旅行团', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: Spacing.xs),
-          Text('粘贴他人分享的账本 JSON，成员与账单自动重映射',
+          Text('导入 .tav 专有备份；也兼容粘贴旧版 JSON 文本',
               style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: Spacing.lg),
           TextField(
@@ -226,7 +227,7 @@ class GroupListScreen extends ConsumerWidget {
             minLines: 4,
             maxLines: 8,
             style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-            decoration: InputDecoration(hintText: '{"app":"travel-assistant-v2",...}'),
+            decoration: InputDecoration(hintText: '旧版 JSON 备份内容（新备份请使用 .tav 文件）'),
           ),
           const SizedBox(height: Spacing.md),
           Row(
@@ -238,7 +239,7 @@ class GroupListScreen extends ConsumerWidget {
                     await _importFromFile(context, ref);
                   },
                   icon: const Icon(Icons.folder_open_rounded, size: 18),
-                  label: const Text('从文件导入'),
+                  label: const Text('导入 .tav 文件'),
                 ),
               ),
               const SizedBox(width: Spacing.md),
@@ -257,7 +258,7 @@ class GroupListScreen extends ConsumerWidget {
                     } catch (_) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                            content: Text('导入失败：JSON 不合法或格式不认识')));
+                            content: Text('导入失败：备份文件损坏或格式不认识')));
                       }
                     }
                   },
@@ -276,12 +277,19 @@ class GroupListScreen extends ConsumerWidget {
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['json', 'txt'],
+        allowedExtensions: ['tav', 'json', 'txt'],
+        withData: true,
       );
-      final path = result.single.path;
+      if (result.isEmpty) return;
+      final picked = result.single;
+      final path = picked.path;
       if (path == null) return;
-      final text = await File(path).readAsString();
-      final summary = await importGroupFromText(ref, text);
+      final bytes = await File(path).readAsBytes();
+      if (bytes.isEmpty) return;
+      final ext = (picked.extension ?? '').toLowerCase();
+      final summary = ext == 'tav'
+          ? await importGroupBackupFile(ref, bytes)
+          : await importGroupFromText(ref, utf8.decode(bytes));
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(summary)));
       }

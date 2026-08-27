@@ -46,3 +46,12 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Local debug/build scratch (logs dumped to repo root during troubleshooting)
+_analyze_full.txt
+_test_full.txt
+_buildrunner_full.txt
+_build_apk*.err
+*.apk
+# Windows reserved device name (created by `> nul` redirection; git cannot track it)
+nul

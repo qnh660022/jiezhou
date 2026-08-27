@@ -77,7 +77,7 @@ class PrivacyScreen extends StatelessWidget {
                   children: [
                     _BulletPoint(text: '相机 / 相册：仅在你想为行程选择图片时使用，图片仅用于应用内展示。'),
                     _BulletPoint(text: '地图：默认不联网；仅当你主动配置并启用在线地图服务时才会发起请求。'),
-                    _BulletPoint(text: '导出（PDF / JSON / CSV）由你主动发起，并经由系统分享给你选择的目标。'),
+                    _BulletPoint(text: '导出（PDF / .tav / .tat / CSV）由你主动发起，并经由系统分享给你选择的目标。'),
                   ],
                 ),
               ),

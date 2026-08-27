@@ -2,12 +2,15 @@
 library;
 import "dart:async";
 import "dart:convert";
+import "dart:typed_data";
 import "package:drift/drift.dart";
 import "../db/database.dart" hide Settlement;
 import "../../core/date_utils.dart";
 import "../../core/uid.dart";
 import "../../domain/models.dart";
 import "../../domain/share_splitter.dart";
+import "../../domain/group_backup.dart";
+import "../../export/backup_format.dart";
 import "prefs_repo.dart";
 
 class LedgerRepository {
@@ -150,8 +153,111 @@ class LedgerRepository {
   Future<void> setExpenseSettled(String eid, bool settled) async { if(settled) { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value("manual"))); } else { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value(null))); } }
 
   // === 结算 ===
-  Stream<List<Settlement>> watchSettlements(String gid) => (db.select(db.settlements)..where((s)=>s.groupId.equals(gid))..orderBy([(s)=>OrderingTerm.desc(s.createdAt)])).watch().map((list) => list.map((s) => Settlement(id:s.id,groupId:s.groupId,status:s.status=='active'?SettlementStatus.active:SettlementStatus.completed,roundNo:s.roundNo,createdAt:s.createdAt,completedAt:s.completedAt)).toList());
-  Future<void> createSettlement(String gid) async { final id=newId("settle"); final outstanding=await (db.select(db.expenses)..where((e)=>e.groupId.equals(gid)&e.settledRoundId.isNull())).get(); final balances=_computeBalances(outstanding); final plan=_minTransferPlan(balances); final transfers=[for(final t in plan) jsonEncode({"from":t["from"],"to":t["to"],"cents":t["cents"],"done":false})]; await db.into(db.settlements).insert(SettlementsCompanion(id:Value(id),groupId:Value(gid),status:Value("active"),transfersJson:Value("[${transfers.join(",")}]"),expenseIdsJson:Value(jsonEncode([for(final e in outstanding) e.id])),roundNo:Value(1),createdAt:Value(DateTime.now().millisecondsSinceEpoch))); }
+  Stream<List<Settlement>> watchSettlements(String gid) {
+    return (db.select(db.settlements)
+          ..where((s) => s.groupId.equals(gid))
+          ..orderBy([(s) => OrderingTerm.desc(s.createdAt)]))
+        .watch()
+        .map((list) => list.map((s) {
+      // 解析 transfersJson：每条 {from, to, cents, done}。
+      // 历史脏数据 / 单元素 JSON 字符串拼接的老格式都做兜底，避免 UI 永远 0 笔。
+      final transfers = <TransferRecord>[];
+      try {
+        final raw = jsonDecode(s.transfersJson);
+        if (raw is List) {
+          for (final it in raw) {
+            if (it is! Map) continue;
+            final from = (it['from'] as String?) ?? '';
+            final to = (it['to'] as String?) ?? '';
+            final cents = (it['cents'] as num?)?.toInt() ?? 0;
+            final done = (it['done'] as bool?) ?? false;
+            if (from.isNotEmpty && to.isNotEmpty && cents > 0) {
+              transfers.add(TransferRecord(from: from, to: to, cents: cents, done: done));
+            }
+          }
+        }
+      } catch (_) {
+        // 历史脏数据：保持空 list，让 UI 给出"开始新轮"提示
+      }
+      return Settlement(
+        id: s.id,
+        groupId: s.groupId,
+        status: s.status == 'active' ? SettlementStatus.active : SettlementStatus.completed,
+        transfers: transfers,
+        roundNo: s.roundNo,
+        createdAt: s.createdAt,
+        completedAt: s.completedAt,
+      );
+    }).toList());
+  }
+
+  /// 新建一轮结算：
+  /// * 先清掉同团已有的 active 轮（脏数据/历史残留统一清理，避免多条 active 共存）；
+  ///   旧 active 直接删除（未完成等于作废，配合用户重新点「开始这一轮」的强意图）。
+  /// * roundNo 取已有最大 + 1，保证第 2 轮、第 3 轮自增正确。
+  /// * 全部账单净额已平衡时（无人欠款）不创建空轮，返回 null；UI 据此给"无需结算"提示。
+  /// * transfersJson 走 jsonEncode 而非字符串拼接，杜绝单元素/零元素边界损坏。
+  Future<Settlement?> createSettlement(String gid) async {
+    final existing = await (db.select(db.settlements)
+          ..where((s) => s.groupId.equals(gid) & s.status.equals('active')))
+        .get();
+    for (final old in existing) {
+      await (db.delete(db.settlements)..where((x) => x.id.equals(old.id))).go();
+    }
+
+    final outstanding = await (db.select(db.expenses)
+          ..where((e) => e.groupId.equals(gid) & e.settledRoundId.isNull()))
+        .get();
+    final balances = _computeBalances(outstanding);
+    final plan = _minTransferPlan(balances);
+    if (plan.isEmpty) return null;
+
+    final lastRound = await (db.select(db.settlements)
+          ..where((s) => s.groupId.equals(gid))
+          ..orderBy([(s) => OrderingTerm.desc(s.roundNo)])
+          ..limit(1))
+        .getSingleOrNull();
+    final nextRoundNo = (lastRound?.roundNo ?? 0) + 1;
+
+    final id = newId("settle");
+    final transfersJson = jsonEncode([
+      for (final t in plan)
+        {
+          "from": t["from"],
+          "to": t["to"],
+          "cents": t["cents"],
+          "done": false,
+        }
+    ]);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.into(db.settlements).insert(SettlementsCompanion(
+      id: Value(id),
+      groupId: Value(gid),
+      status: const Value("active"),
+      transfersJson: Value(transfersJson),
+      expenseIdsJson: Value(jsonEncode([for (final e in outstanding) e.id])),
+      roundNo: Value(nextRoundNo),
+      createdAt: Value(now),
+    ));
+    final created = Settlement(
+      id: id,
+      groupId: gid,
+      status: SettlementStatus.active,
+      transfers: [
+        for (final t in plan)
+          TransferRecord(
+            from: t["from"] as String,
+            to: t["to"] as String,
+            cents: t["cents"] as int,
+            done: false,
+          )
+      ],
+      roundNo: nextRoundNo,
+      createdAt: now,
+      completedAt: null,
+    );
+    return created;
+  }
   Future<void> markTransferDone(String sid, int index, bool done) async { final s=await (db.select(db.settlements)..where((x)=>x.id.equals(sid))).getSingleOrNull(); if(s==null) return; final list=jsonDecode(s.transfersJson) as List; if(index<0||index>=list.length) return; list[index]["done"]=done; await (db.update(db.settlements)..where((x)=>x.id.equals(sid))).write(SettlementsCompanion(transfersJson:Value(jsonEncode(list)))); }
   Future<void> completeSettlement(String sid) async { final s=await (db.select(db.settlements)..where((x)=>x.id.equals(sid))).getSingleOrNull(); if(s==null) return; final eids=jsonDecode(s.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(sid))); } await (db.update(db.settlements)..where((x)=>x.id.equals(sid))).write(SettlementsCompanion(status:Value("completed"),completedAt:Value(DateTime.now().millisecondsSinceEpoch))); }
   Future<void> undoLastSettlement(String gid) async { final s=await (db.select(db.settlements)..where((x)=>x.groupId.equals(gid)&x.status.equals("completed"))..orderBy([(x)=>OrderingTerm.desc(x.createdAt)])).get(); if(s.isEmpty) return; final last=s.first; final eids=jsonDecode(last.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(null))); } await (db.delete(db.settlements)..where((x)=>x.id.equals(last.id))).go(); }
@@ -280,6 +386,236 @@ class LedgerRepository {
     });
   }
 
+  // === 专有格式备份（.tav） ===
+  /// 导出完整团备份（团+成员+账单+结算轮+行程及安排+自定义分类）为二进制 .tav。
+  Future<Uint8List> exportGroupBackupBytes(String gid) async {
+    final g = await getGroup(gid);
+    final members = await getMembers(gid);
+    final expenses = await (db.select(db.expenses)
+          ..where((e) => e.groupId.equals(gid)))
+        .get();
+    final settlements = await (db.select(db.settlements)
+          ..where((s) => s.groupId.equals(gid)))
+        .get();
+    final trips = await (db.select(db.trips)
+          ..where((t) => t.groupId.equals(gid)))
+        .get();
+    final categories = await (db.select(db.categories)
+          ..where((c) => c.builtin.equals(false)))
+        .get();
+    final tripsWithItems = <Map<String, dynamic>>[];
+    for (final t in trips) {
+      final items = await (db.select(db.tripItems)
+            ..where((i) => i.tripId.equals(t.id)))
+          .get();
+      tripsWithItems.add(<String, dynamic>{
+        ...t.toJson(),
+        'items': [for (final it in items) it.toJson()],
+      });
+    }
+    final backup = buildGroupBackup(
+      group: g?.toJson() ?? <String, dynamic>{'id': gid, 'name': '', 'icon': '📁'},
+      members: [for (final m in members) m.toJson()],
+      expenses: [for (final e in expenses) _groupExpenseMap(e)],
+      settlements: [for (final s in settlements) _groupSettlementMap(s)],
+      trips: tripsWithItems,
+      customCategories: [for (final c in categories) c.toJson()],
+    );
+    return encodeBackup(kGroupBackupMagic, backup);
+  }
+
+  /// 导入专有 .tav 备份（亦兼容旧 JSON 文本回退）。
+  Future<ImportReport> importGroupBackupBytes(Uint8List bytes) async {
+    Map<String, dynamic> root;
+    if (looksLikeBackupEnvelope(bytes, acceptedMagics: [kGroupBackupMagic])) {
+      root = decodeBackup(bytes, acceptedMagics: [kGroupBackupMagic]);
+    } else {
+      return importGroupJson(utf8.decode(bytes)); // 旧 JSON 备份
+    }
+    final backup = parseGroupBackupMap(root);
+    final existingByName = await _existingCategoryNameToKey();
+    final result = applyImport(backup, existingCategoryByName: existingByName);
+    return _insertFullBackup(result);
+  }
+
+  Future<Map<String, String>> _existingCategoryNameToKey() async {
+    final rows = await (db.select(db.categories)).get();
+    final map = <String, String>{};
+    for (final c in rows) {
+      if (c.name.isNotEmpty) map[c.name] = c.key;
+    }
+    return map;
+  }
+
+  Future<ImportReport> _insertFullBackup(ImportResult r) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final warnings = <String>[];
+    return db.transaction<ImportReport>(() async {
+      await db.into(db.groups).insert(GroupsCompanion(
+        id: Value(r.group['id'] as String),
+        name: Value(_nonEmpty(r.group['name'] as String?, '导入的团')),
+        icon: Value(_nonEmpty(r.group['icon'] as String?, '📁')),
+        budgetEnabled:
+            Value(r.group['budgetEnabled'] is bool ? r.group['budgetEnabled'] as bool : false),
+        budgetCents:
+            Value(r.group['budgetCents'] is int ? r.group['budgetCents'] as int? : null),
+        createdAt: Value(r.group['createdAt'] is int ? r.group['createdAt'] as int : now),
+        updatedAt: Value(now),
+      ));
+      for (final m in r.members) {
+        await db.into(db.members).insert(MembersCompanion(
+          id: Value(m['id'] as String),
+          groupId: Value(r.group['id'] as String),
+          name: Value(_nonEmpty(m['name'] as String?, '(未命名)')),
+          colorIndex: Value(m['colorIndex'] is int ? (m['colorIndex'] as int) % 8 : 0),
+          createdAt: Value(m['createdAt'] is int ? m['createdAt'] as int : now),
+        ));
+      }
+      for (final e in r.expenses) {
+        await db.into(db.expenses).insert(ExpensesCompanion(
+          id: Value(e['id'] as String),
+          groupId: Value(r.group['id'] as String),
+          dateEpochDay: Value(_epochDayOfMap(e)),
+          title: Value(_nonEmpty(e['title'] as String?, '未命名账单')),
+          categoryKey: Value(_nonEmpty(e['categoryKey'] as String?, 'other')),
+          type: Value(kExpenseTypeNames.contains(e['type']) ? e['type'] as String : 'normal'),
+          amountCents: Value(e['amountCents'] is int ? e['amountCents'] as int : 0),
+          currency: Value(_nonEmpty(e['currency'] as String?, 'CNY')),
+          rate: Value(e['rate'] is num ? (e['rate'] as num).toDouble() : 1.0),
+          amountForeignCents:
+              Value(e['amountForeignCents'] is int ? e['amountForeignCents'] as int? : null),
+          payersJson: Value(jsonEncode(e['payers'] is List ? e['payers'] : [])),
+          sharesJson: Value(jsonEncode(e['shares'] is List ? e['shares'] : [])),
+          shareMode:
+              Value(kShareModeNames.contains(e['shareMode']) ? e['shareMode'] as String : 'equal'),
+          portionsJson: Value(e['portions'] is List ? jsonEncode(e['portions']) : null),
+          note: Value((e['note'] as String? ?? '')),
+          settledRoundId: Value(e['settledRoundId'] is String ? e['settledRoundId'] as String? : null),
+          tripId: Value(e['tripId'] is String ? e['tripId'] as String? : null),
+          tripItemId: Value(e['tripItemId'] is String ? e['tripItemId'] as String? : null),
+          createdAt: Value(e['createdAt'] is int ? e['createdAt'] as int : now),
+        ));
+      }
+      for (final s in r.settlements) {
+        await db.into(db.settlements).insert(SettlementsCompanion(
+          id: Value(s['id'] as String),
+          groupId: Value(r.group['id'] as String),
+          status: Value(_nonEmpty(s['status'] as String?, 'active')),
+          transfersJson:
+              Value(jsonEncode(s['transfers'] is List ? s['transfers'] : [])),
+          expenseIdsJson:
+              Value(jsonEncode(s['expenseIds'] is List ? s['expenseIds'] : [])),
+          roundNo: Value(s['roundNo'] is int ? s['roundNo'] as int : 1),
+          createdAt: Value(s['createdAt'] is int ? s['createdAt'] as int : now),
+          completedAt: Value(s['completedAt'] is int ? s['completedAt'] as int? : null),
+        ));
+      }
+      var tripCount = 0, itemCount = 0;
+      for (final t in r.trips) {
+        await db.into(db.trips).insert(TripsCompanion(
+          id: Value(t['id'] as String),
+          name: Value(_nonEmpty(t['name'] as String?, '导入的行程')),
+          destination: Value((t['destination'] as String? ?? '')),
+          emoji: Value(_nonEmpty(t['emoji'] as String?, '✈️')),
+          cover: Value(_nonEmpty(t['cover'] as String?, 'ocean')),
+          startEpochDay: Value(t['startEpochDay'] is int ? t['startEpochDay'] as int : 0),
+          endEpochDay: Value(t['endEpochDay'] is int ? t['endEpochDay'] as int : 0),
+          note: Value((t['note'] as String? ?? '')),
+          groupId: Value(r.group['id'] as String),
+          archived: Value(t['archived'] is bool ? t['archived'] as bool : false),
+          createdAt: Value(t['createdAt'] is int ? t['createdAt'] as int : now),
+          updatedAt: Value(now),
+        ));
+        tripCount++;
+        for (final it in _asMapList(t['items'])) {
+          await db.into(db.tripItems).insert(_tripItemCompanion(it, now, t['id'] as String));
+          itemCount++;
+        }
+      }
+      for (final c in r.customCategories) {
+        await db.into(db.categories).insert(
+          CategoriesCompanion(
+            key: Value(c['key'] as String),
+            name: Value((c['name'] as String? ?? '')),
+            icon: Value(_nonEmpty(c['icon'] as String?, '📦')),
+            builtin: Value(c['builtin'] is bool ? c['builtin'] as bool : false),
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+      return ImportReport(
+        groups: 1,
+        members: r.members.length,
+        expenses: r.expenses.length,
+        settlements: r.settlements.length,
+        trips: tripCount,
+        tripItems: itemCount,
+        reusedCategories: r.stats.reusedCategories,
+        warnings: warnings,
+      );
+    });
+  }
+
+  Map<String, dynamic> _groupExpenseMap(Expense e) => <String, dynamic>{
+        'id': e.id,
+        'title': e.title,
+        'amountCents': e.amountCents,
+        'dateEpochDay': e.dateEpochDay,
+        'type': e.type,
+        'currency': e.currency,
+        'rate': e.rate,
+        'amountForeignCents': e.amountForeignCents,
+        'payers': jsonDecode(e.payersJson),
+        'shares': jsonDecode(e.sharesJson),
+        'portions': e.portionsJson == null ? <dynamic>[] : jsonDecode(e.portionsJson!),
+        'note': e.note,
+        'categoryKey': e.categoryKey,
+        'settledRoundId': e.settledRoundId,
+        'tripId': e.tripId,
+        'tripItemId': e.tripItemId,
+      };
+
+  Map<String, dynamic> _groupSettlementMap(dynamic s) => <String, dynamic>{
+        'id': s.id,
+        'status': s.status,
+        'roundNo': s.roundNo,
+        'createdAt': s.createdAt,
+        'completedAt': s.completedAt,
+        'transfers': jsonDecode(s.transfersJson),
+        'expenseIds': jsonDecode(s.expenseIdsJson),
+      };
+
+  TripItemsCompanion _tripItemCompanion(Map<String, dynamic> it, int now, String tripId) {
+    return TripItemsCompanion(
+      id: Value(it['id'] as String),
+      tripId: Value(tripId),
+      dateEpochDay: Value(it['dateEpochDay'] is int ? it['dateEpochDay'] as int : 0),
+      type: Value(_nonEmpty(it['type'] as String?, 'attraction')),
+      name: Value(_nonEmpty(it['name'] as String?, '安排')),
+      address: Value((it['address'] as String? ?? '')),
+      lat: Value(it['lat'] is num ? (it['lat'] as num).toDouble() : null),
+      lng: Value(it['lng'] is num ? (it['lng'] as num).toDouble() : null),
+      photoUri: Value(it['photoUri'] as String?),
+      startTimeMin: Value(it['startTimeMin'] is int ? it['startTimeMin'] as int? : null),
+      durationMin: Value(it['durationMin'] is int ? it['durationMin'] as int? : null),
+      costCents: Value(it['costCents'] is int ? it['costCents'] as int? : null),
+      costCurrency: Value(_nonEmpty(it['costCurrency'] as String?, 'CNY')),
+      note: Value((it['note'] as String? ?? '')),
+      fromName: Value((it['fromName'] as String? ?? '')),
+      fromAddress: Value((it['fromAddress'] as String? ?? '')),
+      fromLat: Value(it['fromLat'] is num ? (it['fromLat'] as num).toDouble() : null),
+      fromLng: Value(it['fromLng'] is num ? (it['fromLng'] as num).toDouble() : null),
+      toName: Value((it['toName'] as String? ?? '')),
+      toAddress: Value((it['toAddress'] as String? ?? '')),
+      toLat: Value(it['toLat'] is num ? (it['toLat'] as num).toDouble() : null),
+      toLng: Value(it['toLng'] is num ? (it['toLng'] as num).toDouble() : null),
+      flightNo: Value(it['flightNo'] as String?),
+      sortOrder: Value(it['sortOrder'] is int ? it['sortOrder'] as int : 0),
+      createdAt: Value(it['createdAt'] is int ? it['createdAt'] as int : now),
+      updatedAt: Value(now),
+    );
+  }
+
   static const kExpenseTypeNames = {'normal','refund','prepay'};
   static const kShareModeNames = {'equal','portions','custom'};
 
@@ -308,6 +644,24 @@ class LedgerRepository {
 
 /// 宽松取整：num 直接转，纯数字字符串尝试解析，其余 null
 int? _asIntOrNull(Object? v) => v is num ? v.toInt() : (v is String ? int.tryParse(v) : null);
+
+/// 空串/ null 时回退到兜底值
+String _nonEmpty(String? v, String fallback) {
+  final t = (v ?? '').trim();
+  return t.isEmpty ? fallback : t;
+}
+
+/// 任意 List 安全转成 Map 列表（过滤非 Map 元素）
+List<Map<String, dynamic>> _asMapList(Object? v) => [
+      for (final e in (v as List<dynamic>? ?? <dynamic>[]))
+        if (e is Map) (e as Map).cast<String, dynamic>(),
+    ];
+
+/// 取账单的日期（兼容 date / dateEpochDay 两种键）
+int _epochDayOfMap(Map<String, dynamic> e) {
+  final d = e['dateEpochDay'] ?? e['date'];
+  return d is int ? d : 0;
+}
 
 /// 账单日期：优先 dateEpochDay(int)，兼容 date 键（int epochDay 或可解析的 ISO 字符串），兜底今天
 int _epochDayOf(Map<String,dynamic> e) {
