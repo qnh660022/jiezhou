@@ -442,29 +442,35 @@ class _TravelQuoteFooterState extends State<_TravelQuoteFooter> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
               Spacing.xxl, Spacing.md, Spacing.xxl, Spacing.md),
-          child: Column(
-            children: [
-              Icon(Icons.eco_outlined,
-                  size: 20, color: scheme.primary.withValues(alpha: 0.6)),
-              const SizedBox(height: Spacing.sm),
-              Text(
-                '“${_quote.text}”',
-                textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant, height: 1.6),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '—— ${_quote.by} · 旅途哲思',
-                textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
-                    ?.copyWith(color: scheme.outline),
-              ),
-            ],
+          // 关键：RefreshIndicator 的 Stack 会给子级宽松宽度约束，导致 Column
+          // 收缩成最长一行的宽度、整块贴着左边。强制占满整行宽度后，
+          // 两个 Text 的 textAlign.center 才会相对屏幕宽度真正居中。
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              children: [
+                Icon(Icons.eco_outlined,
+                    size: 20, color: scheme.primary.withValues(alpha: 0.6)),
+                const SizedBox(height: Spacing.sm),
+                Text(
+                  '“${_quote.text}”',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant, height: 1.6),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '—— ${_quote.by} · 旅途哲思',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: scheme.outline),
+                ),
+              ],
+            ),
           ),
         ),
       ),

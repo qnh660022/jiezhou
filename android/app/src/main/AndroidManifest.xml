@@ -35,6 +35,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 禁用 Impeller（Vulkan）渲染器，回退 Skia。
+             Impeller 在部分国产 ROM 的 GPU 驱动上存在冷启动首帧渲染挂起的
+             兼容性问题，症状为启动白屏且永不恢复，杀进程重试后才正常；
+             Dart 侧阻塞已全部排查兜底（v2.4），此处封死最后的引擎层根因。 -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

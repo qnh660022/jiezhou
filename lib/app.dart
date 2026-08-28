@@ -28,12 +28,34 @@ class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 首帧后挂一次：预警→系统通知桥 + 汇率静默刷新。
+    // 只会挂一次：预警→系统通知桥 + 汇率静默刷新。
     // FLUTTER_TEST 环境跳过（通知插件无平台通道，测试也不该有网络副作用）。
     if (!_startupAttached) {
       _startupAttached = true;
       if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-        _closeStartupBridge = attachStartupServices(ref);
+        // 挂载整体挪到首帧渲染之后（addPostFrameCallback）：
+        // didChangeDependencies 正处于 build 阶段，此时绑定 listenManual
+        // 会同步创建 budgetAlertsProvider 依赖图，首帧与 drift 首回流的
+        // flush 级联叠在一起，会触发 riverpod 内部对 _dependencies 的
+        // 并发修改（Concurrent modification during iteration）。挪出首帧后
+        // 依赖图在稳定期创建，竞态窗口自然消除。
+        //
+        // 整体兜底：挂载链路里任何同步异常（provider 初始化、插件通道等）
+        // 都不能打断首帧构建 —— release 模式下首帧管线一旦抛错就永远渲染
+        // 不出来，表现为启动后白屏/灰屏直到杀进程。后台服务挂载失败是
+        // 可降级的（仅丢通知提醒与汇率刷新），绝不能换来一块白屏。
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          try {
+            _closeStartupBridge = attachStartupServices(ref);
+          } catch (e) {
+            assert(() {
+              // ignore: avoid_print
+              print('启动服务挂载失败（不影响首帧）：$e');
+              return true;
+            }());
+          }
+        });
       }
     }
   }

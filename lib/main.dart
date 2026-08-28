@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'core/error_recovery.dart';
 import 'data/providers.dart';
 import 'features/ai/notification_bridge.dart';
 import 'features/ledger/ledger_providers.dart' show currencyRatesProvider;
@@ -33,12 +34,49 @@ Future<void> main() async {
   // 最迟 4 秒内必然执行 —— 白屏的第二个根因也被封死。
   final prefs = await _loadPrefs();
 
-  runApp(
-    ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
-      child: const TravelAssistantApp(),
-    ),
-  );
+  // 全局错误兜底：release 灰屏 → 自动记录堆栈 + 启动窗口期自愈重启 +
+  // 可读错误屏（重启/复制按钮）。必须在 runApp 之前装好。
+  installGlobalErrorHandlers();
+
+  runApp(_BootGate(prefs: prefs));
+}
+
+/// 应用树外壳：监听 [appEpoch]，自愈/手动重启时换 key 强制整树 remount
+/// （含 ProviderScope 全新容器与开屏页重播），无需杀进程。
+class _BootGate extends StatefulWidget {
+  const _BootGate({required this.prefs});
+
+  final SharedPreferences prefs;
+
+  @override
+  State<_BootGate> createState() => _BootGateState();
+}
+
+class _BootGateState extends State<_BootGate> {
+  @override
+  void initState() {
+    super.initState();
+    appEpoch.addListener(_onEpochChanged);
+  }
+
+  void _onEpochChanged() => setState(() {});
+
+  @override
+  void dispose() {
+    appEpoch.removeListener(_onEpochChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(
+      key: ValueKey('app-tree-${appEpoch.value}'),
+      child: ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(widget.prefs)],
+        child: const TravelAssistantApp(),
+      ),
+    );
+  }
 }
 
 /// 安全的 SharedPreferences 装载：正常路径直接返回；
@@ -63,8 +101,13 @@ Future<SharedPreferences> _loadPrefs() async {
 /// * 汇率静默刷新（12h 节流，失败无感）。
 void Function() attachStartupServices(WidgetRef ref) {
   final closeBridge = BudgetAlertNotifierBridge(ref).attach();
-  Future(() => ref.read(exchangeRateServiceProvider).refreshIfStale().then((updated) {
-    if (updated) ref.invalidate(currencyRatesProvider);
-  }));
+  Future(() async {
+    try {
+      final updated = await ref.read(exchangeRateServiceProvider).refreshIfStale();
+      if (updated) ref.invalidate(currencyRatesProvider);
+    } catch (_) {
+      // 汇率刷新失败无感（12h 后会再试），不产生未捕获异步错误。
+    }
+  });
   return closeBridge;
 }

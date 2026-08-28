@@ -57,37 +57,48 @@ class BudgetAlertNotifierBridge {
   /// FLUTTER_TEST 环境下通知插件无平台通道，app.dart 已在测试环境跳过挂载。
   void Function() attach() {
     var lastMaxLevel = -1;
-    void onChange() async {
-      final alerts = _ref.read(budgetAlertsProvider);
-      final group = _ref.read(activeGroupProvider).value;
-      if (group == null || alerts.isEmpty) {
-        lastMaxLevel = -1;
-        return;
-      }
-      final enabled = await _ref.read(budgetAlertsEnabledProvider.future);
-      if (!enabled) return;
-      final maxLevel =
-          alerts.map((a) => a.level.index).reduce((a, b) => a > b ? a : b);
-      if (maxLevel <= lastMaxLevel) return; // 同级或降级不重复通知
-      lastMaxLevel = maxLevel;
 
-      final prefs = _ref.read(sharedPreferencesProvider);
-      final notified = int.tryParse(prefs.getString(_key(group.id)) ?? '') ?? -1;
-      if (maxLevel > notified) {
-        await prefs.setString(_key(group.id), '$maxLevel');
-        final worst = alerts
-            .firstWhere((a) => a.level.index == maxLevel, orElse: () => alerts.first);
-        final levelText = switch (maxLevel) {
-          2 => '预算已超支！',
-          1 => '预算预警',
-          _ => '预算提醒',
-        };
-        await _ref.read(localNotificationServiceProvider).showBudgetAlert(
-              id: 1001,
-              title: '「${group.name}」$levelText',
-              body: worst.messageCn,
-            );
-      }
+    // 回调发生在 riverpod 通知级联内部：绝不能同步 read provider——
+    // 同步 flush 会重入依赖图，在迭代 _dependencies 时触发并发修改异常
+    // （Concurrent modification during iteration）。这里把所有读取推迟到
+    // 微任务执行，读到的都是通知收敛后的稳定最新态，天然规避竞态。
+    void onChange() {
+      Future.microtask(() async {
+        try {
+          final alerts = _ref.read(budgetAlertsProvider);
+          final group = _ref.read(activeGroupProvider).value;
+          if (group == null || alerts.isEmpty) {
+            lastMaxLevel = -1;
+            return;
+          }
+          final enabled = await _ref.read(budgetAlertsEnabledProvider.future);
+          if (!enabled) return;
+          final maxLevel =
+              alerts.map((a) => a.level.index).reduce((a, b) => a > b ? a : b);
+          if (maxLevel <= lastMaxLevel) return; // 同级或降级不重复通知
+          lastMaxLevel = maxLevel;
+
+          final prefs = _ref.read(sharedPreferencesProvider);
+          final notified = int.tryParse(prefs.getString(_key(group.id)) ?? '') ?? -1;
+          if (maxLevel > notified) {
+            await prefs.setString(_key(group.id), '$maxLevel');
+            final worst = alerts
+                .firstWhere((a) => a.level.index == maxLevel, orElse: () => alerts.first);
+            final levelText = switch (maxLevel) {
+              2 => '预算已超支！',
+              1 => '预算预警',
+              _ => '预算提醒',
+            };
+            await _ref.read(localNotificationServiceProvider).showBudgetAlert(
+                  id: 1001,
+                  title: '「${group.name}」$levelText',
+                  body: worst.messageCn,
+                );
+          }
+        } catch (_) {
+          // 通知失败无感：桥只是增值提醒，任何异常都不能冒泡进 riverpod 通知循环。
+        }
+      });
     }
 
     final sub1 = _ref.listenManual(budgetAlertsProvider, (_, __) => onChange());
@@ -95,8 +106,8 @@ class BudgetAlertNotifierBridge {
       lastMaxLevel = -1;
       onChange();
     });
-    // 延迟到微任务再首查：attach 可能发生在首帧构建期间，
-    // 同步读 provider 会触发 riverpod 的并发修改异常。
+    // 延迟到微任务再首查：attach 发生在首帧渲染之后，但同步读 provider
+    // 仍会触发 riverpod 的并发修改异常，统一走微任务。
     Future.microtask(onChange);
     return () {
       sub1.close();
