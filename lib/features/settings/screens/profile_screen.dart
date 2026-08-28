@@ -458,6 +458,7 @@ class _TravelQuoteFooterState extends State<_TravelQuoteFooter> {
               const SizedBox(height: 2),
               Text(
                 '—— ${_quote.by} · 旅途哲思',
+                textAlign: TextAlign.center,
                 style: Theme.of(context)
                     .textTheme
                     .labelSmall

@@ -87,7 +87,8 @@ GroupStats summarize(List<ExpenseRecord> expenses, {required int memberCount}) {
   final list = _nonPrepay(expenses);
   var total = 0;
   for (final e in list) {
-    if (e.type == ExpenseType.refund) continue; // 退款=收款收入，不计入支出总额
+    // 退款按约定为负数（见 models.dart），直接累加即自然冲减总支出：
+    // 酒店 1000 + 退款 200 → 净支出 800。
     total += e.amountCents;
   }
   var prepay = 0;

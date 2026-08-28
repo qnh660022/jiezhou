@@ -402,7 +402,8 @@ class LedgerRepository {
   }
 
   /// 局域网同步用：把团整包以稳定 id 导出为 JSON 快照（与 .tav 同一结构，不含信封）。
-  /// 除当前团外，额外带上【未绑定任何团】的独立行程，让「行程页」也能用局域网一起同步。
+  /// 除当前团外，额外带上【全机其余行程】（含未绑团、绑其他团的），
+  /// 让「行程」和账本一样能参与局域网共享；行程自带 items 数组。
   Future<String> exportGroupSnapshotJson(String gid) async {
     final map = Map<String, dynamic>.from(
         await _buildFullGroupMap(gid)); // 深拷贝，避免污染上层复用结构
@@ -411,7 +412,6 @@ class LedgerRepository {
     final all = await (db.select(db.trips)).get();
     for (final t in all) {
       if (already.contains(t.id)) continue;
-      if (t.groupId != null) continue; // 只补未绑团的独立行程
       final items = await (db.select(db.tripItems)
             ..where((i) => i.tripId.equals(t.id)))
           .get();
@@ -801,9 +801,9 @@ class LedgerRepository {
         'currency': e.currency,
         'rate': e.rate,
         'amountForeignCents': e.amountForeignCents,
-        'payers': jsonDecode(e.payersJson),
-        'shares': jsonDecode(e.sharesJson),
-        'portions': e.portionsJson == null ? <dynamic>[] : jsonDecode(e.portionsJson!),
+        'payers': _safeJsonList(e.payersJson),
+        'shares': _safeJsonList(e.sharesJson),
+        'portions': _safeJson(e.portionsJson),
         'note': e.note,
         'categoryKey': e.categoryKey,
         'settledRoundId': e.settledRoundId,
@@ -818,9 +818,24 @@ class LedgerRepository {
         'roundNo': s.roundNo,
         'createdAt': s.createdAt,
         'completedAt': s.completedAt,
-        'transfers': jsonDecode(s.transfersJson),
-        'expenseIds': jsonDecode(s.expenseIdsJson),
+        'transfers': _safeJson(s.transfersJson),
+        'expenseIds': _safeJson(s.expenseIdsJson),
       };
+
+  /// 稳定解析：单条脏数据绝不让整包快照导出失败（否则对方永远拉取不到账本）。
+  Object? _safeJson(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return jsonDecode(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<dynamic> _safeJsonList(String? raw) {
+    final v = _safeJson(raw);
+    return v is List ? v : <dynamic>[];
+  }
 
   TripItemsCompanion _tripItemCompanion(Map<String, dynamic> it, int now, String tripId) {
     return TripItemsCompanion(
@@ -857,12 +872,16 @@ class LedgerRepository {
   static const kShareModeNames = {'equal','portions','custom'};
 
   // === 辅助 ===
+  /// 净额计算（与 domain/settle_engine 同口径）：已付 − 应摊。
+  /// 退款行（type=='refund'）在存储层可能是正数，这里按「退款为负」约定
+  /// 翻转符号，否则退款会被当成一笔新增支出/收入，结算方案方向完全反掉 —— 钱算错。
   Map<String, int> _computeBalances(List<Expense> expenses) {
     final balances = <String, int>{};
     for (final e in expenses) {
       if (e.settledRoundId != null) continue;
-      _addShareJson(balances, e.payersJson, 1);
-      _addShareJson(balances, e.sharesJson, -1);
+      final sign = e.type == 'refund' ? -1 : 1;
+      _addShareJson(balances, e.payersJson, sign);
+      _addShareJson(balances, e.sharesJson, -sign);
     }
     return balances;
   }

@@ -164,10 +164,10 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
         child: ListView(
           padding: EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xxxl),
           children: [
-            Text('同 Wi-Fi · 纯离线共享记账',
+            Text('同 Wi-Fi · 纯离线共享账本 + 行程',
                 style: TextStyle(fontSize: AppFontSizes.bodyLarge, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            Text('两台手机连同一 Wi-Fi，一个「发起」、一个输口令「加入」，就能双向收发当前团的账本；全链路不走网络，断网也能用。',
+            Text('两台手机连同一 Wi-Fi，一个「发起」、一个输口令「加入」，就能双向收发当前团的账本，并把全机行程（含安排）一并同步；全链路不走网络，断网也能用。',
                 style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant)),
             const SizedBox(height: Spacing.xl),
 
@@ -240,7 +240,7 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
             scheme: scheme,
           ),
           const SizedBox(height: Spacing.md),
-          Text('对方加入后，在本页可看到合并日志。也可让对方在本机用「加入口令」连接后选择拉取/推送。',
+          Text('对方加入后，在本页可看到合并日志。口令同步会带上当前团账本与全机行程，对方拉取/推送时一并合并。',
               style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant)),
           if (_hostLogs.isNotEmpty) ...[
             const SizedBox(height: Spacing.md),
@@ -325,7 +325,7 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
             ),
           ]),
           const SizedBox(height: Spacing.sm),
-          Text('双方已连接的团 id 相同才视为「同一本账」；首次拉取时对方整个团会按同 id 并入本机。',
+          Text('双方已连接的团 id 相同才视为「同一本账」；首次拉取时对方整个团会按同 id 并入本机，其中的行程与安排也会一并同步、各自保留原本归属。',
               style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant)),
         ],
       ],

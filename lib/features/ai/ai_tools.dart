@@ -128,7 +128,7 @@ final List<AiToolDefinition> kAiTools = [
   const AiToolDefinition(
     name: 'add_expense',
     description:
-        '记一笔账单（均摊）。不会立即落库，而是给用户出示一张确认卡，用户在卡片上点确认后由本地记账（模型无需再做任何事）。payer 必须是真实成员名；shareMembers 缺省全体平摊；退款用 expenseType=refund 且金额为正数。',
+        '记一笔账单（均摊）。不会立即落库，而是给用户出示一张确认卡，用户在卡片上点确认后由本地记账（模型无需再做任何事）。payer 必须是真实成员名；shareMembers 缺省全体平摊；退款用 expenseType=refund，金额照常填正数（系统按退款负数口径入账）。',
     parametersSchema: {
       'type': 'object',
       'properties': {
@@ -1555,7 +1555,8 @@ Future<String?> commitExpenseDraft(WidgetRef ref, Map<String, dynamic> args) asy
   if (amountYuan == 0) return '金额不能为 0';
   final isRefund = args['expenseType'] == 'refund';
   final cents = (amountYuan.abs() * 100).round();
-  final signed = isRefund ? cents : cents; // 退款=收款收入，正向计入（收款人在 payers 内拿正数）
+  // 退款 = 收到的钱：按「退款为负」约定入账，结算/统计才会正确冲减
+  final signed = isRefund ? -cents : cents;
   final shares =
       computeSplit(totalCents: signed, memberIds: shareIds, mode: ShareMode.equal);
 
@@ -1735,7 +1736,7 @@ Future<String?> commitTravelPack(WidgetRef ref, Map<String, dynamic> plan) async
       if (payerId == null) continue;
       final isRefund = (se['expenseType'] as String?) == 'refund';
       final cents = (amountYuan.abs() * 100).round();
-      final signed = isRefund ? cents : cents; // 退款正向收款
+      final signed = isRefund ? -cents : cents; // 退款为负，结算/统计正确冲减
       final shares = computeSplit(totalCents: signed, memberIds: allIds, mode: ShareMode.equal);
       var catKey = (se['categoryKey'] as String? ?? '').trim();
       if (catKey.isNotEmpty) {

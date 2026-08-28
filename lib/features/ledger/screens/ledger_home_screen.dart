@@ -891,8 +891,9 @@ class _BillTileState extends ConsumerState<_BillTile> {
                   ],
                 ),
               ),
+              // 退款显示为正（拿回的钱），逻辑层统一按负数参与统计/结算
               MoneyText(
-                e.amountCents,
+                isRefund ? -e.amountCents : e.amountCents,
                 fontSize: AppFontSizes.bodyLarge,
                 semanticColor: true,
               ),

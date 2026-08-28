@@ -551,7 +551,9 @@ class _ExpenseTile extends ConsumerWidget {
                 ],
               ),
             ),
-            MoneyText(expense.amountCents, fontSize: AppFontSizes.bodyLarge, semanticColor: true),
+            // 退款显示为正（拿回的钱），逻辑层统一按负数参与统计/结算
+            MoneyText(isRefund ? -expense.amountCents : expense.amountCents,
+                fontSize: AppFontSizes.bodyLarge, semanticColor: true),
           ],
         ),
       ),

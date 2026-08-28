@@ -253,7 +253,9 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     }
     HapticFeedback.lightImpact();
     final shares = _previewShares!;
-    const sign = 1; // 退/预付/普通统一正向入账，方向由 type 与 payers（收款人）决定
+    // 退款 = 收到退回的钱（收款人在 payers 内），落库统一取负号，
+    // 与 core/money.dart「refund 为负」约定一致，结算/统计才会正确冲减。
+    final sign = _type == ExpenseType.refund ? -1 : 1;
     // 激活团必须存在：否则落到空 groupId 的「幽灵账单」，任何列表都查不到，
     // 表现为「记账成功却不显示」。宁可拦截保存并提示，也不写脏数据。
     final gid = ref.read(activeGroupIdProvider).value;

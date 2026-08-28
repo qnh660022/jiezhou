@@ -177,8 +177,14 @@ final expensesProvider = StreamProvider<List<ExpenseRecord>>((ref) {
 });
 
 /// 单条账单记录 → 视图模型；解析失败返回 null（由上层 .whereType 丢弃）。
+///
+/// 【退款归一】约定「normal/prepay 为正、refund 为负」（见 core/money.dart）。
+/// 历史数据与部分写入路径曾把退款存成正数，这里统一在读取边界幂等地
+/// 归到负数口径（-abs），保证结算/统计/预算/成员榜等下游金额永远一致。
 ExpenseRecord? _tryMapExpense(Expense e) {
   try {
+    final isRefund = e.type == 'refund';
+    final sign = isRefund ? -1 : 1;
     return ExpenseRecord(
       id: e.id,
       groupId: e.groupId,
@@ -186,12 +192,18 @@ ExpenseRecord? _tryMapExpense(Expense e) {
       title: e.title,
       categoryKey: e.categoryKey,
       type: _safeExpenseType(e.type),
-      amountCents: e.amountCents,
+      amountCents: sign * e.amountCents.abs(),
       currency: e.currency,
       rate: e.rate,
       amountForeignCents: e.amountForeignCents,
-      payers: _parseShareList(e.payersJson),
-      shares: _parseShareList(e.sharesJson),
+      payers: [
+        for (final p in _parseShareList(e.payersJson))
+          ShareEntry(memberId: p.memberId, cents: sign * p.cents.abs()),
+      ],
+      shares: [
+        for (final s in _parseShareList(e.sharesJson))
+          ShareEntry(memberId: s.memberId, cents: sign * s.cents.abs()),
+      ],
       shareMode: _safeShareMode(e.shareMode),
       // portions 是 JSON 对象（memberId->份数），不是数组；修正解析避免 TypeError
       portions: e.portionsJson == null ? null : _decodePortions(e.portionsJson!),
@@ -204,6 +216,10 @@ ExpenseRecord? _tryMapExpense(Expense e) {
     return null;
   }
 }
+
+/// 公开的 drift 行 → 领域记录转换（含退款负号归一）。
+/// 非 provider 场景（如行程详情自建记录）也统一走这里，杜绝漏归一。
+ExpenseRecord? expenseRecordOf(Expense e) => _tryMapExpense(e);
 
 /// 安全解析按份数表：JSON 对象 -> {memberId: 份数}；格式异常返回 null 而非抛错。
 Map<String, int>? _decodePortions(String json) {

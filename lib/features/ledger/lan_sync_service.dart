@@ -48,6 +48,7 @@ class LanSyncManager {
     this.snapshotMerger = snapshotMerger;
     _closed = false;
     _code = _newCode();
+    _announce?.cancel(); // 防重复启动造成多定时器叠加
 
     // HTTP 服务
     _http = await HttpServer.bind(InternetAddress.anyIPv4, httpPort);
@@ -104,6 +105,12 @@ class LanSyncManager {
   }
 
   /// 主机端 UDP 事件：收到加入方的发现询问时，单播回执（把广播受限无法到达的兜底掉）。
+  ///
+  /// 【防回声风暴 · 关键】只对「纯询问包」（不带 port 字段）做单播回执；
+  /// 带 port 的包是广播宣告（可能是自己周期性发出的、被本机回收，也可能是
+  /// 同网另一台主机端发来的），一律不回。否则主机会把自己的宣告/回声
+  /// 反复回给自己 → 数据报指数放大 → 主进程忙死、界面卡死、HTTP 快照
+  /// 响应被饿死（对方「拉取不到账本」），且无法退出共享。
   void _onUdpEvent(RawSocketEvent event) {
     if (_closed || _udp == null || _code == null) return;
     if (event != RawSocketEvent.read) return;
@@ -113,9 +120,11 @@ class LanSyncManager {
       final obj = jsonDecode(utf8.decode(dg.data));
       if (obj is Map &&
           obj['app'] == 'trip-sync' &&
+          obj['code'] is String &&
           obj['code'] == _code &&
-          obj['code'] is String) {
-        // 对方在问我的口令 —— 单播回我的端口，确保即使广播被隔离也能被发现。
+          obj['port'] is! int) {
+        // 对方在问我的口令（纯询问，无 port）—— 单播回我的端口，
+        // 确保即使广播被隔离也能被发现。
         final reply = utf8.encode(jsonEncode(
             {'app': 'trip-sync', 'code': _code, 'port': _http?.port}));
         _udp!.send(reply, dg.address, dg.port);
@@ -200,14 +209,19 @@ class LanSyncManager {
 
   /// 拉取主机快照（join 侧）：返回主机当前团快照 JSON。
   Future<String> pullSnapshot(LanPeer peer) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8);
     try {
       final req = await client.getUrl(
               Uri.parse('http://${peer.ip}:${peer.port}/snapshot'))
         ..headers.contentType =
             ContentType('application', 'json', charset: 'utf-8');
       final res = await req.close();
-      return await res.transform(utf8.decoder).join();
+      // 读取阶段也加总超时：主机忙碌/网络抖动时避免 join 侧无限挂起。
+      return await res
+          .transform(utf8.decoder)
+          .join()
+          .timeout(const Duration(seconds: 20));
     } finally {
       client.close(force: true);
     }
@@ -215,14 +229,18 @@ class LanSyncManager {
 
   /// 推送本机快照给主机（join 侧）：返回主机合并后的摘要。
   Future<String> pushSnapshot(LanPeer peer, String snapshotJson) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8);
     try {
       final req = await client
           .postUrl(Uri.parse('http://${peer.ip}:${peer.port}/snapshot'))
         ..headers.contentType = ContentType('application', 'json', charset: 'utf-8');
       req.write(snapshotJson);
       final res = await req.close();
-      return await res.transform(utf8.decoder).join();
+      return await res
+          .transform(utf8.decoder)
+          .join()
+          .timeout(const Duration(seconds: 20));
     } finally {
       client.close(force: true);
     }

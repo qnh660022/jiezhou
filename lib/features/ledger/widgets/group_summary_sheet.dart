@@ -35,12 +35,11 @@ Future<void> showGroupSummarySheet(
       prepay += e.amountCents;
       continue;
     }
+    total += e.amountCents; // 退款为负，自然冲减总支出
     if (e.type == ExpenseType.refund) {
-      // 退款=退回的钱（收款人入账），不计入支出总额，另列展示
-      refund += e.amountCents;
-      continue;
+      // 归正后另列展示「退回多少钱」
+      refund += -e.amountCents;
     }
-    total += e.amountCents;
     if (firstDay == null || e.dateEpochDay < firstDay) firstDay = e.dateEpochDay;
     if (lastDay == null || e.dateEpochDay > lastDay) lastDay = e.dateEpochDay;
   }

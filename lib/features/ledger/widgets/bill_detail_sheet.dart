@@ -52,8 +52,13 @@ class BillDetailSheet extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge),
             ),
-            MoneyText(expense.amountCents,
-                fontSize: AppFontSizes.headline, semanticColor: true),
+            // 退款显示为正（拿回的钱），逻辑层统一按负数参与统计/结算
+            MoneyText(
+                expense.type == ExpenseType.refund
+                    ? -expense.amountCents
+                    : expense.amountCents,
+                fontSize: AppFontSizes.headline,
+                semanticColor: true),
           ],
         ),
         if (expense.tripId != null)
@@ -70,7 +75,12 @@ class BillDetailSheet extends ConsumerWidget {
           value: expense.payers.isEmpty
               ? '-'
               : expense.payers
-                  .map((p) => memberName(p.memberId) + ' ¥' + formatPlainYuan(p.cents))
+                  .map((p) =>
+                      memberName(p.memberId) +
+                      ' ¥' +
+                      formatPlainYuan(expense.type == ExpenseType.refund
+                          ? -p.cents
+                          : p.cents))
                   .join('、'),
         ),
         DetailLine(

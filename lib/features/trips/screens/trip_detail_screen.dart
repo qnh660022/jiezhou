@@ -10,7 +10,6 @@ import '../../../core/uid.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
 import '../../../data/services/weather_service.dart';
-import '../../../domain/models.dart';
 import '../../../domain/trip_bill_linker.dart';
 import '../../ledger/ledger_providers.dart';
 import '../trip_template_store.dart';
@@ -631,6 +630,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   /// 当前选中的天（epochDay）；null = 总览（展示全部按天分组）
   int? _selectedDay;
 
+  /// 行程概览卡是否展开：默认缩略（一行要点），点开才是天气/清单/费用全貌
+  bool _overviewExpanded = false;
+
   Trip get trip => widget.trip;
   List<TripItem> get items => widget.items;  
 
@@ -717,7 +719,21 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             onTapLedger: trip.groupId == null ? widget.onBind : widget.onShowExpenses,
           ),
         ),
-        // 横向滑动：最前放「总览」，后面是每一天，点某天只看当天
+        // 行程概览（默认缩略成一行要点，点开才是天气/清单/费用全貌）在日期栏上方
+        SliverToBoxAdapter(
+          child: _OverviewCard(
+            trip: trip,
+            items: items,
+            bills: bills,
+            ensureWeather: widget.ensureWeather,
+            tripId: trip.id,
+            showAll: showAll,
+            selectedDay: _selectedDay,
+            expanded: _overviewExpanded,
+            onToggle: () => setState(() => _overviewExpanded = !_overviewExpanded),
+          ),
+        ),
+        // 横向滑动日期栏：置于概览下方，配合上面的概览卡成「概览 → 切天 → 每日安排」节奏
         SliverToBoxAdapter(
           child: _DayPicker(
             trip: trip,
@@ -728,17 +744,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               HapticFeedback.selectionClick();
               setState(() => _selectedDay = d);
             },
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: _OverviewCard(
-            trip: trip,
-            items: items,
-            bills: bills,
-            dayKeys: dayKeys,
-            ensureWeather: widget.ensureWeather,
-            tripId: trip.id,
-            showAll: showAll,
           ),
         ),
         SliverList(
@@ -1340,27 +1345,11 @@ class _PlanActualCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty && bills.isEmpty) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
-    // drift 行 -> 领域记录（plannedVsActual 只消费金额/关联字段，其余给中性值）
+    // drift 行 -> 领域记录（统一走 expenseRecordOf：退款已归为负数，
+    // 计划 vs 实际 才会把退款正确冲减到实际支出里）
     final records = [
       for (final e in bills)
-        ExpenseRecord(
-          id: e.id,
-          groupId: e.groupId,
-          dateEpochDay: e.dateEpochDay,
-          title: e.title,
-          categoryKey: e.categoryKey,
-          type: e.type == 'prepay'
-              ? ExpenseType.prepay
-              : (e.type == 'refund' ? ExpenseType.refund : ExpenseType.normal),
-          amountCents: e.amountCents,
-          currency: e.currency,
-          rate: e.rate,
-          payers: const [],
-          shares: const [],
-          settledRoundId: e.settledRoundId,
-          tripId: e.tripId,
-          tripItemId: e.tripItemId,
-        ),
+        if (expenseRecordOf(e) != null) expenseRecordOf(e)!,
     ];
     final plans = [
       for (final it in items)
@@ -1431,42 +1420,110 @@ class _PlanActualCard extends StatelessWidget {
   }
 }
 
-/// 行程概览：把「每天速览」/ 天气 / 清单 / 费用 合并进一张卡，让每日安排时间轴上移为首屏核心
+/// 行程概览：默认「缩略」成一行要点（天数 / 安排数 / 费用合计），
+/// 点开头才展示天气 / 清单 / 计划 vs 实际 全貌 —— 缩略 ≠ 隐藏。
+/// 选中具体某天时（showAll=false）只显示当天的一行速览。
 class _OverviewCard extends StatelessWidget {
   const _OverviewCard({
     required this.trip,
     required this.items,
     required this.bills,
-    required this.dayKeys,
     required this.ensureWeather,
     required this.tripId,
     required this.showAll,
+    required this.selectedDay,
+    required this.expanded,
+    required this.onToggle,
   });
 
   final Trip trip;
   final List<TripItem> items;
   final List<Expense> bills;
-  final Map<int, GlobalKey> dayKeys;
   final Future<List<WeatherDay>?> Function(Trip, List<TripItem>) ensureWeather;
   final String tripId;
 
   /// 是否处于「总览」态（横向选择栏首项）；false 表示只看某一天，概览精简
   final bool showAll;
 
+  /// 当前选中的天（总览态为 null）
+  final int? selectedDay;
+
+  /// 总览态下是否展开全貌（默认缩略成一行要点）
+  final bool expanded;
+  final VoidCallback onToggle;
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    // 缩略态的一行要点：行程总览的「骨架信息」，绝不因缩略而消失
+    final dayCount = tripTotalDays(trip.startEpochDay, trip.endEpochDay);
+    var planCost = 0;
+    for (final it in items) {
+      if (it.costCents != null && it.costCurrency == 'CNY') {
+        planCost += it.costCents!;
+      }
+    }
+    final summaryParts = <String>[
+      '共 $dayCount 天',
+      '${items.length} 个安排',
+      if (planCost > 0) '计划 ¥${MoneyFormat.fenToYuan(planCost)}',
+    ];
+
     return SectionCard(
       padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.md, Spacing.lg, Spacing.md),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            showAll ? '行程概览' : '这一天',
-            style: TextStyle(
-                fontSize: AppFontSizes.body, fontWeight: FontWeight.w700),
+          // 可点开的头部：总览主题 + 一行要点 + 展开/收起指示
+          InkWell(
+            onTap: showAll ? onToggle : null,
+            borderRadius: AppRadius.input,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Text(
+                    showAll ? '行程概览' : '这一天',
+                    style: TextStyle(
+                        fontSize: AppFontSizes.body, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(width: Spacing.sm),
+                  if (!showAll)
+                    Text(
+                      _dayCaption(trip),
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption,
+                          color: scheme.onSurfaceVariant),
+                    )
+                  else
+                    Expanded(
+                      child: Text(
+                        summaryParts.join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: AppFontSizes.caption,
+                            color: scheme.onSurfaceVariant),
+                      ),
+                    ),
+                  if (showAll) ...[
+                    const SizedBox(width: Spacing.sm),
+                    AnimatedRotation(
+                      turns: expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 20, color: scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: Spacing.sm),
-          if (showAll) ...[
+          if (!showAll)
+            _DayMiniSummary(items: items, day: selectedDay)
+          else if (expanded) ...[
+            const SizedBox(height: Spacing.sm),
             _WeatherStrip(trip: trip, items: items, ensureWeather: ensureWeather),
             const SizedBox(height: Spacing.md),
             const Divider(height: 1),
@@ -1478,6 +1535,43 @@ class _OverviewCard extends StatelessWidget {
             _PlanActualCard(trip: trip, items: items, bills: bills),
           ],
         ],
+      ),
+    );
+  }
+
+  String _dayCaption(Trip trip) {
+    final d = selectedDay;
+    if (d == null) return '';
+    return 'D${d - trip.startEpochDay + 1} · ${cnFullDate(d)}';
+  }
+}
+
+/// 「这一天」速览卡：当天安排数与计划费用的一行小结（缩略而不隐藏）
+class _DayMiniSummary extends StatelessWidget {
+  const _DayMiniSummary({required this.items, this.day});
+
+  final List<TripItem> items;
+
+  /// 选中的那天（epochDay）
+  final int? day;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    var count = 0;
+    var cost = 0;
+    for (final it in items) {
+      if (day != null && it.dateEpochDay != day) continue;
+      if (it.costCents != null && it.costCurrency == 'CNY') cost += it.costCents!;
+      count++;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: Spacing.xs),
+      child: Text(
+        '$count 个安排' +
+            (cost > 0 ? ' · 计划 ¥${MoneyFormat.fenToYuan(cost)}' : ''),
+        style: TextStyle(
+            fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant),
       ),
     );
   }
