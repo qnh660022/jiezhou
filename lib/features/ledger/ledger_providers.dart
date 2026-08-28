@@ -341,8 +341,8 @@ final memberBoardProvider = Provider<AsyncValue<List<MemberStatView>>>((ref) {
     final es = (expenses.value ?? const <ExpenseRecord>[])
         .where((e) => e.settledRoundId == null)
         .toList();
-    final paid = StatsCalculator.paidByMember(es);
-    final share = StatsCalculator.shareByMember(es);
+    final paid = StatsCalculator.paidByMember(es, includePrepay: true);
+    final share = StatsCalculator.shareByMember(es, includePrepay: true);
     return [
       for (final m in ms)
         MemberStatView(
@@ -602,6 +602,14 @@ Future<String> importGroupBackupFile(WidgetRef ref, Uint8List bytes) async {
   final report = await ref.read(ledgerRepoProvider).importGroupBackupBytes(bytes);
   return summarizeImportReport(report);
 }
+
+/// 局域网同步：导出当前团整包 JSON 快照（稳定 id）
+Future<String> exportGroupSnapshot(WidgetRef ref, String gid) =>
+    ref.read(ledgerRepoProvider).exportGroupSnapshotJson(gid);
+
+/// 局域网同步：把收到的整包快照按 id 合并进本地（LWW），返回人类可读摘要
+Future<String> mergeGroupSnapshot(WidgetRef ref, String raw) =>
+    ref.read(ledgerRepoProvider).mergeGroupSnapshotJson(raw);
 
 /// 导入团（旧 JSON 文本粘贴），返回人类可读摘要
 Future<String> importGroupFromText(WidgetRef ref, String jsonText) async {

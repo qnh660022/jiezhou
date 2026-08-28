@@ -397,6 +397,18 @@ class LedgerRepository {
   // === 专有格式备份（.tav） ===
   /// 导出完整团备份（团+成员+账单+结算轮+行程及安排+自定义分类）为二进制 .tav。
   Future<Uint8List> exportGroupBackupBytes(String gid) async {
+    final backup = await _buildFullGroupMap(gid);
+    return encodeBackup(kGroupBackupMagic, backup);
+  }
+
+  /// 局域网同步用：把团整包以稳定 id 导出为 JSON 快照（与 .tav 同一结构，不含信封）。
+  Future<String> exportGroupSnapshotJson(String gid) async =>
+      jsonEncode(await _buildFullGroupMap(gid));
+
+  /// Android 已通过 manifest 放行网络，见 AndroidManifest.xml。
+
+  /// 组装整包结构（稳定 id，供 .tav 与局域网快照共用）。
+  Future<Map<String, dynamic>> _buildFullGroupMap(String gid) async {
     final g = await getGroup(gid);
     final members = await getMembers(gid);
     final expenses = await (db.select(db.expenses)
@@ -421,7 +433,7 @@ class LedgerRepository {
         'items': [for (final it in items) it.toJson()],
       });
     }
-    final backup = buildGroupBackup(
+    return buildGroupBackup(
       group: g?.toJson() ?? <String, dynamic>{'id': gid, 'name': '', 'icon': '📁'},
       members: [for (final m in members) m.toJson()],
       expenses: [for (final e in expenses) _groupExpenseMap(e)],
@@ -429,7 +441,204 @@ class LedgerRepository {
       trips: tripsWithItems,
       customCategories: [for (final c in categories) c.toJson()],
     );
-    return encodeBackup(kGroupBackupMagic, backup);
+  }
+
+  /// 局域网同步：把收到的整包快照合并进本地。
+  /// 口径：实体 id 稳定，逐条 upsert；退/重复以【更新/创建时间晚者胜】（LWW）。
+  /// 收到团 id 本地不存在则原样采纳（同 id 入库，别端即“同一本账”）。
+  /// 返回人类可读摘要。
+  Future<String> mergeGroupSnapshotJson(String raw) async {
+    final backup = parseGroupBackupMap(
+        (jsonDecode(raw) as Map).cast<String, dynamic>());
+    final gid = backup.group['id'] as String? ?? '';
+    if (gid.isEmpty) return '快照缺少团 id';
+    final now = DateTime.now().millisecondsSinceEpoch;
+    var addGroup = 0, updGroup = 0, members = 0, expenses = 0, settlements = 0,
+        trips = 0, items = 0;
+
+    await db.transaction(() async {
+      // ---- 团 ----
+      final g = backup.group;
+      final existsGroup = await getGroup(gid);
+      if (existsGroup == null) {
+        await db.into(db.groups).insert(GroupsCompanion(
+          id: Value(gid),
+          name: Value(_nonEmpty(g['name'] as String?, '同步的团')),
+          icon: Value(_nonEmpty(g['icon'] as String?, '📁')),
+          budgetEnabled: Value(g['budgetEnabled'] is bool ? g['budgetEnabled'] as bool : false),
+          budgetCents: Value(g['budgetCents'] is int ? g['budgetCents'] as int? : null),
+          archived: Value(g['archived'] is bool ? g['archived'] as bool : false),
+          archivedAtMs: Value(g['archivedAtMs'] is int ? g['archivedAtMs'] as int? : null),
+          createdAt: Value(g['createdAt'] is int ? g['createdAt'] as int : now),
+          updatedAt: Value(now),
+        ));
+        addGroup++;
+      } else {
+        final inUpd = g['updatedAt'] is int ? g['updatedAt'] as int : 0;
+        if (inUpd >= (existsGroup.updatedAt ?? 0)) {
+          await (db.update(db.groups)..where((x) => x.id.equals(gid))).write(
+            GroupsCompanion(
+              name: Value(_nonEmpty(g['name'] as String?, existsGroup.name)),
+              icon: Value(_nonEmpty(g['icon'] as String?, existsGroup.icon)),
+              budgetEnabled: Value(g['budgetEnabled'] is bool ? g['budgetEnabled'] as bool : existsGroup.budgetEnabled),
+              budgetCents: Value(g['budgetCents'] is int ? g['budgetCents'] as int? : existsGroup.budgetCents),
+              updatedAt: Value(now),
+            ),
+          );
+          updGroup++;
+        }
+      }
+
+      // ---- 成员（id 稳定，upsert）----
+      for (final m in backup.members) {
+        final mid = m['id'] as String?;
+        if (mid == null) continue;
+        final hit = await (db.select(db.members)..where((x) => x.id.equals(mid))).get();
+        final name = _nonEmpty(m['name'] as String?, '(未命名)');
+        final colorIndex = m['colorIndex'] is int ? (m['colorIndex'] as int) % 8 : 0;
+        if (hit.isEmpty) {
+          await db.into(db.members).insert(MembersCompanion(
+            id: Value(mid), groupId: Value(gid), name: Value(name),
+            colorIndex: Value(colorIndex),
+            createdAt: Value(m['createdAt'] is int ? m['createdAt'] as int : now),
+          ));
+        } else {
+          await (db.update(db.members)..where((x) => x.id.equals(mid))).write(
+            MembersCompanion(
+              groupId: Value(gid), name: Value(name), colorIndex: Value(colorIndex),
+            ),
+          );
+        }
+        members++;
+      }
+
+      // ---- 账单（LWW：createdAt 晚者胜；本地无则入库）----
+      for (final e in backup.expenses) {
+        final eid = e['id'] as String?;
+        if (eid == null) continue;
+        final hit = await (db.select(db.expenses)..where((x) => x.id.equals(eid))).get();
+        final inCreated = e['createdAt'] is int ? e['createdAt'] as int : now;
+        final localCreated = hit.isEmpty ? null : hit.first.createdAt;
+        if (hit.isNotEmpty && localCreated != null && localCreated > inCreated) {
+          continue; // 本地更新
+        }
+        final comp = ExpensesCompanion(
+          id: Value(eid),
+          groupId: Value(gid),
+          dateEpochDay: Value(_epochDayOfMap(e)),
+          title: Value(_nonEmpty(e['title'] as String?, '未命名账单')),
+          categoryKey: Value(_nonEmpty(e['categoryKey'] as String?, 'other')),
+          type: Value(kExpenseTypeNames.contains(e['type']) ? e['type'] as String : 'normal'),
+          amountCents: Value(e['amountCents'] is int ? e['amountCents'] as int : 0),
+          currency: Value(_nonEmpty(e['currency'] as String?, 'CNY')),
+          rate: Value(e['rate'] is num ? (e['rate'] as num).toDouble() : 1.0),
+          amountForeignCents: Value(e['amountForeignCents'] is int ? e['amountForeignCents'] as int? : null),
+          payersJson: Value(e['payers'] is List ? jsonEncode(e['payers']) : '[]'),
+          sharesJson: Value(e['shares'] is List ? jsonEncode(e['shares']) : '[]'),
+          shareMode: Value(kShareModeNames.contains(e['shareMode']) ? e['shareMode'] as String : 'equal'),
+          portionsJson: Value(e['portions'] is List && (e['portions'] as List).isNotEmpty ? jsonEncode(e['portions']) : null),
+          note: Value((e['note'] as String? ?? '')),
+          settledRoundId: Value(e['settledRoundId'] is String ? e['settledRoundId'] as String? : null),
+          tripId: Value(e['tripId'] is String ? e['tripId'] as String? : null),
+          tripItemId: Value(e['tripItemId'] is String ? e['tripItemId'] as String? : null),
+          createdAt: Value(inCreated),
+        );
+        if (hit.isEmpty) {
+          await db.into(db.expenses).insert(comp);
+        } else {
+          await (db.update(db.expenses)..where((x) => x.id.equals(eid))).write(comp);
+        }
+        expenses++;
+      }
+
+      // ---- 结算轮（LWW createdAt）----
+      for (final s in backup.settlements) {
+        final sid = s['id'] as String?;
+        if (sid == null) continue;
+        final hit = await (db.select(db.settlements)..where((x) => x.id.equals(sid))).get();
+        final inCreated = s['createdAt'] is int ? s['createdAt'] as int : now;
+        final localCreated = hit.isEmpty ? null : hit.first.createdAt;
+        if (hit.isNotEmpty && localCreated != null && localCreated > inCreated) {
+          continue;
+        }
+        final comp = SettlementsCompanion(
+          id: Value(sid),
+          groupId: Value(gid),
+          status: Value(_nonEmpty(s['status'] as String?, 'active')),
+          transfersJson: Value(s['transfers'] is List ? jsonEncode(s['transfers']) : '[]'),
+          expenseIdsJson: Value(s['expenseIds'] is List ? jsonEncode(s['expenseIds']) : '[]'),
+          roundNo: Value(s['roundNo'] is int ? s['roundNo'] as int : 1),
+          createdAt: Value(inCreated),
+          completedAt: Value(s['completedAt'] is int ? s['completedAt'] as int? : null),
+        );
+        if (hit.isEmpty) {
+          await db.into(db.settlements).insert(comp);
+        } else {
+          await (db.update(db.settlements)..where((x) => x.id.equals(sid))).write(comp);
+        }
+        settlements++;
+      }
+
+      // ---- 行程 + 安排（LWW updatedAt）----
+      for (final t in backup.trips) {
+        final tid = t['id'] as String?;
+        if (tid == null) continue;
+        final hit = await (db.select(db.trips)..where((x) => x.id.equals(tid))).get();
+        final inUpd = t['updatedAt'] is int ? t['updatedAt'] as int : 0;
+        final localUpd = hit.isEmpty ? -1 : (hit.first.updatedAt ?? 0);
+        final apply = hit.isEmpty || inUpd >= localUpd;
+        if (apply) {
+          if (hit.isEmpty) {
+            await db.into(db.trips).insert(TripsCompanion(
+              id: Value(tid),
+              name: Value(_nonEmpty(t['name'] as String?, '同步的行程')),
+              destination: Value((t['destination'] as String? ?? '')),
+              emoji: Value(_nonEmpty(t['emoji'] as String?, '✈️')),
+              cover: Value(_nonEmpty(t['cover'] as String?, 'ocean')),
+              startEpochDay: Value(t['startEpochDay'] is int ? t['startEpochDay'] as int : 0),
+              endEpochDay: Value(t['endEpochDay'] is int ? t['endEpochDay'] as int : 0),
+              note: Value((t['note'] as String? ?? '')),
+              groupId: Value(gid),
+              archived: Value(t['archived'] is bool ? t['archived'] as bool : false),
+              createdAt: Value(t['createdAt'] is int ? t['createdAt'] as int : now),
+              updatedAt: Value(now),
+            ));
+          } else {
+            await (db.update(db.trips)..where((x) => x.id.equals(tid))).write(TripsCompanion(
+              name: Value(_nonEmpty(t['name'] as String?, hit.first.name)),
+              destination: Value((t['destination'] as String? ?? '')),
+              emoji: Value(_nonEmpty(t['emoji'] as String?, '✈️')),
+              cover: Value(_nonEmpty(t['cover'] as String?, 'ocean')),
+              startEpochDay: Value(t['startEpochDay'] is int ? t['startEpochDay'] as int : hit.first.startEpochDay),
+              endEpochDay: Value(t['endEpochDay'] is int ? t['endEpochDay'] as int : hit.first.endEpochDay),
+              note: Value((t['note'] as String? ?? '')),
+              archived: Value(t['archived'] is bool ? t['archived'] as bool : hit.first.archived),
+              updatedAt: Value(now),
+            ));
+          }
+          trips++;
+        }
+        if (apply) {
+          for (final it in _asMapList(t['items'])) {
+            final iid = it['id'] as String;
+            final ihit = await (db.select(db.tripItems)..where((x) => x.id.equals(iid))).get();
+            final iUpd = it['updatedAt'] is int ? it['updatedAt'] as int : 0;
+            final iLocal = ihit.isEmpty ? -1 : (ihit.first.updatedAt ?? 0);
+            if (ihit.isNotEmpty && iLocal > iUpd) continue;
+            final comp = _tripItemCompanion(it, now, tid);
+            if (ihit.isEmpty) {
+              await db.into(db.tripItems).insert(comp);
+            } else {
+              await (db.update(db.tripItems)..where((x) => x.id.equals(iid))).write(comp);
+            }
+            items++;
+          }
+        }
+      }
+    });
+
+    return '合并完成：团$addGroup新增/更新$updGroup · 成员$members · 账单$expenses · '
+        '结算$settlements · 行程$trips · 安排$items';
   }
 
   /// 导入专有 .tav 备份（亦兼容旧 JSON 文本回退）。
@@ -581,6 +790,7 @@ class LedgerRepository {
         'settledRoundId': e.settledRoundId,
         'tripId': e.tripId,
         'tripItemId': e.tripItemId,
+        'createdAt': e.createdAt,
       };
 
   Map<String, dynamic> _groupSettlementMap(dynamic s) => <String, dynamic>{
@@ -631,7 +841,7 @@ class LedgerRepository {
   Map<String, int> _computeBalances(List<Expense> expenses) {
     final balances = <String, int>{};
     for (final e in expenses) {
-      if (e.settledRoundId != null || e.type == 'prepay') continue;
+      if (e.settledRoundId != null) continue;
       _addShareJson(balances, e.payersJson, 1);
       _addShareJson(balances, e.sharesJson, -1);
     }

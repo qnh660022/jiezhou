@@ -629,6 +629,11 @@ class _DetailBody extends ConsumerWidget {
     // 行程关联账单：入账徽章 + 计划vs实际 共用一份数据
     final bills =
         ref.watch(tripBillsProvider(trip.id)).value ?? const <Expense>[];
+    // 每天区块的锚点：供「每天速览」点击跳转滚动定位用
+    final dayKeys = <int, GlobalKey>{};
+    for (final it in items) {
+      dayKeys.putIfAbsent(it.dateEpochDay, GlobalKey.new);
+    }
     // itemId -> 最新一条未结算关联账单（仲裁约定：createdAt 最新为目标）
     final latestUnsettledByItem = <String, Expense>{};
     final byCreated = [...bills]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -687,13 +692,14 @@ class _DetailBody extends ConsumerWidget {
             trip: trip,
             items: items,
             bills: bills,
+            dayKeys: dayKeys,
             ensureWeather: ensureWeather,
             tripId: trip.id,
           ),
         ),
         SliverList(
           delegate: SliverChildListDelegate(
-              _buildDaySections(context, ref, latestUnsettledByItem)),
+              _buildDaySections(context, ref, latestUnsettledByItem, dayKeys)),
         ),
         // 尾部留白：内容可从悬浮胶囊导航下方穿过，末尾垫高保证最后一条可达
         SliverToBoxAdapter(
@@ -728,7 +734,8 @@ class _DetailBody extends ConsumerWidget {
 
   /// 按天分组时间轴区块（[latestUnsettledByItem]：安排 id -> 最新未结算关联账单）
   List<Widget> _buildDaySections(BuildContext context, WidgetRef ref,
-      Map<String, Expense> latestUnsettledByItem) {
+      Map<String, Expense> latestUnsettledByItem,
+      Map<int, GlobalKey> dayKeys) {
     final byDay = <int, List<TripItem>>{};
     for (final it in items) {
       (byDay[it.dateEpochDay] ??= []).add(it);
@@ -746,10 +753,13 @@ class _DetailBody extends ConsumerWidget {
     }
     for (final day in days) {
       final list = byDay[day]!;
-      widgets.add(_DayHeader(
-        dayIndex: day - trip.startEpochDay + 1,
-        day: day,
-        count: list.length,
+      widgets.add(KeyedSubtree(
+        key: dayKeys[day],
+        child: _DayHeader(
+          dayIndex: day - trip.startEpochDay + 1,
+          day: day,
+          count: list.length,
+        ),
       ));
       for (var i = 0; i < list.length; i++) {
         final it = list[i];
@@ -1378,12 +1388,13 @@ class _PlanActualCard extends StatelessWidget {
   }
 }
 
-/// 行程概览：把天气 / 清单 / 费用 三块合并进一张卡，让每日安排时间轴上移为首屏核心
+/// 行程概览：把「每天速览」/ 天气 / 清单 / 费用 合并进一张卡，让每日安排时间轴上移为首屏核心
 class _OverviewCard extends StatelessWidget {
   const _OverviewCard({
     required this.trip,
     required this.items,
     required this.bills,
+    required this.dayKeys,
     required this.ensureWeather,
     required this.tripId,
   });
@@ -1391,11 +1402,20 @@ class _OverviewCard extends StatelessWidget {
   final Trip trip;
   final List<TripItem> items;
   final List<Expense> bills;
+  final Map<int, GlobalKey> dayKeys;
   final Future<List<WeatherDay>?> Function(Trip, List<TripItem>) ensureWeather;
   final String tripId;
 
   @override
   Widget build(BuildContext context) {
+    final byDay = <int, List<TripItem>>{};
+    for (final it in items) {
+      (byDay[it.dateEpochDay] ??= []).add(it);
+    }
+    for (final list in byDay.values) {
+      list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    }
+    final days = byDay.keys.toList()..sort();
     return SectionCard(
       padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.md, Spacing.lg, Spacing.md),
       child: Column(
@@ -1405,6 +1425,17 @@ class _OverviewCard extends StatelessWidget {
               style: TextStyle(
                   fontSize: AppFontSizes.body, fontWeight: FontWeight.w700)),
           const SizedBox(height: Spacing.sm),
+          if (days.isNotEmpty) ...[
+            _DailySnap(
+              trip: trip,
+              days: days,
+              byDay: byDay,
+              dayKeys: dayKeys,
+            ),
+            const SizedBox(height: Spacing.md),
+            const Divider(height: 1),
+            const SizedBox(height: Spacing.sm),
+          ],
           _WeatherStrip(trip: trip, items: items, ensureWeather: ensureWeather),
           const SizedBox(height: Spacing.md),
           const Divider(height: 1),
@@ -1417,6 +1448,115 @@ class _OverviewCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// 每天速览：顶部按天缩略展示当天安排，点击平滑滚动到对应天的详细区块
+class _DailySnap extends StatelessWidget {
+  const _DailySnap({
+    required this.trip,
+    required this.days,
+    required this.byDay,
+    required this.dayKeys,
+  });
+
+  final Trip trip;
+  final List<int> days;
+  final Map<int, List<TripItem>> byDay;
+  final Map<int, GlobalKey> dayKeys;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    void jump(int day) {
+      final ctx = dayKeys[day]?.currentContext;
+      if (ctx != null) {
+        HapticFeedback.selectionClick();
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+          alignment: 0.02,
+        );
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('每天速览 · 点日期直达',
+            style: TextStyle(
+                fontSize: AppFontSizes.caption - 1,
+                color: scheme.onSurfaceVariant)),
+        const SizedBox(height: Spacing.sm),
+        for (final (i, day) in days.indexed) ...[
+          if (i > 0) const SizedBox(height: Spacing.sm),
+          InkWell(
+            borderRadius: AppRadius.input,
+            onTap: () => jump(day),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.sm, vertical: Spacing.xs),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: scheme.primaryContainer.withValues(alpha: 0.7),
+                      borderRadius: AppRadius.capsule,
+                    ),
+                    child: Text('D${day - trip.startEpochDay + 1}',
+                        style: TextStyle(
+                            fontSize: AppFontSizes.caption - 1,
+                            fontWeight: FontWeight.w800,
+                            color: scheme.onPrimaryContainer)),
+                  ),
+                  const SizedBox(width: Spacing.sm),
+                  Expanded(
+                    child: Text(
+                      cnFullDate(day),
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: Spacing.sm),
+                  Flexible(
+                    child: Text(
+                      _snapSummary(byDay[day]!),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption - 1,
+                          color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 当天安排的缩略摘要：取前两条类型 emoji+名称，超出以「+N」收尾
+  String _snapSummary(List<TripItem> list) {
+    final visual = {
+      'attraction': '🏞️',
+      'food': '🍜',
+      'transport': '🚗',
+      'stay': '🏨',
+      'note': '📝',
+    };
+    final shown = <String>[];
+    for (final it in list.take(2)) {
+      shown.add('${visual[it.type] ?? '•'} ${it.name}');
+    }
+    if (list.length > 2) shown.add('+${list.length - 2}');
+    return shown.join(' · ');
   }
 }
 

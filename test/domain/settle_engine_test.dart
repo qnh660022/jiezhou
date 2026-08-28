@@ -68,15 +68,20 @@ void main() {
       expect(bal, {'a': -40, 'b': 20, 'c': 20});
     });
 
-    test('prepay 不计入净额', () {
+    test('prepay 纳入净额，垫付方参与 AA', () {
+      // c 预垫 900，四人均摊时 c 应收回 900-900/4*... 简化：a/b 各摊 300
       final bal = computeNetBalances(members, [
           _bill('p1',
               type: ExpenseType.prepay,
               payers: const [ShareEntry(memberId: 'c', cents: 900)],
-              shares: const [ShareEntry(memberId: 'c', cents: 900)]),
+              shares: const [
+                ShareEntry(memberId: 'a', cents: 300),
+                ShareEntry(memberId: 'b', cents: 300),
+                ShareEntry(memberId: 'c', cents: 300),
+              ]),
         ],
       );
-      expect(bal, {'a': 0, 'b': 0, 'c': 0});
+      expect(bal, {'a': -300, 'b': -300, 'c': 600});
     });
 
     test('已结算账单不计入', () {

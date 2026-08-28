@@ -11,6 +11,7 @@ import 'features/ledger/screens/expense_edit_screen.dart';
 import 'features/ledger/screens/expenses_screen.dart';
 import 'features/ledger/screens/group_edit_screen.dart';
 import 'features/ledger/screens/group_list_screen.dart';
+import 'features/ledger/screens/lan_sync_screen.dart';
 import 'features/ledger/screens/ledger_home_screen.dart';
 import 'features/ledger/screens/members_screen.dart';
 import 'features/ledger/screens/settle_screen.dart';
@@ -149,6 +150,11 @@ List<RouteBase> buildAppRoutes() => [
                     builder: (context, state) => const GroupEditScreen(),
                   ),
                 ],
+              ),
+              GoRoute(
+                path: 'lan-sync',
+                name: 'lan-sync',
+                builder: (context, state) => const LanSyncScreen(),
               ),
               GoRoute(
                 path: 'members',

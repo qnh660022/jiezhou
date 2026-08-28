@@ -202,8 +202,8 @@ class StatsCalculator {
   static int totalCents(List es) => _toEs(es).where((e)=>!e.isPrepay).fold(0,(s,e)=>s+e.amountCents);
   static int countOf(List es) => _toEs(es).where((e)=>!e.isPrepay).length;
   static int prepayTotalCents(List es) => _toEs(es).where((e)=>e.isPrepay).fold(0,(s,e)=>s+e.amountCents);
-  static Map<String,int> paidByMember(List es) { final m=<String,int>{}; for(final e in _toEs(es).where((x)=>!x.isPrepay)) { for(final p in e.payersList) { final mid=p is Map?(p["memberId"]??""):(p.memberId??""); final c=p is Map?(p["cents"]??0) as int:(p.cents??0) as int; m[mid]=(m[mid]??0)+c; } } return m; }
-  static Map<String,int> shareByMember(List es) { final m=<String,int>{}; for(final e in _toEs(es).where((x)=>!x.isPrepay)) { for(final s in e.sharesList) { final mid=s is Map?(s["memberId"]??""):(s.memberId??""); final c=s is Map?(s["cents"]??0) as int:(s.cents??0) as int; m[mid]=(m[mid]??0)+c; } } return m; }
+  static Map<String,int> paidByMember(List es, {bool includePrepay = false}) { final m=<String,int>{}; for(final e in _toEs(es).where((x)=>includePrepay||!x.isPrepay)) { for(final p in e.payersList) { final mid=p is Map?(p["memberId"]??""):(p.memberId??""); final c=p is Map?(p["cents"]??0) as int:(p.cents??0) as int; m[mid]=(m[mid]??0)+c; } } return m; }
+  static Map<String,int> shareByMember(List es, {bool includePrepay = false}) { final m=<String,int>{}; for(final e in _toEs(es).where((x)=>includePrepay||!x.isPrepay)) { for(final s in e.sharesList) { final mid=s is Map?(s["memberId"]??""):(s.memberId??""); final c=s is Map?(s["cents"]??0) as int:(s.cents??0) as int; m[mid]=(m[mid]??0)+c; } } return m; }
   static Map<String,int> categoryTotals(List es) { final m=<String,int>{}; for(final e in _toEs(es).where((x)=>!x.isPrepay)) { m[e.categoryKey]=(m[e.categoryKey]??0)+e.amountCents; } return m; }
   static Map<int,int> dailyTotals(List es) { final m=<int,int>{}; for(final e in _toEs(es).where((x)=>!x.isPrepay)) { m[e.dateEpochDay]=(m[e.dateEpochDay]??0)+e.amountCents; } return m; }
 }

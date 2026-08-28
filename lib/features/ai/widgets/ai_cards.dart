@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/seed/item_types.dart';
 import '../../../theme/tokens.dart';
-import '../ai_tools.dart' show commitExpenseDraft;
+import '../ai_tools.dart' show commitExpenseDraft, commitTravelPack;
 
 /// 卡片入口：按 type 分发到具体卡片。
 class AiCardView extends StatelessWidget {
@@ -34,6 +34,9 @@ class AiCardView extends StatelessWidget {
         return _ChecklistCard(data: data);
       case 'expense_confirm':
         return ExpenseConfirmCard(args: (data['args'] as Map?)?.cast<String, dynamic>() ?? const {});
+      case 'travel_pack':
+        return TravelPackCard(
+            plan: (data['plan'] as Map?)?.cast<String, dynamic>() ?? const {});
       default:
         return _CardShell(
           child: Text('（不支持的数据卡片）', style: TextStyle(fontSize: AppFontSizes.caption)),
@@ -698,6 +701,170 @@ class _ExpenseConfirmCardState extends ConsumerState<ExpenseConfirmCard> {
       _error = null;
     });
     final err = await commitExpenseDraft(ref, widget.args);
+    if (!mounted) return;
+    if (err == null) {
+      setState(() {
+        _committing = false;
+        _done = true;
+      });
+    } else {
+      setState(() {
+        _committing = false;
+        _error = err;
+      });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 一键旅行包卡（可交互）：预览完整方案，点「一键生成」全部本地落库
+// ---------------------------------------------------------------------------
+
+/// AI 一键旅行包预览卡：展示 建团+成员+预算+行程+日程+清单+样例账单，
+/// 确认后由 [commitTravelPack] 在本地一次性落库——零 token、零 AI 请求。
+class TravelPackCard extends ConsumerStatefulWidget {
+  const TravelPackCard({super.key, required this.plan});
+
+  final Map<String, dynamic> plan;
+
+  @override
+  ConsumerState<TravelPackCard> createState() => _TravelPackCardState();
+}
+
+class _TravelPackCardState extends ConsumerState<TravelPackCard> {
+  bool _committing = false;
+  String? _error;
+  bool _done = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final p = widget.plan;
+    final members = (p['memberNames'] as List?)?.cast<Object>() ?? const [];
+    final budgetYuan = (p['budgetYuan'] as num?)?.toDouble();
+    final days = (p['days'] as List?)?.cast<Map>() ?? const [];
+    final checklist = (p['checklist'] as List?) ?? const [];
+    final bills = (p['sampleExpenses'] as List?) ?? const [];
+    var billTotal = 0.0;
+    for (final b in bills) {
+      billTotal += _d((b as Map)['amountYuan']);
+    }
+
+    String mmdd(String iso) => _mmdd(iso);
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: MediaQuery.widthOf(context) * 0.85),
+        padding: const EdgeInsets.all(Spacing.lg),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(4),
+          ),
+          border: Border.all(color: scheme.primary.withValues(alpha: 0.4), width: 1.2),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              const Icon(Icons.luggage_rounded, size: 18, color: _primary),
+              const SizedBox(width: Spacing.sm),
+              const Text('一键旅行包',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: AppFontSizes.body)),
+              const Spacer(),
+              Text('🧳 ${mmdd(p['startDate'] as String? ?? '')}~${mmdd(p['endDate'] as String? ?? '')}',
+                  style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant)),
+            ]),
+            const SizedBox(height: Spacing.md),
+            _kvRow(context, '旅行团', '${p['groupName'] ?? ''} · ${members.length} 人'),
+            _kvRow(context, '行程', '${p['tripName'] ?? ''}'),
+            _kvRow(context, '目的地', '${p['destination'] ?? ''}'),
+            if (budgetYuan != null && budgetYuan > 0)
+              _kvRow(context, '预算', _money(budgetYuan)),
+            const SizedBox(height: Spacing.sm),
+            Text('每日安排',
+                style: TextStyle(
+                    fontSize: AppFontSizes.caption,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.primary)),
+            const SizedBox(height: 4),
+            for (final d in days)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  'D${d['day']} · ${(d['items'] as List?)?.length ?? 0} 个安排',
+                  style:
+                      TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant),
+                ),
+              ),
+            _kvRow(context, '行李清单', '${checklist.length} 项'),
+            if (bills.isNotEmpty)
+              _kvRow(context, '样例账单', '${bills.length} 笔 · ${_money(billTotal)}'),
+            const SizedBox(height: Spacing.lg),
+            if (_done)
+              Row(children: [
+                Icon(Icons.check_circle_rounded, size: 18, color: scheme.primary),
+                const SizedBox(width: Spacing.sm),
+                Text('已一键生成，去「账本 / 行程」查看',
+                    style: TextStyle(
+                        fontSize: AppFontSizes.caption,
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700)),
+              ])
+            else if (_error != null) ...[
+              Text(_error!,
+                  style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.error)),
+              const SizedBox(height: Spacing.sm),
+              _buildButton(scheme),
+            ] else
+              _buildButton(scheme),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const Color _primary = Color(0xFF2E7D5B);
+
+  Widget _buildButton(ColorScheme scheme) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _committing ? null : () => setState(() => _error = '已取消，未生成'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: scheme.onSurfaceVariant,
+              side: BorderSide(color: scheme.outlineVariant),
+            ),
+            child: const Text('取消'),
+          ),
+        ),
+        const SizedBox(width: Spacing.md),
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: _committing ? null : _apply,
+            icon: _committing
+                ? const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.auto_awesome_rounded, size: 18),
+            label: const Text('一键生成'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _apply() async {
+    setState(() {
+      _committing = true;
+      _error = null;
+    });
+    final err = await commitTravelPack(ref, widget.plan);
     if (!mounted) return;
     if (err == null) {
       setState(() {

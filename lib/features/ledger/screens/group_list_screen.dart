@@ -17,6 +17,7 @@ import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/group_summary_sheet.dart';
 import '../widgets/stagger_in.dart';
+import 'lan_sync_screen.dart';
 
 /// 旅行团管理：切换、新建入口、专有 .tav 备份导入导出。
 class GroupListScreen extends ConsumerWidget {
@@ -31,6 +32,11 @@ class GroupListScreen extends ConsumerWidget {
       appBar: GlassAppBar(
         title: '旅行团管理',
         actions: [
+          IconButton(
+            tooltip: '局域网同步（同 Wi-Fi 快照合并）',
+            onPressed: () => context.pushNamed('lan-sync'),
+            icon: const Icon(Icons.wifi_tethering_rounded),
+          ),
           IconButton(
             tooltip: '导入团备份',
             onPressed: () => _importSheet(context, ref),
@@ -164,14 +170,16 @@ class GroupListScreen extends ConsumerWidget {
     HapticFeedback.selectionClick();
     await showDraggableSheet<void>(
       context: context,
-      initialChildSize: 0.42,
-      minChildSize: 0.34,
-      builder: (sheetContext, __) => Padding(
-        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      initialChildSize: 0.52,
+      minChildSize: 0.4,
+      builder: (sheetContext, scrollController) => SingleChildScrollView(
+        controller: scrollController,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xxl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             Row(children: [
               Text(g.icon, style: const TextStyle(fontSize: 24)),
               const SizedBox(width: Spacing.sm),
@@ -241,7 +249,8 @@ class GroupListScreen extends ConsumerWidget {
                 _confirmDeleteGroup(context, ref, g);
               },
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

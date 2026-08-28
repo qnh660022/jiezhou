@@ -318,6 +318,81 @@ final List<AiToolDefinition> kAiTools = [
     },
   ),
   const AiToolDefinition(
+    name: 'create_travel_pack',
+    description:
+        '🚀 一键生成完整旅行包：建团+成员+预算+行程+每日安排+行李清单+样例账单，一次性产出。\n'
+        '收到用户一句需求（如「去成都玩3天，预算6000，4人AA」）就调用本工具，不要再分步调用\n'
+        'create_group/create_trip_plan/add_checklist_item/set_group_budget/add_expense。\n'
+        '全部内容放进预览卡，用户点「一键生成」才会真正落库，模型只需简述方案。',
+    parametersSchema: {
+      'type': 'object',
+      'properties': {
+        'groupName': {'type': 'string', 'description': '旅行团名称（缺省用目的地命名）'},
+        'memberNames': {'type': 'array', 'items': {'type': 'string'}, 'description': '参与成员名单，如 ["你","小明","小红","小刚"]（约等于人数）'},
+        'budgetYuan': {'type': 'number', 'description': '预算总额（元），如 6000'},
+        'tripName': {'type': 'string', 'description': '行程名称'},
+        'destination': {'type': 'string'},
+        'startDate': {'type': 'string', 'description': 'YYYY-MM-DD'},
+        'endDate': {'type': 'string', 'description': 'YYYY-MM-DD，天数=end-start+1'},
+        'days': {
+          'type': 'array',
+          'description': '按天排日程；day 为 1 起始天序号',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'day': {'type': 'integer', 'description': '从 1 开始'},
+              'items': {
+                'type': 'array',
+                'items': {
+                  'type': 'object',
+                  'properties': {
+                    'name': {'type': 'string'},
+                    'type': {'type': 'string', 'enum': ['attraction', 'food', 'transport', 'stay', 'note']},
+                    'startTime': {'type': 'string', 'description': 'HH:mm 可省略'},
+                    'costYuan': {'type': 'number'},
+                    'address': {'type': 'string'},
+                    'note': {'type': 'string'},
+                  },
+                  'required': ['name'],
+                },
+              },
+            },
+            'required': ['day', 'items'],
+          },
+        },
+        'checklist': {
+          'type': 'array',
+          'description': '行程行李清单（可空）',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'text': {'type': 'string'},
+              'category': {'type': 'string', 'enum': ['docs', 'clothes', 'electronics', 'toiletries', 'medicine', 'other']},
+            },
+            'required': ['text'],
+          },
+        },
+        'sampleExpenses': {
+          'type': 'array',
+          'description': '预填样例账单（可空），均摊到全部成员、关联到行程',
+          'items': {
+            'type': 'object',
+            'properties': {
+              'title': {'type': 'string'},
+              'amountYuan': {'type': 'number'},
+              'payerName': {'type': 'string', 'description': '付款人（memberNames 中一员）'},
+              'categoryKey': {'type': 'string', 'description': '未知留空按 other'},
+              'date': {'type': 'string', 'description': 'YYYY-MM-DD，缺省同行程开始日'},
+              'expenseType': {'type': 'string', 'enum': ['normal', 'refund'], 'description': '默认 normal'},
+            },
+            'required': ['title', 'amountYuan', 'payerName'],
+          },
+        },
+      },
+      'required': ['tripName', 'destination', 'startDate', 'endDate', 'days'],
+    },
+  ),
+  const AiToolDefinition(
     name: 'set_app_theme',
     description: '切换应用主题外观。',
     parametersSchema: {
@@ -396,6 +471,8 @@ class AiToolExecutor {
           return await _listTripTemplates();
         case 'apply_trip_template':
           return await _applyTripTemplate(args);
+        case 'create_travel_pack':
+          return await _createTravelPack(args);
         case 'get_trip_schedule':
           return await _tripSchedule(args);
         case 'add_checklist_item':
@@ -1104,6 +1181,61 @@ class AiToolExecutor {
     }));
   }
 
+  // ---- 一键旅行包 ----
+
+  /// create_travel_pack：出示「旅行包预览卡」，用户点「一键生成」才由
+  /// commitTravelPack 本地全部落库（建团+成员+预算+行程+日程+清单+样例账单）。
+  Future<AiToolOutcome> _createTravelPack(Map<String, dynamic> args) async {
+    final start = _epochDay(args['startDate']);
+    final end = _epochDay(args['endDate']);
+    if (start == null || end == null) {
+      return AiToolOutcome('{"error":"日期格式应为 YYYY-MM-DD"}');
+    }
+    final members = (args['memberNames'] as List?)
+            ?.whereType<Object>()
+            .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    if (members.isEmpty) {
+      return AiToolOutcome('{"error":"请至少提供一名成员（memberNames）"}');
+    }
+    final daysRaw = args['days'];
+    if (daysRaw is! List || daysRaw.isEmpty) {
+      return AiToolOutcome('{"error":"days 不能为空"}');
+    }
+    var itemCount = 0;
+    for (final d in daysRaw.whereType<Map>()) {
+      itemCount += ((d['items'] as List?)?.length ?? 0);
+    }
+    final plan = <String, dynamic>{
+      'groupName': (args['groupName'] as String? ?? '').trim(),
+      'memberNames': members,
+      'budgetYuan': (args['budgetYuan'] as num?)?.toDouble(),
+      'tripName': (args['tripName'] as String? ?? '').trim(),
+      'destination': (args['destination'] as String? ?? '').trim(),
+      'startDate': fmtIsoDate(epochDayToDate(start)),
+      'endDate': fmtIsoDate(epochDayToDate(end)),
+      'days': daysRaw,
+      'checklist': (args['checklist'] as List?) ?? const [],
+      'sampleExpenses': (args['sampleExpenses'] as List?) ?? const [],
+    };
+    final itemCountStr = itemCount.toString();
+    final memberStr = members.length.toString();
+    return AiToolOutcome(
+      jsonStr({
+        'renderedCard': 'travel_pack',
+        'groupName': plan['groupName'],
+        'memberCount': members.length,
+        'tripName': plan['tripName'],
+        'itemCount': itemCount,
+        'hint': '已为「${plan['tripName']}」组好旅行包预览（$memberStr 人、$itemCountStr 条安排、预算¥${plan['budgetYuan'] ?? '-'}），点卡片「一键生成」即全部落库；回答一句话介绍方案即可，不要复述完整清单',
+      }),
+      cardType: 'travel_pack',
+      cardData: {'plan': plan},
+    );
+  }
+
   // ---- 清单 ----
 
   Future<AiToolOutcome> _addChecklistItem(Map<String, dynamic> args) async {
@@ -1425,3 +1557,158 @@ Future<String?> commitExpenseDraft(WidgetRef ref, Map<String, dynamic> args) asy
 
 /// 与执行器内部同源的日期解析（公开别名，供确认卡落库用）
 int? _epochDayPublic(dynamic v) => _epochDay(v);
+
+// ---------------------------------------------------------------------------
+// 旅行包落库（本地零 token）
+// ---------------------------------------------------------------------------
+
+/// 把旅行包预览卡的 plan 全部落库：建团 + 成员 + 预算 + 行程 + 日程 + 清单 + 样例账单。
+/// 返回成功文案（SnackBar 等展示）；失败时返回具体错误文案。
+Future<String?> commitTravelPack(WidgetRef ref, Map<String, dynamic> plan) async {
+  final repo = ref.read(ledgerRepoProvider);
+  final tripsRepo = ref.read(tripsRepoProvider);
+  final checklistRepo = ref.read(checklistRepoProvider);
+  final categories = ref.read(categoriesProvider).value ?? const <CategoryView>[];
+
+  final groupName = ((plan['groupName'] as String? ?? '').trim().isEmpty
+      ? '${plan['tripName']}之团'
+      : plan['groupName'] as String) ?? '旅行团';
+  final memberNames = (plan['memberNames'] as List?)?.cast<String>() ?? const <String>[];
+  final budgetYuan = (plan['budgetYuan'] as num?)?.toDouble();
+  final start = _epochDayPublic(plan['startDate']);
+  final end = _epochDayPublic(plan['endDate']);
+  final daysRaw = (plan['days'] as List?) ?? const [];
+  final checklist = (plan['checklist'] as List?) ?? const [];
+  final sampleExpenses = (plan['sampleExpenses'] as List?) ?? const [];
+  final now = DateTime.now().millisecondsSinceEpoch;
+
+  if (memberNames.isEmpty) return '没有成员，旅行包无法创建';
+  if (start == null || end == null) return '日期格式错误';
+
+  try {
+    // 1) 建团并设为当前团
+    final group = await repo.addGroup(groupName, memberNames.length <= 4 ? '👨‍👩‍👧‍👦' : '👥');
+    await repo.setActiveGroup(group.id);
+
+    // 2) 添加成员
+    final memberIdMap = <String, String>{};
+    for (final name in memberNames) {
+      final id = await repo.addMember(group.id, name);
+      memberIdMap[name] = id;
+    }
+    final allIds = memberIdMap.values.toList();
+
+    // 3) 设置预算
+    if (budgetYuan != null && budgetYuan > 0) {
+      await repo.setBudget(group.id, enabled: true, budgetCents: (budgetYuan * 100).round());
+    }
+
+    // 4) 创建行程（关联旅行团）
+    final tripName = (plan['tripName'] as String? ?? '').trim();
+    final dest = (plan['destination'] as String? ?? '').trim();
+    final tripId = await tripsRepo.createTrip(
+      name: tripName,
+      dest: dest,
+      emoji: '✈️',
+      cover: 'ocean',
+      start: start,
+      end: end,
+      groupId: group.id,
+    );
+
+    // 5) 写入每日安排
+    final perDayCount = <int, int>{};
+    for (final dayEntry in daysRaw) {
+      if (dayEntry is! Map) continue;
+      final dayNo = (dayEntry['day'] as num?)?.toInt() ?? 0;
+      final itemsRaw = dayEntry['items'];
+      if (dayNo < 1 || itemsRaw is! List) continue;
+      for (final itemRaw in itemsRaw) {
+        if (itemRaw is! Map) continue;
+        final itemName = (itemRaw['name'] as String? ?? '').trim();
+        if (itemName.isEmpty) continue;
+        final idx = perDayCount[dayNo] ?? 0;
+        perDayCount[dayNo] = idx + 1;
+        final costYuan = (itemRaw['costYuan'] as num?)?.toDouble();
+        await tripsRepo.insertItem(TripItemsCompanion(
+          id: Value(newId('item')),
+          tripId: Value(tripId),
+          dateEpochDay: Value(start + dayNo - 1),
+          type: Value(findTripItemType(itemRaw['type'] as String? ?? 'attraction').key),
+          name: Value(itemName),
+          address: Value((itemRaw['address'] as String? ?? '').trim()),
+          startTimeMin: Value(_hhmmToMin(itemRaw['startTime'] as String?)),
+          costCents: costYuan == null ? const Value(null) : Value((costYuan * 100).round()),
+          note: Value((itemRaw['note'] as String? ?? '').trim()),
+          sortOrder: Value(idx * 10),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ));
+      }
+    }
+
+    // 6) 写入行李清单
+    for (final chk in checklist) {
+      if (chk is! Map) continue;
+      final text = (chk['text'] as String? ?? '').trim();
+      if (text.isEmpty) continue;
+      var cat = (chk['category'] as String? ?? '').trim();
+      if (!const {'docs','clothes','electronics','toiletries','medicine','other'}.contains(cat)) {
+        cat = 'other';
+      }
+      final existing = await checklistRepo.getAllByScope('trip', tripId: tripId);
+      final maxOrder = existing.isEmpty ? 0 : existing.map((e) => e.sortOrder).reduce((a, b) => a > b ? a : b);
+      await checklistRepo.addItem(tripId, 'trip', cat, text, maxOrder + 10);
+    }
+
+    // 7) 写入样例账单
+    for (final se in sampleExpenses) {
+      if (se is! Map) continue;
+      final title = (se['title'] as String? ?? '').trim();
+      if (title.isEmpty) continue;
+      final amountYuan = (se['amountYuan'] as num?)?.toDouble();
+      if (amountYuan == null || amountYuan == 0) continue;
+      final payerName = (se['payerName'] as String? ?? '').trim();
+      final payerId = memberIdMap[payerName];
+      if (payerId == null) continue;
+      final isRefund = (se['expenseType'] as String?) == 'refund';
+      final cents = (amountYuan.abs() * 100).round();
+      final signed = isRefund ? -cents : cents;
+      final shares = computeSplit(totalCents: signed, memberIds: allIds, mode: ShareMode.equal);
+      var catKey = (se['categoryKey'] as String? ?? '').trim();
+      if (catKey.isNotEmpty) {
+        final hit = categories.where((c) => c.key == catKey || c.name == catKey).toList();
+        catKey = hit.isEmpty ? 'other' : hit.first.key;
+      } else {
+        catKey = 'other';
+      }
+      final day = _epochDayPublic(se['date']) ?? start;
+      await repo.addExpense(ExpensesCompanion(
+        id: Value(newId('expense')),
+        groupId: Value(group.id),
+        dateEpochDay: Value(day),
+        title: Value(title),
+        categoryKey: Value(catKey),
+        type: Value(isRefund ? 'refund' : 'normal'),
+        amountCents: Value(signed),
+        currency: Value('CNY'),
+        rate: Value(1.0),
+        payersJson: Value(jsonEncode([{'memberId': payerId, 'cents': signed}])),
+        sharesJson: Value(jsonEncode(
+          [for (final s in shares) {'memberId': s.memberId, 'cents': s.cents}],
+        )),
+        shareMode: Value('equal'),
+        tripId: Value(tripId),
+        createdAt: Value(now),
+      ));
+    }
+
+    // 刷新
+    ref.invalidate(expensesProvider);
+    ref.invalidate(groupsProvider);
+    ref.invalidate(membersProvider);
+    return null; // 成功
+  } catch (e) {
+    return '创建旅行包失败：${e.toString().replaceAll('"', "'")}';
+  }
+}

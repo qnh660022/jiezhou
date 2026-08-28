@@ -2,8 +2,9 @@
 ///
 /// 【口径】balance = 已付 − 应摊：
 /// * 只统计 settledRoundId == null（未随任何完成结算入账）的账单；
-/// * type == prepay 的预付款不参与（单独合计）；
-/// * 多人付款逐人累加；refund 以负数自然冲减。
+/// * prepay 预付款参与：payer 余额 +、share 余额 −，让垫付方在 AA 中拿到应收回款；
+/// * refund 以负数自然冲减；
+/// * 多人付款逐人累加。
 ///
 /// 转账方向约定：balance < 0 是欠款方(from)，balance > 0 是收款方(to)。
 /// 本文件纯 Dart 无 IO。
@@ -48,7 +49,7 @@ Map<String, int> computeNetBalances(
   final bal = <String, int>{for (final m in members) m.id: 0};
   for (final e in expenses) {
     if (e.settledRoundId != null) continue; // 已入账的历史轮次不再参与
-    if (e.type == ExpenseType.prepay) continue; // 预付款单独合计
+    // refund 为负数、prepay 亦正常参与，均在 payers/shares 中带符号累加
     for (final p in e.payers) {
       bal[p.memberId] = (bal[p.memberId] ?? 0) + p.cents;
     }
