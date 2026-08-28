@@ -60,3 +60,18 @@ _build_apk*.err
 *.apk
 # Windows reserved device name (created by `> nul` redirection; git cannot track it)
 nul
+
+# =====================================================================
+# 个人/本机构建环境、规划笔记 —— 开源时不外传（仅本项目私有）
+# =====================================================================
+# 本机工具链/构建脚本（含绝对路径 D:\AI\env、D:\AI\money2.0 等）
+/scripts/env.local.ps1
+/scripts/setup_env.ps1
+/scripts/setup_env_v2.ps1
+/scripts/build_apk.ps1
+/scripts/_build_apk.ps1
+/scripts/_build_bg.ps1
+# 与 AI 的规划会话笔记
+.zcode/
+# 验收报告（可能含个人项目背景，公开前先审阅）
+/docs/*.md
