@@ -212,7 +212,25 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_hostCode == null)
-          Column(children: const [SkeletonBox(height: 120, radius: AppRadius.cardValue)])
+          Column(children: [
+            const SkeletonBox(height: 120, radius: AppRadius.cardValue),
+            const SizedBox(height: Spacing.lg),
+            // 启动中随时可退出，避免端口/网络环境异常时“卡死退出不掉”
+            OutlinedButton.icon(
+              onPressed: () {
+                _mgr.dispose();
+                setState(() {
+                  _mode = '';
+                  _starting = false;
+                });
+              },
+              icon: const Icon(Icons.close_rounded, size: 18),
+              label: const Text('取消 / 退出'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: scheme.onSurfaceVariant,
+              ),
+            ),
+          ])
         else ...[
           _InfoCard(
             code: _hostCode!,

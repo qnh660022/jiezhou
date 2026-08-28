@@ -612,7 +612,7 @@ class _ExpenseConfirmCardState extends ConsumerState<ExpenseConfirmCard> {
               textBaseline: TextBaseline.alphabetic,
               children: [
                 Text(
-                  '${isRefund ? '-' : ''}$currency',
+                  '${isRefund ? '+' : ''}$currency',
                   style: TextStyle(
                       fontSize: AppFontSizes.body,
                       fontWeight: FontWeight.w700,

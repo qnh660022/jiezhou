@@ -543,7 +543,7 @@ class _ExpenseTile extends ConsumerWidget {
                   ),
                   const SizedBox(height: 1),
                   Text(
-                    payerName + ' 付款 · 摊 ' +
+                    (isRefund ? payerName + ' 收款' : payerName + ' 付款') + ' · 摊 ' +
                         expense.shares.map((s) => s.memberId).toSet().length.toString() +
                         ' 人',
                     style: Theme.of(context).textTheme.bodySmall,

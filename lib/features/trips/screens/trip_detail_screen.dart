@@ -598,7 +598,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
 
 
 /// 详情主体：滚动视图 + 分区组装
-class _DetailBody extends ConsumerWidget {
+class _DetailBody extends ConsumerStatefulWidget {
   const _DetailBody({
     required this.trip,
     required this.items,
@@ -624,12 +624,23 @@ class _DetailBody extends ConsumerWidget {
   final void Function(BuildContext, TripItem) onQuickBill;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DetailBody> createState() => _DetailBodyState();
+}
+
+class _DetailBodyState extends ConsumerState<_DetailBody> {
+  /// 当前选中的天（epochDay）；null = 总览（展示全部按天分组）
+  int? _selectedDay;
+
+  Trip get trip => widget.trip;
+  List<TripItem> get items => widget.items;  
+
+  @override
+  Widget build(BuildContext context) {
     final today = todayEpochDay();
     // 行程关联账单：入账徽章 + 计划vs实际 共用一份数据
     final bills =
         ref.watch(tripBillsProvider(trip.id)).value ?? const <Expense>[];
-    // 每天区块的锚点：供「每天速览」点击跳转滚动定位用
+    // 每天区块的锚点：供「总览」点击跳转滚动定位用
     final dayKeys = <int, GlobalKey>{};
     for (final it in items) {
       dayKeys.putIfAbsent(it.dateEpochDay, GlobalKey.new);
@@ -651,12 +662,31 @@ class _DetailBody extends ConsumerWidget {
     );
     final progress =
         tripProgress(status, trip.startEpochDay, trip.endEpochDay, today);
+
+    final byDay = <int, List<TripItem>>{};
+    for (final it in items) {
+      (byDay[it.dateEpochDay] ??= []).add(it);
+    }
+    for (final list in byDay.values) {
+      list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    }
+    final days = byDay.keys.toList()..sort();
+
+    // 选中了具体某天：自动校正到存在的天；半天无安排则回退总览
+    if (_selectedDay != null && !days.contains(_selectedDay)) {
+      _selectedDay = null;
+    }
+
+    final showAll = _selectedDay == null;
+    final visibleDays =
+        showAll ? days : [for (final d in days) if (d == _selectedDay) d];
+
     return Stack(
       children: [
         CustomScrollView(
-      controller: scrollController,
+      controller: widget.scrollController,
       slivers: [
-        SliverToBoxAdapter(child: _HeaderHero(trip: trip, status: status, scrollController: scrollController)),
+        SliverToBoxAdapter(child: _HeaderHero(trip: trip, status: status, scrollController: widget.scrollController)),
         if (progress != null)
           SliverToBoxAdapter(
             child: Padding(
@@ -684,7 +714,20 @@ class _DetailBody extends ConsumerWidget {
           child: _QuickActionsCard(
             tripId: trip.id,
             bound: trip.groupId,
-            onTapLedger: trip.groupId == null ? onBind : onShowExpenses,
+            onTapLedger: trip.groupId == null ? widget.onBind : widget.onShowExpenses,
+          ),
+        ),
+        // 横向滑动：最前放「总览」，后面是每一天，点某天只看当天
+        SliverToBoxAdapter(
+          child: _DayPicker(
+            trip: trip,
+            days: days,
+            items: items,
+            selected: _selectedDay,
+            onSelect: (d) {
+              HapticFeedback.selectionClick();
+              setState(() => _selectedDay = d);
+            },
           ),
         ),
         SliverToBoxAdapter(
@@ -693,13 +736,14 @@ class _DetailBody extends ConsumerWidget {
             items: items,
             bills: bills,
             dayKeys: dayKeys,
-            ensureWeather: ensureWeather,
+            ensureWeather: widget.ensureWeather,
             tripId: trip.id,
+            showAll: showAll,
           ),
         ),
         SliverList(
           delegate: SliverChildListDelegate(
-              _buildDaySections(context, ref, latestUnsettledByItem, dayKeys)),
+              _buildDaySections(context, ref, latestUnsettledByItem, dayKeys, visibleDays, showAll)),
         ),
         // 尾部留白：内容可从悬浮胶囊导航下方穿过，末尾垫高保证最后一条可达
         SliverToBoxAdapter(
@@ -723,7 +767,7 @@ class _DetailBody extends ConsumerWidget {
             backgroundColor: Theme.of(context).colorScheme.primary,
             foregroundColor: Theme.of(context).colorScheme.onPrimary,
             shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
-            onPressed: () => onAddItem(context, null),
+            onPressed: () => widget.onAddItem(context, null),
             icon: const Icon(Icons.add_rounded),
             label: const Text('添加安排'),
           ),
@@ -735,7 +779,7 @@ class _DetailBody extends ConsumerWidget {
   /// 按天分组时间轴区块（[latestUnsettledByItem]：安排 id -> 最新未结算关联账单）
   List<Widget> _buildDaySections(BuildContext context, WidgetRef ref,
       Map<String, Expense> latestUnsettledByItem,
-      Map<int, GlobalKey> dayKeys) {
+      Map<int, GlobalKey> dayKeys, List<int> visibleDays, bool showAll) {
     final byDay = <int, List<TripItem>>{};
     for (final it in items) {
       (byDay[it.dateEpochDay] ??= []).add(it);
@@ -743,15 +787,14 @@ class _DetailBody extends ConsumerWidget {
     for (final list in byDay.values) {
       list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     }
-    final days = byDay.keys.toList()..sort();
     final widgets = <Widget>[];
-    if (days.isNotEmpty) {
-      widgets.add(const SectionHeader(
-        title: '每日安排',
+    if (visibleDays.isNotEmpty) {
+      widgets.add(SectionHeader(
+        title: showAll ? '每日安排' : '当天安排',
         subtitle: '轻点编辑 · 长按更多操作',
       ));
     }
-    for (final day in days) {
+    for (final day in visibleDays) {
       final list = byDay[day]!;
       widgets.add(KeyedSubtree(
         key: dayKeys[day],
@@ -770,20 +813,20 @@ class _DetailBody extends ConsumerWidget {
             index: i,
             child: GestureDetector(
               onTap: () => _openDetail(context, it),
-              onLongPress: () => onItemLongPress(context, it, list),
+              onLongPress: () => widget.onItemLongPress(context, it, list),
               child: _ItemTile(
                 item: it,
                 isFirst: i == 0,
                 isLast: i == list.length - 1,
                 linkedBillCents: latestUnsettledByItem[it.id]?.amountCents,
-                onQuickBill: onQuickBill,
+                onQuickBill: widget.onQuickBill,
               ),
             ),
           ),
         ));
       }
     }
-    if (days.isEmpty) {
+    if (visibleDays.isEmpty) {
       widgets.add(const Padding(
         padding: EdgeInsets.only(top: Spacing.huge),
         child: EmptyState(
@@ -1397,6 +1440,7 @@ class _OverviewCard extends StatelessWidget {
     required this.dayKeys,
     required this.ensureWeather,
     required this.tripId,
+    required this.showAll,
   });
 
   final Trip trip;
@@ -1406,157 +1450,187 @@ class _OverviewCard extends StatelessWidget {
   final Future<List<WeatherDay>?> Function(Trip, List<TripItem>) ensureWeather;
   final String tripId;
 
+  /// 是否处于「总览」态（横向选择栏首项）；false 表示只看某一天，概览精简
+  final bool showAll;
+
   @override
   Widget build(BuildContext context) {
-    final byDay = <int, List<TripItem>>{};
-    for (final it in items) {
-      (byDay[it.dateEpochDay] ??= []).add(it);
-    }
-    for (final list in byDay.values) {
-      list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-    }
-    final days = byDay.keys.toList()..sort();
     return SectionCard(
       padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.md, Spacing.lg, Spacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('行程概览',
-              style: TextStyle(
-                  fontSize: AppFontSizes.body, fontWeight: FontWeight.w700)),
+          Text(
+            showAll ? '行程概览' : '这一天',
+            style: TextStyle(
+                fontSize: AppFontSizes.body, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: Spacing.sm),
-          if (days.isNotEmpty) ...[
-            _DailySnap(
-              trip: trip,
-              days: days,
-              byDay: byDay,
-              dayKeys: dayKeys,
-            ),
+          if (showAll) ...[
+            _WeatherStrip(trip: trip, items: items, ensureWeather: ensureWeather),
             const SizedBox(height: Spacing.md),
             const Divider(height: 1),
             const SizedBox(height: Spacing.sm),
+            _ChecklistEntryCard(tripId: tripId),
+            const SizedBox(height: Spacing.md),
+            const Divider(height: 1),
+            const SizedBox(height: Spacing.sm),
+            _PlanActualCard(trip: trip, items: items, bills: bills),
           ],
-          _WeatherStrip(trip: trip, items: items, ensureWeather: ensureWeather),
-          const SizedBox(height: Spacing.md),
-          const Divider(height: 1),
-          const SizedBox(height: Spacing.sm),
-          _ChecklistEntryCard(tripId: tripId),
-          const SizedBox(height: Spacing.md),
-          const Divider(height: 1),
-          const SizedBox(height: Spacing.sm),
-          _PlanActualCard(trip: trip, items: items, bills: bills),
         ],
       ),
     );
   }
 }
 
-/// 每天速览：顶部按天缩略展示当天安排，点击平滑滚动到对应天的详细区块
-class _DailySnap extends StatelessWidget {
-  const _DailySnap({
+/// 横向滑动日期选择栏：最前固定「总览」，后面每一天一个胶囊；选中某天只看当天。
+class _DayPicker extends StatelessWidget {
+  const _DayPicker({
     required this.trip,
     required this.days,
-    required this.byDay,
-    required this.dayKeys,
+    required this.items,
+    required this.selected,
+    required this.onSelect,
   });
 
   final Trip trip;
   final List<int> days;
-  final Map<int, List<TripItem>> byDay;
-  final Map<int, GlobalKey> dayKeys;
+  final List<TripItem> items;
+  final int? selected;
+  final ValueChanged<int?> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    void jump(int day) {
-      final ctx = dayKeys[day]?.currentContext;
-      if (ctx != null) {
-        HapticFeedback.selectionClick();
-        Scrollable.ensureVisible(
-          ctx,
-          duration: const Duration(milliseconds: 360),
-          curve: Curves.easeOutCubic,
-          alignment: 0.02,
-        );
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('每天速览 · 点日期直达',
-            style: TextStyle(
-                fontSize: AppFontSizes.caption - 1,
-                color: scheme.onSurfaceVariant)),
-        const SizedBox(height: Spacing.sm),
-        for (final (i, day) in days.indexed) ...[
-          if (i > 0) const SizedBox(height: Spacing.sm),
-          InkWell(
-            borderRadius: AppRadius.input,
-            onTap: () => jump(day),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.sm, vertical: Spacing.xs),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: scheme.primaryContainer.withValues(alpha: 0.7),
-                      borderRadius: AppRadius.capsule,
-                    ),
-                    child: Text('D${day - trip.startEpochDay + 1}',
-                        style: TextStyle(
-                            fontSize: AppFontSizes.caption - 1,
-                            fontWeight: FontWeight.w800,
-                            color: scheme.onPrimaryContainer)),
-                  ),
-                  const SizedBox(width: Spacing.sm),
-                  Expanded(
-                    child: Text(
-                      cnFullDate(day),
-                      style: TextStyle(
-                          fontSize: AppFontSizes.caption,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const SizedBox(width: Spacing.sm),
-                  Flexible(
-                    child: Text(
-                      _snapSummary(byDay[day]!),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                          fontSize: AppFontSizes.caption - 1,
-                          color: scheme.onSurfaceVariant),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
+      child: SizedBox(
+        height: 64,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: days.length + 1,
+          separatorBuilder: (_, __) => const SizedBox(width: Spacing.sm),
+          itemBuilder: (context, i) {
+            // 第 0 项固定为「总览」
+            if (i == 0) {
+              return _DayChip(
+                label: '总览',
+                caption: '全部${days.length}天',
+                active: selected == null,
+                icon: Icons.view_agenda_outlined,
+                onTap: () => onSelect(null),
+              );
+            }
+            final day = days[i - 1];
+            final count = items.where((it) => it.dateEpochDay == day).length;
+            return _DayChip(
+              label: 'D${day - trip.startEpochDay + 1}',
+              caption: fmtMonthDayOfEpoch(day),
+              active: selected == day,
+              badge: count,
+              onTap: () => onSelect(day),
+            );
+          },
+        ),
+      ),
     );
   }
+}
 
-  /// 当天安排的缩略摘要：取前两条类型 emoji+名称，超出以「+N」收尾
-  String _snapSummary(List<TripItem> list) {
-    final visual = {
-      'attraction': '🏞️',
-      'food': '🍜',
-      'transport': '🚗',
-      'stay': '🏨',
-      'note': '📝',
-    };
-    final shown = <String>[];
-    for (final it in list.take(2)) {
-      shown.add('${visual[it.type] ?? '•'} ${it.name}');
-    }
-    if (list.length > 2) shown.add('+${list.length - 2}');
-    return shown.join(' · ');
+/// 横向胶囊：选中态主色填充；badge 显示当天安排条数
+class _DayChip extends StatelessWidget {
+  const _DayChip({
+    required this.label,
+    required this.caption,
+    required this.active,
+    required this.onTap,
+    this.badge,
+    this.icon,
+  });
+
+  final String label;
+  final String caption;
+  final bool active;
+  final VoidCallback onTap;
+  final int? badge;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: active
+          ? scheme.primary
+          : scheme.surfaceContainerHigh.withValues(alpha: 0.7),
+      borderRadius: BorderRadius.circular(AppRadius.cardValue),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.cardValue),
+        onTap: onTap,
+        child: Container(
+          width: 92,
+          padding: const EdgeInsets.symmetric(horizontal: Spacing.sm),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon,
+                        size: 15,
+                        color: active ? scheme.onPrimary : scheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: AppFontSizes.body,
+                      fontWeight: FontWeight.w800,
+                      color: active ? scheme.onPrimary : scheme.onSurface,
+                    ),
+                  ),
+                  if (badge != null) ...[
+                    const SizedBox(width: 5),
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? scheme.onPrimary.withValues(alpha: 0.2)
+                            : scheme.primary.withValues(alpha: 0.12),
+                        borderRadius: AppRadius.capsule,
+                      ),
+                      child: Text(
+                        '$badge',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color:
+                              active ? scheme.onPrimary : scheme.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 3),
+              Text(
+                caption,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppFontSizes.caption - 2,
+                  color: active
+                      ? scheme.onPrimary.withValues(alpha: 0.85)
+                      : scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

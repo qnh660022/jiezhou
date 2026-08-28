@@ -61,6 +61,11 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
         scrollController: _scroll,
         actions: [
           IconButton(
+            tooltip: '局域网同步（同 Wi-Fi 快照合并）',
+            onPressed: () => context.pushNamed('lan-sync'),
+            icon: const Icon(Icons.wifi_tethering_rounded),
+          ),
+          IconButton(
             tooltip: '行程模板库',
             onPressed: () => context.push('/trips/templates'),
             icon: const Icon(Icons.inventory_2_outlined),

@@ -27,11 +27,17 @@ Future<void> showGroupSummarySheet(
 
   var total = 0;
   var prepay = 0;
+  var refund = 0;
   int? firstDay;
   int? lastDay;
   for (final e in expenses) {
     if (e.type == ExpenseType.prepay) {
       prepay += e.amountCents;
+      continue;
+    }
+    if (e.type == ExpenseType.refund) {
+      // 退款=退回的钱（收款人入账），不计入支出总额，另列展示
+      refund += e.amountCents;
       continue;
     }
     total += e.amountCents;
@@ -80,7 +86,8 @@ Future<void> showGroupSummarySheet(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _SummaryRow('总支出', _yuan(total) + ' 元', emphasize: true),
-                  if (prepay > 0) _SummaryRow('预付另计', _yuan(prepay) + ' 元'),
+  if (prepay > 0) _SummaryRow('预付另计', _yuan(prepay) + ' 元'),
+  if (refund > 0) _SummaryRow('退款另计', _yuan(refund) + ' 元'),
                   _SummaryRow('账单笔数', '${expenses.length} 笔'),
                   _SummaryRow('人均', _yuan(perHead) + ' 元（$payerCount 人付款）'),
                   if (topPayer != null && topPayer.paidCents > 0)

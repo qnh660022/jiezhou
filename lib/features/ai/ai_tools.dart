@@ -1445,6 +1445,68 @@ Map<String, dynamic>? jsonDecodeLoose(String s) {
 String _esc(String raw) =>
     raw.replaceAll('\\', r'\\').replaceAll('"', r'\"').replaceAll('\n', ' ');
 
+/// 把模型偶然输出的 `<tool_call><function=xxx><parameter=name>值</parameter>…</tool_call>`
+/// 文本格式解析为原生 [AiToolCall]。原样函数调用走正规 tool_calls，这里只兜底。
+///
+/// 返回空表示不象工具调用（保持原文本回答）。可解析多条调用。
+List<AiToolCall> parseLegacyToolCalls(String content) {
+  final calls = <AiToolCall>[];
+  final blocks = RegExp(r'<tool_call>([\s\S]*?)</tool_call>')
+      .allMatches(content)
+      .map((m) => m.group(1) ?? '')
+      .toList();
+  if (blocks.isEmpty && content.trimLeft().startsWith('<tool_call>')) {
+    // 模型省略了闭合标签：取到内容末尾
+    final rest = content.substring(content.indexOf('<tool_call>') + 11);
+    blocks.add(rest);
+  }
+  if (blocks.isEmpty) return calls;
+  for (final block in blocks) {
+    final fnMatch = RegExp(r'<function=([a-zA-Z_0-9]+)\s*>?').firstMatch(block);
+    if (fnMatch == null) continue;
+    final name = fnMatch.group(1)!;
+    final args = <String, dynamic>{};
+    // <parameter=key>value</parameter>（值可含换行），兼容缺闭合标签的截断
+    for (final pm in RegExp(r'<parameter=([a-zA-Z_0-9]+)>([\s\S]*?)(?:</parameter>|(?=<parameter=)|$)')
+        .allMatches(block)) {
+      final key = pm.group(1)!;
+      var value = (pm.group(2) ?? '').trim();
+      if (value.startsWith('[')) {
+        // 数组参数：尝试按行解析，丢无法解析的元素
+        final arr = <dynamic>[];
+        for (final line in value.split(RegExp(r'[\r\n]+'))) {
+          final t = line.trim().replaceAll(RegExp(r'^[-*\d]+[.、)\s]*'), '');
+          if (t.isEmpty) continue;
+          arr.add(_coerceScalar(t));
+        }
+        args[key] = arr;
+      } else if (value.startsWith('{')) {
+        try {
+          args[key] = jsonDecodeLoose(value) ?? <String, dynamic>{};
+        } catch (_) {
+          args[key] = value;
+        }
+      } else {
+        args[key] = _coerceScalar(value);
+      }
+    }
+    calls.add(AiToolCall(
+      id: 'legacy_${name}_${calls.length}',
+      name: name,
+      argumentsJson: jsonStr(args),
+    ));
+  }
+  return calls;
+}
+
+dynamic _coerceScalar(String s) {
+  final num = double.tryParse(s);
+  if (num != null) return num % 1 == 0 ? num.toInt() : num;
+  if (s == 'true') return true;
+  if (s == 'false') return false;
+  return s;
+}
+
 /// 供测试 / 非 widget 环境获取执行器
 final aiToolExecutorProvider = Provider<AiToolExecutor>((r) => AiToolExecutor(r));
 
@@ -1493,7 +1555,7 @@ Future<String?> commitExpenseDraft(WidgetRef ref, Map<String, dynamic> args) asy
   if (amountYuan == 0) return '金额不能为 0';
   final isRefund = args['expenseType'] == 'refund';
   final cents = (amountYuan.abs() * 100).round();
-  final signed = isRefund ? -cents : cents;
+  final signed = isRefund ? cents : cents; // 退款=收款收入，正向计入（收款人在 payers 内拿正数）
   final shares =
       computeSplit(totalCents: signed, memberIds: shareIds, mode: ShareMode.equal);
 
@@ -1673,7 +1735,7 @@ Future<String?> commitTravelPack(WidgetRef ref, Map<String, dynamic> plan) async
       if (payerId == null) continue;
       final isRefund = (se['expenseType'] as String?) == 'refund';
       final cents = (amountYuan.abs() * 100).round();
-      final signed = isRefund ? -cents : cents;
+      final signed = isRefund ? cents : cents; // 退款正向收款
       final shares = computeSplit(totalCents: signed, memberIds: allIds, mode: ShareMode.equal);
       var catKey = (se['categoryKey'] as String? ?? '').trim();
       if (catKey.isNotEmpty) {

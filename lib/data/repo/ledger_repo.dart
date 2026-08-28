@@ -402,8 +402,26 @@ class LedgerRepository {
   }
 
   /// 局域网同步用：把团整包以稳定 id 导出为 JSON 快照（与 .tav 同一结构，不含信封）。
-  Future<String> exportGroupSnapshotJson(String gid) async =>
-      jsonEncode(await _buildFullGroupMap(gid));
+  /// 除当前团外，额外带上【未绑定任何团】的独立行程，让「行程页」也能用局域网一起同步。
+  Future<String> exportGroupSnapshotJson(String gid) async {
+    final map = Map<String, dynamic>.from(
+        await _buildFullGroupMap(gid)); // 深拷贝，避免污染上层复用结构
+    final trips = map['trips'] as List;
+    final already = {for (final t in trips) (t as Map)['id']};
+    final all = await (db.select(db.trips)).get();
+    for (final t in all) {
+      if (already.contains(t.id)) continue;
+      if (t.groupId != null) continue; // 只补未绑团的独立行程
+      final items = await (db.select(db.tripItems)
+            ..where((i) => i.tripId.equals(t.id)))
+          .get();
+      trips.add(<String, dynamic>{
+        ...t.toJson(),
+        'items': [for (final it in items) it.toJson()],
+      });
+    }
+    return jsonEncode(map);
+  }
 
   /// Android 已通过 manifest 放行网络，见 AndroidManifest.xml。
 
@@ -598,7 +616,8 @@ class LedgerRepository {
               startEpochDay: Value(t['startEpochDay'] is int ? t['startEpochDay'] as int : 0),
               endEpochDay: Value(t['endEpochDay'] is int ? t['endEpochDay'] as int : 0),
               note: Value((t['note'] as String? ?? '')),
-              groupId: Value(gid),
+              groupId: Value(
+                  _nonEmpty(t['groupId'] as String?, gid)), // 保留行程自身归属，独立行程保持未绑团
               archived: Value(t['archived'] is bool ? t['archived'] as bool : false),
               createdAt: Value(t['createdAt'] is int ? t['createdAt'] as int : now),
               updatedAt: Value(now),

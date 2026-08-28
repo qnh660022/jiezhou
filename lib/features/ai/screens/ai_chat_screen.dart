@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../data/providers.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/travel_quotes.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/widgets/stagger_in.dart';
@@ -300,6 +301,9 @@ class _ThinkingBubbleState extends State<_ThinkingBubble>
 
   static const _dots = ['·  ', '·· ', '···'];
 
+  /// 旅途哲思：每次出现换一条，仅 UI 展示，不进任何模型上下文
+  late var _quote = randomTravelQuote();
+
   @override
   void dispose() {
     _ctrl.dispose();
@@ -326,9 +330,25 @@ class _ThinkingBubbleState extends State<_ThinkingBubble>
           ),
           child: AnimatedBuilder(
             animation: _ctrl,
-            builder: (_, __) => Text(
-              '思考中${_dots[(_ctrl.value * 3).floor().clamp(0, 2)]}',
-              style: TextStyle(fontSize: AppFontSizes.body, color: scheme.onSurfaceVariant),
+            builder: (_, __) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '思考中${_dots[(_ctrl.value * 3).floor().clamp(0, 2)]}',
+                  style: TextStyle(
+                      fontSize: AppFontSizes.body,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '“${_quote.text}” · 旅途哲思',
+                  style: TextStyle(
+                      fontSize: AppFontSizes.caption,
+                      color: scheme.outline,
+                      height: 1.4),
+                ),
+              ],
             ),
           ),
         ),

@@ -53,12 +53,12 @@ class LanSyncManager {
     _http = await HttpServer.bind(InternetAddress.anyIPv4, httpPort);
     _http!.listen(_onRequest);
 
-    // UDP 广播口令
+    // UDP 广播口令 + 响应加入方发现询问（广播常被 AP 隔离，必须同时支持单播回执）
     _udp = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4, kLanSyncUdpPort,
         reuseAddress: true, reusePort: true);
     _udp!.broadcastEnabled = true;
-    _udp!.listen((_) {}); // 主机端的发现回执在 join 侧；主机只负责广播
+    _udp!.listen(_onUdpEvent); // 处理发现询问，并回执给询问者
     _announce = Timer.periodic(_announceInterval, (_) => _announceCode());
 
     final ips = await _localIPv4s();
@@ -100,6 +100,26 @@ class LanSyncManager {
         jsonEncode({'app': 'trip-sync', 'code': _code, 'port': _http?.port}));
     try {
       _udp!.send(msg, InternetAddress(kLanSyncBroadcast), kLanSyncUdpPort);
+    } catch (_) {}
+  }
+
+  /// 主机端 UDP 事件：收到加入方的发现询问时，单播回执（把广播受限无法到达的兜底掉）。
+  void _onUdpEvent(RawSocketEvent event) {
+    if (_closed || _udp == null || _code == null) return;
+    if (event != RawSocketEvent.read) return;
+    final dg = _udp!.receive();
+    if (dg == null) return;
+    try {
+      final obj = jsonDecode(utf8.decode(dg.data));
+      if (obj is Map &&
+          obj['app'] == 'trip-sync' &&
+          obj['code'] == _code &&
+          obj['code'] is String) {
+        // 对方在问我的口令 —— 单播回我的端口，确保即使广播被隔离也能被发现。
+        final reply = utf8.encode(jsonEncode(
+            {'app': 'trip-sync', 'code': _code, 'port': _http?.port}));
+        _udp!.send(reply, dg.address, dg.port);
+      }
     } catch (_) {}
   }
 

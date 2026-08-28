@@ -38,6 +38,11 @@ class LedgerHomeScreen extends ConsumerWidget {
           title: '账本',
           actions: [
             HeaderIconButton(
+              icon: Icons.wifi_tethering_rounded,
+              tooltip: '局域网同步（同 Wi-Fi 快照合并）',
+              onTap: () => context.pushNamed('lan-sync'),
+            ),
+            HeaderIconButton(
               icon: Icons.swap_horizontal_circle_rounded,
               tooltip: '切换旅行团',
               onTap: () => _openGroupSwitcher(context, ref),

@@ -126,7 +126,14 @@ class AiChatController extends Notifier<AiChatState> {
         maxTokens: 1024,
       );
 
-      if (!result.hasToolCalls) {
+      // 兜底：个别模型不返回原生 tool_calls，而是把工具调用打成
+      // <tool_call>…</tool_call> 纯文本。识别到就当作本轮的工具调用执行。
+      var toolCalls = result.toolCalls;
+      if (!result.hasToolCalls && result.content?.contains('<tool_call>') == true) {
+        toolCalls = parseLegacyToolCalls(result.content!);
+      }
+
+      if (toolCalls.isEmpty) {
         state = state.copyWith(
           turns: [
             ...state.turns,
@@ -143,8 +150,8 @@ class AiChatController extends Notifier<AiChatState> {
 
       // 记录 assistant 的工具调用请求，并逐个本地执行回填结果
       _history.add(
-          AiMessage(role: 'assistant', content: result.content, toolCalls: result.toolCalls));
-      for (final call in result.toolCalls) {
+          AiMessage(role: 'assistant', content: result.content, toolCalls: toolCalls));
+      for (final call in toolCalls) {
         actions.add(_actionLabel(call));
         final outcome = await executor.execute(call.name, call.argumentsJson);
         // 查询类结果直出卡片，用户立即看到数据

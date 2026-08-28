@@ -50,6 +50,9 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   /// 按份数模式的份数表
   final Map<String, int> _portions = {};
 
+  /// 按份数模式：勾选参与分摊的成员（默认全部，可取消）
+  final Set<String> _portionParticipants = {};
+
   /// 自定义分摊的每人口径（分，来自文本框实时解析）
   final Map<String, int> _customShares = {};
 
@@ -115,6 +118,10 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
         }
         if (e.portions != null) _portions.addAll(e.portions!);
         for (final s in e.shares) {
+          // 参与分摊的成员：按份数/平均模式下即 shares 中出现的人
+          if (e.shareMode == ShareMode.equal || e.shareMode == ShareMode.portions) {
+            _portionParticipants.add(s.memberId);
+          }
           _customShares[s.memberId] = s.cents.abs();
         }
         break;
@@ -156,9 +163,8 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     return (_currencyCode == 'CNY') ? raw : (raw * _rate).round();
   }
 
-  /// 落库金额：refund 存负
-  int get _signedTotal =>
-      _type == ExpenseType.refund ? -_cnyTotalAbs : _cnyTotalAbs;
+  /// 落库金额：退款/预付/普通一律存正数；正向性由 type 区分（退款=退款收入/收款）
+  int get _signedTotal => _cnyTotalAbs;
 
   List<LedgerMemberView> get _members =>
       ref.watch(membersProvider).value ?? const <LedgerMemberView>[];
@@ -179,10 +185,15 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     switch (_shareMode) {
       case ShareMode.equal:
       case ShareMode.portions:
+        // 支持只勾选部分成员参与分摊；默认全员参与
+        final participants = _shareMode == ShareMode.portions
+            ? ids.where(_portionParticipants.contains).toList()
+            : ids.toList();
+        if (participants.isEmpty) return null;
         try {
           return computeSplit(
             totalCents: _cnyTotalAbs,
-            memberIds: ids,
+            memberIds: participants,
             mode: _shareMode,
             portions: _shareMode == ShareMode.portions ? _portions : null,
           );
@@ -242,7 +253,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     }
     HapticFeedback.lightImpact();
     final shares = _previewShares!;
-    final sign = _type == ExpenseType.refund ? -1 : 1;
+    const sign = 1; // 退/预付/普通统一正向入账，方向由 type 与 payers（收款人）决定
     // 激活团必须存在：否则落到空 groupId 的「幽灵账单」，任何列表都查不到，
     // 表现为「记账成功却不显示」。宁可拦截保存并提示，也不写脏数据。
     final gid = ref.read(activeGroupIdProvider).value;
@@ -309,7 +320,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isRefund = _type == ExpenseType.refund;
-    final amountColor = isRefund ? SemanticColors.expense : scheme.onSurface;
+    final amountColor = isRefund ? SemanticColors.income : scheme.onSurface;
     final members = _members;
 
     return Scaffold(
@@ -663,7 +674,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   Widget _metaCard() {
     final scheme = Theme.of(context).colorScheme;
     final hint = _type == ExpenseType.refund
-        ? '退款会以负数入账，从总支出里扣回去'
+        ? '退款是「收到的钱」：由实际收款人拿到，并平摊回给各位成员'
         : _type == ExpenseType.prepay
             ? '预付款不计入日常支出，结算时单独算'
             : null;
@@ -721,9 +732,10 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
 
   Widget _payerSection({required List<LedgerMemberView> members}) {
     final scheme = Theme.of(context).colorScheme;
+    final isRefund = _type == ExpenseType.refund;
     return _SectionCard(
-      title: '谁付的钱',
-      subtitle: '可多选，金额默认垫全额',
+      title: isRefund ? '谁收到了退款' : '谁付的钱',
+      subtitle: isRefund ? '退款由收款人收到，再平摊给各位' : '可多选，金额默认垫全额',
       child: Column(
         children: [
           Wrap(
@@ -876,6 +888,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
                 if (_shareMode == ShareMode.portions) {
                   for (final id in _memberIds) {
                     _portions.putIfAbsent(id, () => 1);
+                    _portionParticipants.add(id);
                   }
                 }
               });
@@ -888,11 +901,24 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
                     style: Theme.of(context).textTheme.bodySmall),
               ],
             ShareMode.portions => [
+                Text('勾选参与分摊的人，再填每人份数（默认全部参与）',
+                    style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: Spacing.xs),
                 for (final m in members)
                   Padding(
                     padding: const EdgeInsets.only(bottom: Spacing.sm),
                     child: Row(
                       children: [
+                        Checkbox(
+                          value: _portionParticipants.contains(m.id),
+                          onChanged: (v) => setState(() {
+                            if (v == true) {
+                              _portionParticipants.add(m.id);
+                            } else {
+                              _portionParticipants.remove(m.id);
+                            }
+                          }),
+                        ),
                         MemberAvatar(member: m, size: 28),
                         const SizedBox(width: Spacing.sm),
                         Expanded(child: Text(m.name, style: Theme.of(context).textTheme.bodyMedium)),

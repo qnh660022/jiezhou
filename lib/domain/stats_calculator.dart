@@ -87,6 +87,7 @@ GroupStats summarize(List<ExpenseRecord> expenses, {required int memberCount}) {
   final list = _nonPrepay(expenses);
   var total = 0;
   for (final e in list) {
+    if (e.type == ExpenseType.refund) continue; // 退款=收款收入，不计入支出总额
     total += e.amountCents;
   }
   var prepay = 0;

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../data/providers.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../../shared/travel_quotes.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/ledger_providers.dart';
@@ -153,6 +154,9 @@ class ProfileScreen extends ConsumerWidget {
             onTap: () => _toast(context, '反馈入口：请通过应用商店留言或联系开发者'),
           ),
         ),
+        const SizedBox(height: Spacing.lg),
+        // 底部旅途哲理文案：每次进入/下拉刷新都不一样，仅 UI 展示
+        const _TravelQuoteFooter(),
       ],
     );
   }
@@ -406,6 +410,62 @@ class _StaggerInState extends State<_StaggerIn>
           end: Offset.zero,
         ).animate(_animation),
         child: widget.child,
+      ),
+    );
+  }
+}
+
+/// 底部旅途哲理文案：随机取一条，仅 UI 展示，不进任何模型上下文。
+class _TravelQuoteFooter extends StatefulWidget {
+  const _TravelQuoteFooter();
+
+  @override
+  State<_TravelQuoteFooter> createState() => _TravelQuoteFooterState();
+}
+
+class _TravelQuoteFooterState extends State<_TravelQuoteFooter> {
+  late var _quote = randomTravelQuote();
+
+  /// 下拉/再次进入时换一条
+  void _refresh() {
+    setState(() => _quote = randomTravelQuote());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return RefreshIndicator(
+      onRefresh: () async => _refresh(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _refresh,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+              Spacing.xxl, Spacing.md, Spacing.xxl, Spacing.md),
+          child: Column(
+            children: [
+              Icon(Icons.eco_outlined,
+                  size: 20, color: scheme.primary.withValues(alpha: 0.6)),
+              const SizedBox(height: Spacing.sm),
+              Text(
+                '“${_quote.text}”',
+                textAlign: TextAlign.center,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant, height: 1.6),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '—— ${_quote.by} · 旅途哲思',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: scheme.outline),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
