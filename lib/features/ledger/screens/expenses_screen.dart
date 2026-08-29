@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:convert';
 import 'dart:ui' show ImageFilter;
 
 import 'package:collection/collection.dart';
@@ -6,11 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/date_utils.dart';
 import '../../../domain/models.dart';
+import '../../../export/share_helper.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/sheet.dart';
@@ -21,6 +20,7 @@ import '../ledger_providers.dart';
 import '../widgets/bill_detail_sheet.dart';
 import '../widgets/category_icon_box.dart';
 import '../widgets/stagger_in.dart';
+import 'expense_csv_import_screen.dart';
 
 /// 🧾 消费 Tab：粘性日期分组账单流 + 多维筛选 + 合计栏 + CSV 导出。
 class ExpensesScreen extends ConsumerStatefulWidget {
@@ -96,11 +96,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         categoryNames: categoryNames,
       );
 
-      final dir = await getTemporaryDirectory();
       final groupName = ref.read(activeGroupProvider).value?.name ?? '旅行团';
-      final file = File(dir.path + '/旅途账单-' + groupName + '-' + fmtIsoDate(DateTime.now()) + '.csv');
-      await file.writeAsString(csv);
-      await Share.shareXFiles([XFile(file.path)], subject: '旅途账单 CSV');
+      final filename =
+          '旅途账单-' + groupName + '-' + fmtIsoDate(DateTime.now()) + '.csv';
+      await shareFile(utf8.encode(csv), filename, 'text/csv; charset=utf-8');
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -158,6 +157,12 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             icon: Icons.ios_share_rounded,
             tooltip: '导出 CSV',
             onTap: () => _exportCsv(filtered),
+          ),
+          HeaderIconButton(
+            icon: Icons.file_upload_outlined,
+            tooltip: 'CSV 导入',
+            onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ExpenseCsvImportScreen())),
           ),
         ]),
         Padding(

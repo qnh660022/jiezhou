@@ -633,6 +633,26 @@ Future<String> importGroupFromText(WidgetRef ref, String jsonText) async {
   return summarizeImportReport(report);
 }
 
+/// 导出全量备份(.tavA)，返回 (字节, 文件名)
+Future<(Uint8List, String)> exportFullBackup(WidgetRef ref) async {
+  final bytes = await ref.read(ledgerRepoProvider).exportFullBackupBytes();
+  final now = DateTime.now();
+  final stamp =
+      '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+  return (bytes, 'travel_assistant_full_$stamp.tavA');
+}
+
+/// 导入全量备份(.tavA)，replace=true 覆盖恢复 / false 合并，返回人类可读摘要
+Future<String> importFullBackupFile(
+  WidgetRef ref,
+  Uint8List bytes, {
+  required bool replace,
+}) async {
+  final report =
+      await ref.read(ledgerRepoProvider).importFullBackupBytes(bytes, replace: replace);
+  return report.toString();
+}
+
 /// 安全文件名基线（去掉路径分隔等非法字符）
 String _safeFileBase(String raw) {
   final cleaned = raw.replaceAll(RegExp(r'[\\/:*?"<>|\r\n\t]'), '_').trim();

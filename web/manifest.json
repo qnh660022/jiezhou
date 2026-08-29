@@ -1,13 +1,11 @@
 {
-    "name": "travel_assistant",
-    "short_name": "travel_assistant",
+    "name": "旅途助手",
+    "short_name": "旅途助手",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
-    "prefer_related_applications": false,
+    "background_color": "#F7FBF8",
+    "theme_color": "#2E7D5B",
+    "description": "行程规划 + 出行清单 + AA 记账，纯本地离线，Web 版数据仅存本浏览器",
     "icons": [
         {
             "src": "icons/Icon-192.png",

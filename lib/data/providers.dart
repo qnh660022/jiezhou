@@ -1,9 +1,6 @@
 /// Riverpod Providers：所有仓储的全局实例。
 library;
-import "dart:io" show Platform;
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:drift/drift.dart" show DatabaseConnection;
-import "package:drift/native.dart";
 import "db/database.dart";
 import "repo/trips_repo.dart";
 import "repo/ledger_repo.dart";
@@ -24,20 +21,10 @@ import "services/impl/ai_chat_service_impl.dart";
 import "services/impl/exchange_rate_service_impl.dart";
 
 /// 数据库单例。
-/// flutter_test 环境（FLUTTER_TEST 环境变量由测试运行时注入）下改用内存库：
-/// 测试沙箱没有平台通道，path_provider 永不返回会导致首页数据流
-/// 永远处于 waiting、骨架屏无限 shimmer、pumpAndSettle 超时。
-/// closeStreamsSynchronously 让 drift 在最后一个监听者取消时同步关闭流查询，
-/// 避免其内部 Timer.run 缓存批处理在 widget 测试收尾时留下 pending timer。
-final dbProvider = Provider<AppDatabase>((_) {
-  if (Platform.environment.containsKey("FLUTTER_TEST")) {
-    return AppDatabase(DatabaseConnection(
-      NativeDatabase.memory(),
-      closeStreamsSynchronously: true,
-    ));
-  }
-  return AppDatabase();
-});
+/// 平台连接由 [AppDatabase] 默认构造经平台门面解析：
+///   原生 = Documents 文件库；测试 = 内存库；Web = sqlite-WASM(IndexedDB)。
+/// closeStreamsSynchronously 已由 io 门面在测试路径设置。
+final dbProvider = Provider<AppDatabase>((_) => AppDatabase());
 
 /// 仓储 providers
 final tripsRepoProvider = Provider<TripsRepository>((r) => TripsRepository(r.read(dbProvider)));

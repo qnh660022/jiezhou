@@ -1,10 +1,16 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'features/ai/screens/ai_chat_screen.dart';
 import 'features/ai/screens/ai_settings_screen.dart';
+import 'features/checklist/desktop_checklist_workbench.dart';
 import 'features/checklist/screens/checklist_screen.dart';
 import 'features/checklist/screens/item_edit_screen.dart';
+import 'features/desktop/desktop_shell.dart';
+import 'features/desktop/desktop_utils.dart' show isDesktopWeb;
+import 'features/ledger/desktop_ledger_workbench.dart';
+import 'features/trips/desktop_trips_workbench.dart' as trips_wb;
 import 'features/ledger/screens/budget_screen.dart';
 import 'features/ledger/screens/categories_screen.dart';
 import 'features/ledger/screens/expense_edit_screen.dart';
@@ -52,27 +58,30 @@ List<RouteBase> buildAppRoutes() => [
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) => HomeShell(shell: navigationShell),
       branches: [
-        // ============ AI 助手 ============
-        StatefulShellBranch(routes: [
-          GoRoute(
-            path: '/ai',
-            name: 'ai',
-            builder: (context, state) => const AiChatScreen(),
-            routes: [
-              GoRoute(
-                path: 'settings',
-                name: 'ai-settings',
-                builder: (context, state) => const AiSettingsScreen(),
-              ),
-            ],
-          ),
-        ]),
+        // ============ AI 助手（Web 端屏蔽：不注册分支，免暴露） ============
+        if (!kIsWeb)
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/ai',
+              name: 'ai',
+              builder: (context, state) => const AiChatScreen(),
+              routes: [
+                GoRoute(
+                  path: 'settings',
+                  name: 'ai-settings',
+                  builder: (context, state) => const AiSettingsScreen(),
+                ),
+              ],
+            ),
+          ]),
         // ============ 清单 ============
         StatefulShellBranch(routes: [
           GoRoute(
             path: '/checklist',
             name: 'checklist',
-            builder: (context, state) => const ChecklistScreen(),
+            builder: (context, state) => isDesktopWeb(context)
+                ? const DesktopChecklistWorkbench()
+                : const ChecklistScreen(),
             routes: [
               GoRoute(
                 path: 'item-edit',
@@ -87,7 +96,9 @@ List<RouteBase> buildAppRoutes() => [
           GoRoute(
             path: '/trips',
             name: 'trips',
-            builder: (context, state) => const TripsHomeScreen(),
+            builder: (context, state) => isDesktopWeb(context)
+                ? const trips_wb.DesktopTripsWorkbench()
+                : const TripsHomeScreen(),
             routes: [
               GoRoute(
                 path: 'edit',
@@ -137,7 +148,9 @@ List<RouteBase> buildAppRoutes() => [
           GoRoute(
             path: '/ledger',
             name: 'ledger',
-            builder: (context, state) => const LedgerHomeScreen(),
+            builder: (context, state) => isDesktopWeb(context)
+                ? const DesktopLedgerWorkbench()
+                : const LedgerHomeScreen(),
             routes: [
               GoRoute(
                 path: 'groups',
@@ -233,16 +246,24 @@ class HomeShell extends StatelessWidget {
 
   final StatefulNavigationShell shell;
 
-  static const List<CapsuleTabItem> _tabs = [
-    CapsuleTabItem(emoji: '🤖', label: 'AI'),
-    CapsuleTabItem(emoji: '📋', label: '清单'),
-    CapsuleTabItem(emoji: '🧳', label: '行程'),
-    CapsuleTabItem(emoji: '💰', label: '账本'),
-    CapsuleTabItem(emoji: '👤', label: '我的'),
-  ];
+  // 原生含 AI Tab，共 5 项；Web 屏蔽 AI，仅 4 项（需与 branches 个数一一对应）。
+  static List<CapsuleTabItem> get _tabs {
+    final base = <CapsuleTabItem>[
+      const CapsuleTabItem(emoji: '📋', label: '清单'),
+      const CapsuleTabItem(emoji: '🧳', label: '行程'),
+      const CapsuleTabItem(emoji: '💰', label: '账本'),
+      const CapsuleTabItem(emoji: '👤', label: '我的'),
+    ];
+    if (kIsWeb) return base;
+    return [const CapsuleTabItem(emoji: '🤖', label: 'AI'), ...base];
+  }
 
   @override
   Widget build(BuildContext context) {
+    // 桌面 Web 大屏：左侧导航栏外壳；其余（安卓/窄屏 Web）沿用移动底栏。
+    if (isDesktopWeb(context)) {
+      return DesktopShell(shell: shell, tabs: _tabs);
+    }
     return Scaffold(
       extendBody: true,
       body: shell,

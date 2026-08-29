@@ -1,46 +1,65 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="旅途助手 Web 版：行程规划 + 出行清单 + AA 记账（纯本地离线，数据仅存本浏览器）">
 
-  <!-- iOS meta tags & icons -->
+  <!-- Viewport / mobile -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="travel_assistant">
+  <meta name="apple-mobile-web-app-title" content="旅途助手">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>travel_assistant</title>
+  <meta name="theme-color" content="#2E7D5B">
+  <title>旅途助手</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* 首屏加载提示（Flutter 就绪前） */
+    html, body { margin: 0; padding: 0; height: 100%; background: #F7FBF8; }
+    #boot {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      font-family: system-ui, -apple-system, sans-serif; color: #5A5F5A;
+    }
+    #boot .logo { font-size: 40px; }
+    #boot .bar {
+      width: 120px; height: 4px; border-radius: 99px; overflow: hidden;
+      background: #E3E8E2;
+    }
+    #boot .bar > i {
+      display: block; height: 100%; width: 40%;
+      border-radius: 99px; background: #2E7D5B;
+      animation: slide 1.1s ease-in-out infinite;
+    }
+    @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+    #boot.hidden { opacity: 0; transition: opacity .3s; }
+    flutter-view { width: 100%; height: 100%; }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <div id="boot">
+    <div class="logo">🧳</div>
+    <div>旅途助手加载中…</div>
+    <div class="bar"><i></i></div>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <script>
+    // Flutter render 后隐藏首屏提示
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('boot');
+      if (el) { el.classList.add('hidden'); setTimeout(function(){ el.remove(); }, 350); }
+    });
+    setTimeout(function () { var el = document.getElementById('boot'); if (el) el.remove(); }, 15000);
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

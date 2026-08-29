@@ -8,6 +8,7 @@ import 'core/error_recovery.dart';
 import 'data/providers.dart';
 import 'features/ai/notification_bridge.dart';
 import 'features/ledger/ledger_providers.dart' show currencyRatesProvider;
+import 'platform/context_menu_guard.dart';
 import 'theme/theme_provider.dart';
 
 Future<void> main() async {
@@ -37,6 +38,9 @@ Future<void> main() async {
   // 全局错误兜底：release 灰屏 → 自动记录堆栈 + 启动窗口期自愈重启 +
   // 可读错误屏（重启/复制按钮）。必须在 runApp 之前装好。
   installGlobalErrorHandlers();
+
+  // Web 端屏蔽浏览器原生右键菜单（桌面工作台提供自定义右键菜单）；原生为空实现。
+  disableBrowserContextMenu();
 
   runApp(_BootGate(prefs: prefs));
 }

@@ -1,15 +1,12 @@
 // 📄 导出行程 PDF：说明页 + 生成 + 分享
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
 import '../../../export/pdf_builder.dart';
+import '../../../export/share_helper.dart';
 
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -244,12 +241,11 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
         dateRange: cnDateRange(trip.startEpochDay, trip.endEpochDay),
         totalItems: items.length,
       );
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/trip_$_tripId.pdf');
-      await file.writeAsBytes(bytes);
-      await Share.shareXFiles([
-        XFile(file.path),
-      ], text: '来看看我的行程「${trip.name}」');
+      await shareFile(
+        bytes,
+        'trip_$_tripId.pdf',
+        'application/pdf',
+      );
     } catch (e) {
       _toast('生成失败：$e');
     } finally {

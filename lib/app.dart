@@ -1,11 +1,12 @@
-import 'dart:io' show Platform;
-
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'main.dart' show attachStartupServices;
+import 'platform/detect_env.dart' show isTestEnv;
+import 'features/desktop/mobile_not_supported_screen.dart';
 import 'router.dart';
 import 'theme/theme_provider.dart';
 import 'theme/tokens.dart';
@@ -32,7 +33,9 @@ class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp> {
     // FLUTTER_TEST 环境跳过（通知插件无平台通道，测试也不该有网络副作用）。
     if (!_startupAttached) {
       _startupAttached = true;
-      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      // Web 端不挂系统通知桥（Web 实现本就是空）且无 FLUTTER_TEST 环境；仅在
+      // 非测试的非 Web 原生环境真正挂载预警通知 + 汇率静默刷新。
+      if (!kIsWeb && !isTestEnv) {
         // 挂载整体挪到首帧渲染之后（addPostFrameCallback）：
         // didChangeDependencies 正处于 build 阶段，此时绑定 listenManual
         // 会同步创建 budgetAlertsProvider 依赖图，首帧与 drift 首回流的
@@ -75,6 +78,13 @@ class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp> {
       title: '旅途助手',
       debugShowCheckedModeBanner: false,
       routerConfig: widget.router ?? appRouter,
+      // Web 版仅支持桌面（宽屏）；手机浏览器直接显示拦截页。
+      builder: (context, child) {
+        if (kIsWeb && MediaQuery.sizeOf(context).width < 1024) {
+          return const MobileNotSupportedScreen();
+        }
+        return child ?? const SizedBox.shrink();
+      },
       // theme: 浅色基准——选中石墨夜或跟随系统时给默认薄荷绿浅色方案
       theme: buildAppTheme(isDark || isSystem ? ThemeKeys.green : themeKey),
       darkTheme: buildAppTheme(ThemeKeys.dark),

@@ -1,11 +1,9 @@
 /// AppDatabase：Drift 单例，schemaVersion=2。
 library;
 
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import '../../platform/db_connection.dart';
 
 import 'tables.dart';
 import 'daos/trips_dao.dart';
@@ -25,7 +23,7 @@ part 'database.g.dart';
   ChecklistDao, AlbumDao, CategoriesDao,
 ])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
+  AppDatabase([QueryExecutor? executor]) : super(executor ?? openDbConnection());
 
   @override
   int get schemaVersion => 2;
@@ -46,12 +44,4 @@ class AppDatabase extends _$AppDatabase {
           await categoriesDao.initBuiltin();
         },
       );
-}
-
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'travel_v2.sqlite'));
-    return NativeDatabase(file);
-  });
 }

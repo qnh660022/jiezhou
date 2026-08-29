@@ -13,12 +13,12 @@
 /// key 变化强制 remount（含 ProviderScope 全新容器），开屏页重播。
 library;
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
+
+import '../platform/fs.dart' show persistErrorLog;
 
 /// 应用树纪元：自愈/手动重启时 +1。
 final ValueNotifier<int> appEpoch = ValueNotifier<int>(0);
@@ -43,21 +43,9 @@ void installGlobalErrorHandlers() {
 }
 
 Future<void> _persistLog(String detail) async {
-  try {
-    final dir = await getApplicationDocumentsDirectory();
-    final f = File('${dir.path}/startup_error.log');
-    await f.writeAsString(
-      '==== ${DateTime.now().toIso8601String()} ====\n$detail\n\n',
-      mode: FileMode.append,
-    );
-    // 只保留最近 ~200KB，防止无限增长。
-    if (await f.length() > 200 * 1024) {
-      final content = await f.readAsString();
-      await f.writeAsString(content.substring(content.length ~/ 2));
-    }
-  } catch (_) {
-    // 日志失败不能再抛，否则自愈本身变成错误源。
-  }
+  // 落盘逻辑按平台隔离（Web 无文件系统，为空实现），此处不 catch ——
+  // 实现内部均已 try/catch，不会让自愈本身抛错。
+  await persistErrorLog(detail);
 }
 
 void _presentError(Object error, StackTrace? stack, String detail) {

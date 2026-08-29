@@ -1,6 +1,4 @@
 // 🖼️ 行程相册：九宫格照片墙 + 相机/相册添加 + 归属日期 + 全屏预览 + 长按删除
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/date_utils.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
+import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
+import '../../../platform/file_image.dart';
 
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
@@ -49,11 +49,13 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SheetActionTile(
-              icon: Icons.photo_camera_rounded,
-              label: '拍摄一张',
-              onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
-            ),
+            // 桌面浏览器多无摄像头/体验不一致：仅保留「选择图片」。
+            if (!isDesktopWeb(context))
+              SheetActionTile(
+                icon: Icons.photo_camera_rounded,
+                label: '拍摄一张',
+                onTap: () => Navigator.of(sheetContext).pop(ImageSource.camera),
+              ),
             SheetActionTile(
               icon: Icons.photo_rounded,
               label: '从相册选择',
@@ -106,7 +108,7 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
             fit: StackFit.expand,
             children: [
               InteractiveViewer(
-                child: Image.file(File(uri), fit: BoxFit.contain),
+                child: fileImage(uri, fit: BoxFit.contain),
               ),
               Positioned(
                 top: MediaQuery.paddingOf(ctx).top + 8,
@@ -228,7 +230,7 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
                       onLongPress: () => _deletePhoto(p.id),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.file(File(p.uri), fit: BoxFit.cover),
+                        child: fileImage(p.uri, fit: BoxFit.cover),
                       ),
                     );
                   },

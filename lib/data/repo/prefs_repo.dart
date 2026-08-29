@@ -1,9 +1,9 @@
 /// 偏好仓储：themeKey/activeGroupId/currencyRates/mapConfig 读写。
 library;
 import "dart:convert";
-import "dart:io";
-import "package:path_provider/path_provider.dart";
 import "package:shared_preferences/shared_preferences.dart";
+
+import "../../platform/fs.dart" show clearTempDir;
 
 class PrefsRepository {
   Future<SharedPreferences> get _sp async => SharedPreferences.getInstance();
@@ -33,14 +33,7 @@ class PrefsRepository {
   /// 清除可重建的本地缓存（航班缓存 + 临时目录文件）；不影响任何用户数据。
   Future<void> clearTemporaryCache() async {
     await clearFlightCache();
-    try {
-      final dir = await getTemporaryDirectory();
-      if (dir.existsSync()) {
-        for (final f in dir.listSync()) {
-          try { if (f is File) f.deleteSync(); else if (f is Directory) f.deleteSync(recursive: true); } catch (_) {}
-        }
-      }
-    } catch (_) {}
+    await clearTempDir();
   }
 
   /// 预算预警已读级别集合（0=info 1=warning 2=danger），按团隔离。

@@ -1,9 +1,9 @@
 /// 天气实现：三级定位→Open-Meteo→WMO映射→6h缓存。
+/// 缓存存 SharedPreferences（跨 Web / 原生通用，免去文件系统依赖）。
 library;
 import "dart:convert";
-import "dart:io";
 import "package:dio/dio.dart";
-import "package:path_provider/path_provider.dart";
+import "package:shared_preferences/shared_preferences.dart";
 import "../weather_service.dart";
 import "../../seed/city_coords.dart";
 import "../../seed/wmo_codes.dart";
@@ -63,10 +63,10 @@ class WeatherServiceImpl implements WeatherService {
 
   Future<List<WeatherDay>?> _readCache(String key) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File("${dir.path}/weather_cache.json");
-      if (!await file.exists()) return null;
-      final raw = jsonDecode(await file.readAsString()) as Map;
+      final prefs = await SharedPreferences.getInstance();
+      final rawJson = prefs.getString('weather_cache_json');
+      if (rawJson == null) return null;
+      final raw = jsonDecode(rawJson) as Map;
       final e = raw[key];
       if (e == null) return null;
       final ts = DateTime.parse(e["ts"]);
@@ -77,11 +77,11 @@ class WeatherServiceImpl implements WeatherService {
 
   Future<void> _writeCache(String key, List<WeatherDay> days) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File("${dir.path}/weather_cache.json");
-      final raw = Map<String,dynamic>.from(await file.exists() ? jsonDecode(await file.readAsString()) : <String,dynamic>{});
+      final prefs = await SharedPreferences.getInstance();
+      final rawJson = prefs.getString('weather_cache_json');
+      final raw = Map<String,dynamic>.from(rawJson == null ? <String,dynamic>{} : jsonDecode(rawJson) as Map);
       raw[key] = {"ts":DateTime.now().toIso8601String(),"days":[for(final d in days){"date":d.date.toIso8601String(),"codeText":d.codeText,"iconEmoji":d.iconEmoji,"tempMax":d.tempMax,"tempMin":d.tempMin}]};
-      await file.writeAsString(jsonEncode(raw));
+      await prefs.setString('weather_cache_json', jsonEncode(raw));
     } catch (_) {}
   }
 }

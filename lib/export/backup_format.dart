@@ -11,8 +11,9 @@
 library;
 
 import 'dart:convert';
-import 'dart:io' show GZipCodec;
 import 'dart:typed_data';
+
+import '../platform/gzip.dart';
 
 /// 旅游团备份魔数 "TA1G"
 const List<int> kGroupBackupMagic = <int>[0x54, 0x41, 0x31, 0x47];
@@ -20,13 +21,16 @@ const List<int> kGroupBackupMagic = <int>[0x54, 0x41, 0x31, 0x47];
 /// 行程备份魔数 "TA1T"
 const List<int> kTripBackupMagic = <int>[0x54, 0x41, 0x31, 0x54];
 
+/// 全量备份魔数 "TA1A"
+const List<int> kFullBackupMagic = <int>[0x54, 0x41, 0x31, 0x41];
+
 const int _kVersion = 1;
 const int _kFlagGzip = 1 << 0;
 
 /// 把备份 Map 编码为专有二进制文件内容。
 Uint8List encodeBackup(List<int> magic, Map<String, dynamic> data) {
   final jsonBytes = utf8.encode(jsonEncode(data));
-  final payload = GZipCodec().encode(jsonBytes);
+  final payload = gzipEncode(jsonBytes);
   final out = ByteData(10 + payload.length);
   for (var i = 0; i < 4; i++) {
     out.setUint8(i, magic[i]);
@@ -65,7 +69,7 @@ Map<String, dynamic> decodeBackup(Uint8List bytes,
   }
   final payload = bytes.sublist(10, 10 + len);
   final jsonBytes =
-      (flags & _kFlagGzip) != 0 ? GZipCodec().decode(payload) : payload;
+      (flags & _kFlagGzip) != 0 ? gzipDecode(payload) : payload;
   final decoded = jsonDecode(utf8.decode(jsonBytes));
   if (decoded is! Map) {
     throw const FormatException('备份根节点必须是对象');

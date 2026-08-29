@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/uid.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
+import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
 
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart' show MoneyFormat;
@@ -21,9 +22,13 @@ const List<String> kTripEmojis = [
   '✈️', '🏖️', '⛰️', '🏙️', '🎒', '🚗', '🏕️', '🎡', '🛳️', '🗺️',
 ];
 
-/// 新建 / 编辑行程页（路由 extra 传行程 id 即编辑模式）
+/// 新建 / 编辑行程页（路由 extra 传行程 id 即编辑模式；或直接传 [initialId]）
 class TripEditScreen extends ConsumerStatefulWidget {
-  const TripEditScreen({super.key});
+  const TripEditScreen({super.key, this.initialId});
+
+  /// 编辑模式下待编辑的行程 id。为桌面工作台在 Dialog 内复用而加：
+  /// 传入时优先使用，否则回落到路由 extra（移动端/整页跳转不受影响）。
+  final String? initialId;
 
   @override
   ConsumerState<TripEditScreen> createState() => _TripEditScreenState();
@@ -74,8 +79,33 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
 
   Future<void> _pickDateRange() async {
     HapticFeedback.selectionClick();
-    final initialStart =
-        _startDay ?? todayEpochDay();
+    final initialStart = _startDay ?? todayEpochDay();
+
+    // 桌面 Web：用原生日期区间对话框（确认/取消按钮均可见），
+    // 规避底部抽屉在桌面对话框/大窗内“确认被遮挡”的问题。
+    if (isDesktopWeb(context)) {
+      final range = await showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100),
+        initialDateRange: _startDay != null && _endDay != null
+            ? DateTimeRange(
+                start: epochDayToDate(_startDay!),
+                end: epochDayToDate(_endDay!))
+            : DateTimeRange(
+                start: epochDayToDate(initialStart),
+                end: epochDayToDate(initialStart)),
+        helpText: '选择行程日期区间',
+      );
+      if (range != null && mounted) {
+        setState(() {
+          _startDay = dateToEpochDay(range.start);
+          _endDay = dateToEpochDay(range.end);
+        });
+      }
+      return;
+    }
+
     final result = await showDraggableSheet<_DateRangeResult>(
       context: context,
       initialChildSize: 0.72,
@@ -133,10 +163,22 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
-      final arg = GoRouterState.of(context).extra;
-      if (arg is String && _editId == null) {
-        _editId = arg;
-        _loadExisting(arg);
+      // 桌面工作台在 Dialog 内复用时由 widget.initialId 提供编辑目标；
+      // 移动端/整页跳转依旧从路由 extra 读取。
+      if (widget.initialId != null) {
+        _editId = widget.initialId;
+        _loadExisting(_editId!);
+      } else {
+        try {
+          final arg = GoRouterState.of(context).extra;
+          if (arg is String && _editId == null) {
+            _editId = arg;
+            _loadExisting(arg);
+          }
+        } catch (_) {
+          // 桌面工作台以 Dialog 打开（非 go_router 子树）时无 GoRouterState → 按新建处理。
+          _editId = null;
+        }
       }
       if (_editId == null) _loaded = true;
     }

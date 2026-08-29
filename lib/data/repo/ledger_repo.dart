@@ -10,6 +10,7 @@ import "../../core/uid.dart";
 import "../../domain/models.dart";
 import "../../domain/share_splitter.dart";
 import "../../domain/group_backup.dart";
+import "../../domain/full_backup.dart";
 import "../../export/backup_format.dart";
 import "prefs_repo.dart";
 
@@ -672,6 +673,290 @@ class LedgerRepository {
     final existingByName = await _existingCategoryNameToKey();
     final result = applyImport(backup, existingCategoryByName: existingByName);
     return _insertFullBackup(result);
+  }
+
+  // === 全量备份（.tavA） ===
+  /// 导出全量备份：全部团（每团整包）+ 未绑团行程，打包为二进制 .tavA。
+  Future<Uint8List> exportFullBackupBytes() async {
+    final allGroups = await (db.select(db.groups)).get();
+    final groups = <Map<String, dynamic>>[];
+    for (final g in allGroups) {
+      groups.add(await _buildFullGroupMap(g.id));
+    }
+    final standalone = <Map<String, dynamic>>[];
+    final unbound =
+        await (db.select(db.trips)..where((t) => t.groupId.isNull())).get();
+    for (final t in unbound) {
+      final items = await (db.select(db.tripItems)
+            ..where((i) => i.tripId.equals(t.id)))
+          .get();
+      final checklist = await (db.select(db.checklistItems)
+            ..where((c) => c.tripId.equals(t.id)))
+          .get();
+      standalone.add(<String, dynamic>{
+        ...t.toJson(),
+        'items': [for (final it in items) it.toJson()],
+        'checklist': [for (final c in checklist) c.toJson()],
+      });
+    }
+    final root = buildFullBackup(groups: groups, standaloneTrips: standalone);
+    return encodeBackup(kFullBackupMagic, root);
+  }
+
+  /// 导入全量备份：replace=true 先清空全部数据再合并（恢复）；false 则逐团 LWW 合并。
+  Future<FullImportReport> importFullBackupBytes(
+    Uint8List bytes, {
+    required bool replace,
+  }) async {
+    final root = decodeBackup(bytes, acceptedMagics: [kFullBackupMagic]);
+    final backup = parseFullBackupMap(root);
+    final report = fullImportReportFor(backup, replace: replace);
+    if (replace) {
+      await _clearAllData();
+    }
+    // 逐团合并（每团独立事务，避免嵌套事务；合并语义与局域网快照一致）
+    for (final g in backup.groups) {
+      final single = buildGroupBackup(
+        group: (g['group'] as Map?)?.cast<String, dynamic>() ?? const {},
+        members: _asMapList(g['members']),
+        expenses: _asMapList(g['expenses']),
+        settlements: _asMapList(g['settlements']),
+        trips: _asMapList(g['trips']),
+        customCategories: _asMapList(g['customCategories']),
+      );
+      await mergeGroupSnapshotJson(jsonEncode(single));
+    }
+    // 未绑团独立行程：稳定 id upsert（行程+安排+清单）
+    for (final t in backup.standaloneTrips) {
+      await _upsertStandaloneTrip(t);
+    }
+    return report;
+  }
+
+  Future<void> _upsertStandaloneTrip(Map<String, dynamic> t) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final tid = t['id'] as String?;
+    if (tid == null) return;
+    final hit = await (db.select(db.trips)..where((x) => x.id.equals(tid))).get();
+    final inUpd = t['updatedAt'] is int ? t['updatedAt'] as int : 0;
+    final localUpd = hit.isEmpty ? -1 : hit.first.updatedAt;
+    if (hit.isNotEmpty && localUpd > inUpd) return; // 本地更新
+    if (hit.isEmpty) {
+      await db.into(db.trips).insert(TripsCompanion(
+        id: Value(tid),
+        name: Value(_nonEmpty(t['name'] as String?, '同步的行程')),
+        destination: Value((t['destination'] as String? ?? '')),
+        emoji: Value(_nonEmpty(t['emoji'] as String?, '✈️')),
+        cover: Value(_nonEmpty(t['cover'] as String?, 'ocean')),
+        startEpochDay:
+            Value(t['startEpochDay'] is int ? t['startEpochDay'] as int : 0),
+        endEpochDay:
+            Value(t['endEpochDay'] is int ? t['endEpochDay'] as int : 0),
+        note: Value((t['note'] as String? ?? '')),
+        groupId: Value(null),
+        archived: Value(t['archived'] is bool ? t['archived'] as bool : false),
+        createdAt: Value(t['createdAt'] is int ? t['createdAt'] as int : now),
+        updatedAt: Value(now),
+      ));
+    } else {
+      await (db.update(db.trips)..where((x) => x.id.equals(tid))).write(
+        TripsCompanion(
+          name: Value(_nonEmpty(t['name'] as String?, hit.first.name)),
+          destination: Value((t['destination'] as String? ?? '')),
+          emoji: Value(_nonEmpty(t['emoji'] as String?, hit.first.emoji)),
+          cover: Value(_nonEmpty(t['cover'] as String?, hit.first.cover)),
+          startEpochDay: Value(t['startEpochDay'] is int
+              ? t['startEpochDay'] as int
+              : hit.first.startEpochDay),
+          endEpochDay: Value(t['endEpochDay'] is int
+              ? t['endEpochDay'] as int
+              : hit.first.endEpochDay),
+          note: Value((t['note'] as String? ?? '')),
+          archived: Value(t['archived'] is bool
+              ? t['archived'] as bool
+              : hit.first.archived),
+          updatedAt: Value(now),
+        ),
+      );
+    }
+    for (final it in _asMapList(t['items'])) {
+      final iid = it['id'] as String?;
+      if (iid == null) continue;
+      final ihit =
+          await (db.select(db.tripItems)..where((x) => x.id.equals(iid))).get();
+      final iUpd = it['updatedAt'] is int ? it['updatedAt'] as int : 0;
+      final iLocal = ihit.isEmpty ? -1 : ihit.first.updatedAt;
+      if (ihit.isNotEmpty && iLocal > iUpd) continue;
+      final comp = _tripItemCompanion(it, now, tid);
+      if (ihit.isEmpty) {
+        await db.into(db.tripItems).insert(comp);
+      } else {
+        await (db.update(db.tripItems)..where((x) => x.id.equals(iid)))
+            .write(comp);
+      }
+    }
+    for (final c in _asMapList(t['checklist'])) {
+      final cid = c['id'] as String?;
+      if (cid == null) continue;
+      final chit =
+          await (db.select(db.checklistItems)..where((x) => x.id.equals(cid))).get();
+      if (chit.isNotEmpty) continue;
+      await db.into(db.checklistItems).insert(ChecklistItemsCompanion(
+        id: Value(cid),
+        scope: Value('trip'),
+        tripId: Value(tid),
+        category: Value(_nonEmpty(c['category'] as String?, 'other')),
+        label: Value(_nonEmpty(c['label'] as String?, '事项')),
+        done: Value(c['done'] is bool ? c['done'] as bool : false),
+        sortOrder: Value(c['sortOrder'] is int ? c['sortOrder'] as int : 0),
+      ));
+    }
+  }
+
+  /// 清空全部业务数据（覆盖恢复用）。按外键依赖倒序删除。
+  Future<void> _clearAllData() async {
+    await db.transaction(() async {
+      await db.delete(db.expenses).go();
+      await db.delete(db.settlements).go();
+      await db.delete(db.tripItems).go();
+      await db.delete(db.checklistItems).go();
+      await db.delete(db.albumPhotos).go();
+      await db.delete(db.trips).go();
+      await db.delete(db.members).go();
+      await db.delete(db.categories).go();
+      await db.delete(db.groups).go();
+    });
+  }
+
+  /// CSV 批量导入账单到指定团。
+  ///
+  /// [rows] 每项为已归一化账单：
+  ///   {title, amountCents, dateEpochDay, categoryKey, type,
+  ///    payerNames, shareMode, shareNames, currency, rate, note}
+  /// 付款/分账成员按姓名创建/复用（缺失自动新建）。返回导入摘要。
+  Future<ImportReport> bulkImportExpenses(
+    String groupId, {
+    required List<Map<String, dynamic>> rows,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // ① 收集全部成员姓名，缺失则新建
+    final names = <String>{};
+    for (final r in rows) {
+      for (final n in (r['payerNames'] as List? ?? <dynamic>[])) {
+        final s = n.toString().trim();
+        if (s.isNotEmpty) names.add(s);
+      }
+      for (final n in (r['shareNames'] as List? ?? <dynamic>[])) {
+        final s = n.toString().trim();
+        if (s.isNotEmpty) names.add(s);
+      }
+    }
+    final existing =
+        await (db.select(db.members)..where((m) => m.groupId.equals(groupId))).get();
+    final nameToId = <String, String>{
+      for (final m in existing)
+        if (m.name.isNotEmpty) m.name: m.id,
+    };
+    final toCreate = <String>[];
+    for (final n in names) {
+      if (!nameToId.containsKey(n)) {
+        nameToId[n] = newId('member');
+        toCreate.add(n);
+      }
+    }
+    final allIds = nameToId.values.toList();
+
+    var memberCount = 0, expenseCount = 0, badRows = 0;
+    final warnings = <String>[];
+    await db.transaction(() async {
+      for (final n in toCreate) {
+        await db.into(db.members).insert(MembersCompanion(
+          id: Value(nameToId[n]!),
+          groupId: Value(groupId),
+          name: Value(n),
+          colorIndex: Value(0),
+          createdAt: Value(now),
+        ));
+        memberCount++;
+      }
+      for (final r in rows) {
+        final title = (r['title'] as String? ?? '').trim();
+        final amount = r['amountCents'];
+        if (title.isEmpty || amount is! int) {
+          badRows++;
+          continue;
+        }
+        final payerNames =
+            (r['payerNames'] as List? ?? <dynamic>[]).map((n) => n.toString().trim()).toList();
+        var shareNames =
+            (r['shareNames'] as List? ?? <dynamic>[]).map((n) => n.toString().trim()).toList();
+        if (shareNames.isEmpty) shareNames = names.toList(); // 未指定分账人→全部成员
+        final payerIds =
+            payerNames.map((n) => nameToId[n]).whereType<String>().toSet().toList();
+        final shareIds =
+            shareNames.map((n) => nameToId[n]).whereType<String>().toSet().toList();
+        if (payerIds.isEmpty) payerIds.addAll(allIds); // 未指定付款人→全部成员
+        if (shareIds.isEmpty) shareIds.addAll(allIds);
+        if (payerIds.isEmpty || shareIds.isEmpty) {
+          badRows++;
+          continue;
+        }
+        final mode = ShareMode.values.firstWhere(
+          (m) => m.name == r['shareMode'],
+          orElse: () => ShareMode.equal,
+        );
+        List<ShareEntry> shares;
+        try {
+          shares = splitShares(
+            totalCents: amount,
+            memberIds: shareIds,
+            mode: mode,
+          );
+        } catch (_) {
+          badRows++;
+          continue;
+        }
+        final payers = splitShares(
+          totalCents: amount,
+          memberIds: payerIds,
+          mode: ShareMode.equal,
+        );
+        final categoryKey = (r['categoryKey'] as String? ?? '').trim();
+        final typeRaw = (r['type'] as String? ?? 'normal').trim();
+        final type = kExpenseTypeNames.contains(typeRaw) ? typeRaw : 'normal';
+        await db.into(db.expenses).insert(ExpensesCompanion(
+          id: Value(newId('expense')),
+          groupId: Value(groupId),
+          dateEpochDay: Value(r['dateEpochDay'] is int ? r['dateEpochDay'] as int : 0),
+          title: Value(title),
+          categoryKey: Value(categoryKey.isEmpty ? 'other' : categoryKey),
+          type: Value(type),
+          amountCents: Value(amount),
+          currency: Value(((r['currency'] as String?) ?? '').trim().isEmpty ? 'CNY' : (r['currency'] as String)),
+          rate: Value(r['rate'] is num ? (r['rate'] as num).toDouble() : 1.0),
+          amountForeignCents: const Value(null),
+          payersJson: Value(jsonEncode([
+            for (final p in payers) {'memberId': p.memberId, 'cents': p.cents},
+          ])),
+          sharesJson: Value(jsonEncode([
+            for (final s in shares) {'memberId': s.memberId, 'cents': s.cents},
+          ])),
+          shareMode: Value(mode.name),
+          portionsJson: const Value(null),
+          note: Value((r['note'] as String? ?? '')),
+          settledRoundId: const Value(null),
+          createdAt: Value(now),
+        ));
+        expenseCount++;
+      }
+    });
+    if (badRows > 0) warnings.add('$badRows 条无效记录已跳过');
+    return ImportReport(
+      groups: 0,
+      members: memberCount,
+      expenses: expenseCount,
+      warnings: warnings,
+    );
   }
 
   Future<Map<String, String>> _existingCategoryNameToKey() async {

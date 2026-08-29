@@ -137,6 +137,11 @@ class TripsRepository {
     } else {
       throw const FormatException('不是「旅途助手」的行程备份文件');
     }
+    return importTripBackupMap(root);
+  }
+
+  /// 从已解码的行程备份根节点导入（同步码/二维码复用）。
+  Future<TripImportReport> importTripBackupMap(Map<String, dynamic> root) async {
     final backup = parseTripBackupMap(root);
     final result = applyTripImport(backup);
     return db.transaction<TripImportReport>(() async {

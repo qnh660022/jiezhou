@@ -50,6 +50,27 @@ abstract final class AppBottomLayout {
       value + MediaQuery.paddingOf(context).bottom;
 }
 
+/// 桌面 Web 布局令牌（仅 Web 大屏启用；安卓不触碰）。
+abstract final class DesktopLayout {
+  /// 触发桌面布局的最小窗口宽度。
+  static const double breakpoint = 1024;
+
+  /// 左侧导航栏宽度。
+  static const double sidebarWidth = 232;
+
+  /// 内容区居中最大宽度。
+  static const double contentMaxWidth = 1080;
+
+  /// 主从工作台：左侧 Master 面板宽度。
+  static const double masterPanelWidth = 340;
+
+  /// 对话框内嵌页面默认宽度。
+  static const double dialogWidth = 920;
+
+  /// 对话框水平内边距。
+  static const double dialogInset = 48;
+}
+
 /// 字体层级：34 / 28 / 22 / 17 / 15 / 13，大标题一律粗体
 abstract final class AppFontSizes {
   static const double display = 34; // 页面大标题

@@ -13,7 +13,7 @@ import 'models.dart';
 
 const List<String> _header = [
   '日期', '描述', '分类', '类型', '金额元', '币种', '汇率', '外币金额',
-  '付款人', '分摊方式', '分摊人数', '备注', '状态', '关联行程', '关联安排',
+  '付款人', '分摊方式', '分摊人数', '分摊人', '分摊明细', '备注', '状态', '关联行程', '关联安排',
 ];
 
 /// 单元格转义：含逗号/引号/换行时加引号包裹并把内部引号翻倍
@@ -63,6 +63,12 @@ String buildExpensesCsv(
   buf.write(_header.map(csvEscape).join(','));
   buf.write('\r\n');
   for (final e in expenses) {
+    final sharees = e.shares
+        .map((s) => memberNames[s.memberId] ?? s.memberId)
+        .toList();
+    final shareDetail = e.shares
+        .map((s) => '${memberNames[s.memberId] ?? s.memberId}:${formatMoney(s.cents)}')
+        .join('；');
     final cells = <String>[
       fmtIsoDate(epochDayToDate(e.dateEpochDay)),
       e.title,
@@ -75,6 +81,8 @@ String buildExpensesCsv(
       e.payers.map((p) => memberNames[p.memberId] ?? p.memberId).join('、'),
       _modeLabel(e.shareMode),
       e.shares.map((s) => s.memberId).toSet().length.toString(),
+      sharees.join('、'),
+      shareDetail,
       e.note ?? '',
       e.settledRoundId != null ? '已结' : '未结',
       e.tripId == null ? '' : (tripNames[e.tripId] ?? e.tripId!),

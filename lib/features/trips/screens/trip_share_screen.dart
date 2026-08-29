@@ -1,5 +1,4 @@
 // 🔗 分享行程海报：RepaintBoundary 预览 + 保存 + 分享
-import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -7,10 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
+import '../../../export/share_helper.dart';
 
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
@@ -239,10 +237,9 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     if (byteData == null) { _toast('截图失败'); return; }
     final bytes = byteData.buffer.asUint8List();
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/poster_${DateTime.now().millisecondsSinceEpoch}.png');
-    await file.writeAsBytes(bytes);
-    _toast('已保存到 ${file.path}');
+    final msg = await saveImageBytes(
+        bytes, 'poster_${DateTime.now().millisecondsSinceEpoch}.png');
+    _toast(msg);
   }
 
   Future<void> _share() async {
@@ -252,11 +249,9 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     if (byteData == null) { _toast('截图失败'); return; }
     final bytes = byteData.buffer.asUint8List();
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/poster_share.png');
-    await file.writeAsBytes(bytes);
     final trip = await ref.read(tripsRepoProvider).getById(_tripId!);
-    await Share.shareXFiles([XFile(file.path)], text: '来看看我的行程「${trip?.name ?? ''}」');
+    await shareFile(bytes, 'poster_share.png', 'image/png',
+        text: '来看看我的行程「${trip?.name ?? ''}」');
   }
 }
 

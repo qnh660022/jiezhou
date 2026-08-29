@@ -1,8 +1,7 @@
 // 🧳 行程首页（Tab 根）：五态状态机分组 + 渐变封面大卡（Hero/视差/进度条）
 // 数据访问集中区 —— 按 t2 命名假设编写，T2 落地后如签名有出入统一在此校正：
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +17,7 @@ import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
+import '../../ledger/screens/qr_scan_screen.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
 
@@ -60,6 +60,13 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
         largeTitle: '旅途助手',
         scrollController: _scroll,
         actions: [
+          if (!kIsWeb)
+            IconButton(
+              tooltip: '扫码/口令同步（与电脑端互导）',
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const QrScanScreen())),
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+            ),
           IconButton(
             tooltip: '局域网同步（同 Wi-Fi 快照合并）',
             onPressed: () => context.pushNamed('lan-sync'),
@@ -644,9 +651,7 @@ class _TripOpsSheet extends ConsumerWidget {
                 );
                 if (result.isEmpty) return;
                 final picked = result.single;
-                final path = picked.path;
-                if (path == null) throw const FormatException();
-                final bytes = await File(path).readAsBytes();
+                final bytes = await picked.readAsBytes();
                 if (bytes.isEmpty) throw const FormatException();
                 final imported = await repo.importTripBackupBytes(bytes);
                 if (pageContext.mounted) {

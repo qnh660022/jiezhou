@@ -22,7 +22,11 @@ import '../widgets/member_avatar.dart';
 
 /// 💸 记一笔 / 编辑账单：全 App 录入体验的门面，务必精致。
 class ExpenseEditScreen extends ConsumerStatefulWidget {
-  const ExpenseEditScreen({super.key});
+  const ExpenseEditScreen({super.key, this.initialId});
+
+  /// 编辑模式下待编辑的账单 id。桌面工作台在 Dialog 内复用；移动端/整页跳转
+  /// 仍从路由 query `id` 读取（传 null 不影响原逻辑）。
+  final String? initialId;
 
   @override
   ConsumerState<ExpenseEditScreen> createState() => _ExpenseEditScreenState();
@@ -79,9 +83,18 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     if (_initialized) return;
     _initialized = true;
 
-    // 编辑模式：/expenses/edit?id=xxx
-    final uri = GoRouterState.of(context).uri;
-    final editId = uri.queryParameters['id'];
+    // 编辑模式：桌面工作台经 initialId 传入；移动端/整页跳转走 /expenses/edit?id=xxx
+    String? editId;
+    if (widget.initialId != null) {
+      editId = widget.initialId;
+    } else {
+      try {
+        editId = GoRouterState.of(context).uri.queryParameters['id'];
+      } catch (_) {
+        // 桌面工作台以 Dialog 打开（非 go_router 子树）时无 GoRouterState → 按新建。
+        editId = null;
+      }
+    }
     if (editId == null || editId.isEmpty) {
       _categoryKey = 'food';
       return;

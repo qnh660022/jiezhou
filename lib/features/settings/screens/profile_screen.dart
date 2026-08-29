@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../data/providers.dart';
+import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/travel_quotes.dart';
 import '../../../theme/theme_provider.dart';
@@ -21,6 +23,10 @@ class ProfileScreen extends ConsumerWidget {
     // 跟随全局主题即时刷新
     ref.watch(themeProvider);
     final scheme = Theme.of(context).colorScheme;
+
+    if (isDesktopWeb(context)) {
+      return _buildDesktop(context, ref, scheme);
+    }
 
     return ListView(
       physics: const BouncingScrollPhysics(),
@@ -89,15 +95,16 @@ class ProfileScreen extends ConsumerWidget {
             onTap: () => context.push('/ledger/groups'),
           ),
         ),
-        _StaggerIn(
-          index: 5,
-          child: _ProfileTile(
-            icon: Icons.smart_toy_outlined,
-            title: 'AI 设置',
-            subtitle: '配置 AI 助手使用的模型服务',
-            onTap: () => context.push('/ai/settings'),
+        if (!kIsWeb)
+          _StaggerIn(
+            index: 5,
+            child: _ProfileTile(
+              icon: Icons.smart_toy_outlined,
+              title: 'AI 设置',
+              subtitle: '配置 AI 助手使用的模型服务',
+              onTap: () => context.push('/ai/settings'),
+            ),
           ),
-        ),
         // 数据与隐私分组
         const SectionHeader(title: '数据与隐私'),
         _StaggerIn(
@@ -158,6 +165,121 @@ class ProfileScreen extends ConsumerWidget {
         // 底部旅途哲理文案：每次进入/下拉刷新都不一样，仅 UI 展示
         const _TravelQuoteFooter(),
       ],
+    );
+  }
+
+  /// 桌面 Web 两列布局（大屏专属；手机保持单列）。
+  Widget _buildDesktop(BuildContext context, WidgetRef ref, ColorScheme scheme) {
+    final cardW = (DesktopLayout.contentMaxWidth - Spacing.lg) / 2;
+    Widget section(String title, List<Widget> tiles) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: Spacing.xl),
+          SectionHeader(title: title),
+          const SizedBox(height: Spacing.sm),
+          Wrap(
+            spacing: Spacing.lg,
+            runSpacing: Spacing.lg,
+            children: [for (final t in tiles) SizedBox(width: cardW, child: t)],
+          ),
+        ],
+      );
+    }
+
+    final budgetEnabled = ref.watch(budgetAlertsEnabledProvider).value ?? true;
+    return Center(
+      child: ConstrainedBox(
+        constraints:
+            const BoxConstraints(maxWidth: DesktopLayout.contentMaxWidth),
+        child: ListView(
+          padding: const EdgeInsets.all(Spacing.xxl),
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: Spacing.lg),
+              child: Text('我的', style: AppTextStyles.display(scheme)),
+            ),
+            const _UserCard(),
+            section('偏好设置', [
+              _ProfileTile(
+                icon: Icons.palette_outlined,
+                title: '外观主题',
+                trailing: const _ThemeSeedDots(),
+                onTap: () => context.push('/profile/theme'),
+              ),
+              _ProfileTile(
+                icon: Icons.notifications_active_outlined,
+                title: '预算预警',
+                subtitle: '超支时在账本页提醒',
+                switchValue: budgetEnabled,
+                onSwitchChanged: (v) async {
+                  HapticFeedback.selectionClick();
+                  await ref.read(prefsRepoProvider).setBudgetAlertsEnabled(v);
+                  ref.invalidate(budgetAlertsEnabledProvider);
+                },
+                onTap: () {},
+              ),
+              _ProfileTile(
+                icon: Icons.map_outlined,
+                title: '地图服务设置',
+                onTap: () => context.push('/trips/map-settings'),
+              ),
+              _ProfileTile(
+                icon: Icons.groups_rounded,
+                title: '记账团管理',
+                onTap: () => context.push('/ledger/groups'),
+              ),
+              if (!kIsWeb)
+                _ProfileTile(
+                  icon: Icons.smart_toy_outlined,
+                  title: 'AI 设置',
+                  subtitle: '配置 AI 助手使用的模型服务',
+                  onTap: () => context.push('/ai/settings'),
+                ),
+            ]),
+            section('数据与隐私', [
+              _ProfileTile(
+                icon: Icons.shield_outlined,
+                title: '隐私说明',
+                onTap: () => context.push('/profile/privacy'),
+              ),
+              _ProfileTile(
+                icon: Icons.cleaning_services_outlined,
+                title: '清除本地缓存',
+                subtitle: '清理临时文件与在线缓存，不影响数据',
+                onTap: () => _confirmClearCache(context, ref),
+              ),
+              _ProfileTile(
+                icon: Icons.restart_alt_rounded,
+                title: '恢复默认设置',
+                subtitle: '重置外观与开关，保留团/账单/行程',
+                onTap: () => _confirmResetDefaults(context, ref),
+              ),
+            ]),
+            section('其他', [
+              _ProfileTile(
+                icon: Icons.info_outline,
+                title: '关于',
+                trailing: Text('$_appVersion',
+                    style: Theme.of(context).textTheme.labelSmall),
+                onTap: () => context.push('/profile/about'),
+              ),
+              _ProfileTile(
+                icon: Icons.system_update_alt_rounded,
+                title: '检查更新',
+                onTap: () => _toast(context, '当前已是最新版本'),
+              ),
+              _ProfileTile(
+                icon: Icons.feedback_outlined,
+                title: '意见反馈',
+                onTap: () => _toast(context, '反馈入口：请通过应用商店留言或联系开发者'),
+              ),
+            ]),
+            const SizedBox(height: Spacing.xl),
+            const _TravelQuoteFooter(),
+          ],
+        ),
+      ),
     );
   }
 

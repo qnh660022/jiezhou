@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,7 +17,7 @@ import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/group_summary_sheet.dart';
 import '../widgets/stagger_in.dart';
-import 'lan_sync_screen.dart';
+import 'qr_scan_screen.dart';
 
 /// 旅行团管理：切换、新建入口、专有 .tav 备份导入导出。
 class GroupListScreen extends ConsumerWidget {
@@ -32,6 +32,13 @@ class GroupListScreen extends ConsumerWidget {
       appBar: GlassAppBar(
         title: '旅行团管理',
         actions: [
+          if (!kIsWeb)
+            IconButton(
+              tooltip: '扫码/口令同步（与电脑端互导）',
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const QrScanScreen())),
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+            ),
           IconButton(
             tooltip: '局域网同步（同 Wi-Fi 快照合并）',
             onPressed: () => context.pushNamed('lan-sync'),
@@ -364,9 +371,7 @@ class GroupListScreen extends ConsumerWidget {
       );
       if (result.isEmpty) return;
       final picked = result.single;
-      final path = picked.path;
-      if (path == null) return;
-      final bytes = await File(path).readAsBytes();
+      final bytes = await picked.readAsBytes();
       if (bytes.isEmpty) return;
       final ext = (picked.extension ?? '').toLowerCase();
       final summary = ext == 'tav'
