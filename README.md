@@ -33,10 +33,11 @@
 
 | | 地址 |
 | --- | --- |
-| Web 应用（芥舟） | `https://app.你的域名.com`（Vercel） |
-| 官网 | `https://你的域名.com`（Vercel） |
+| 官网 | <https://jiezhou.22006.dpdns.org/> |
+| Web 应用（芥舟） | <https://purser.22006.dpdns.org/> |
+| 源码仓库 | <https://github.com/qnh660022/jiezhou> |
 
-> 上线后将上述占位替换为真实链接。Web 端为能力适配版：无 AI 对话、无局域网协同，其余功能一致。
+> Web 端为能力适配版：无 AI 对话、无局域网协同，其余功能一致。
 
 ## 本地运行与构建
 
