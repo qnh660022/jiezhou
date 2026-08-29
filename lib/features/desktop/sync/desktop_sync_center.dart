@@ -58,6 +58,15 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
       ..showSnackBar(SnackBar(content: Text(m)));
   }
 
+  /// 解析待导出的团 ID：优先活跃团，没有则取第一个可用团。
+  String? _resolveGroupId() {
+    final active = ref.read(activeGroupIdProvider).value;
+    if (active != null) return active;
+    final groups = ref.read(groupsProvider).valueOrNull ?? [];
+    if (groups.isNotEmpty) return groups.first.id;
+    return null;
+  }
+
   Future<void> _run(String label, Future<String> Function() job) async {
     setState(() => _busy = true);
     try {
@@ -267,7 +276,7 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
         _ActionCard(
           icon: Icons.qr_code_2_rounded,
           color: scheme.primary,
-          title: '生成二维码（当前团 + 全部行程快照）',
+          title: '生成二维码（全部账本 + 行程快照）',
           subtitle: '数据较多时自动分页；手机「扫码同步」逐页扫描',
           busy: _busy,
           onTap: _buildQr,
@@ -359,7 +368,7 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
               child: OutlinedButton.icon(
                 onPressed: _exportCurrentCode,
                 icon: const Icon(Icons.upload_rounded, size: 18),
-                label: const Text('导出当前团同步码'),
+                label: const Text('导出同步码'),
               ),
             ),
           ],
@@ -374,9 +383,9 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
   }
 
   Future<void> _exportCurrentCode() async {
-    final gid = ref.read(activeGroupIdProvider).value;
+    final gid = _resolveGroupId();
     if (gid == null) {
-      _toast('请先到「账本」选择一个旅行团');
+      _toast('暂无账本可导出，请先在手机端同步数据');
       return;
     }
     await _run('导出同步码', () async {
