@@ -1,4 +1,4 @@
-# 芥舟 · 旅途助手（JieZhou Travel Assistant）
+# 芥舟 · 旅途助手（Purser Travel Assistant）
 
 > 以芥为舟，行万水千山。
 
@@ -37,36 +37,8 @@
 | Web 应用（芥舟） | <https://purser.22006.dpdns.org/> |
 | 源码仓库 | <https://github.com/qnh660022/jiezhou> |
 
-> Web 端为能力适配版：无 AI 对话、无局域网协同，其余功能一致。
+> Web 端暂不支持手机端访问。
 
-## 本地运行与构建
-
-环境要求：[Flutter SDK](https://docs.flutter.dev/get-started/install)（stable，Dart SDK `>=3.13.1`）。
-
-```bash
-# 1. 拉取依赖 + 生成代码（drift / json 序列化）
-flutter pub get
-dart run build_runner build --delete-conflicting-outputs
-
-# 2a. 运行 Android（设备/模拟器）
-flutter run
-
-# 2b. 运行 Web（本地调试）
-flutter build web --release
-# 然后随意用静态服务器托管 build/web，或：
-
-# 2c. 本地预览 build/web（镜像 Vercel 行为，含 wasm/SPA 回退）
-node scripts/preview.mjs    # http://localhost:8080
-```
-
-构建 Android 安装包（APK）：
-
-```bash
-flutter build apk --release
-# 产物：build/app/outputs/flutter-apk/app-release.apk
-```
-
-> 首次 Web 构建前，请确认 `web/drift_worker.dart.js` 由 `dart compile js -O4 -o web/drift_worker.dart.js web/drift_worker.dart` 生成（产物不入库，已 gitignore）。
 
 ## 技术栈
 
@@ -100,24 +72,10 @@ scripts/                               # 构建与本地预览脚本
 test/                                  # 单元 + Widget 测试
 ```
 
-## 部署（Vercel，同一仓库两个项目）
-
-### 项目 A：Web 应用
-- **Root Directory**：`./`，Framework Preset：**Other**
-- **Build Command**：`bash scripts/build_web.sh`（脚本会自动安装 Flutter stable SDK，首次构建约 3–5 分钟）
-- **Output Directory**：`build/web`
-- 顶层的 `vercel.json` 已配置 SPA 回退 + wasm 类型 + COOP/COEP 头，Web 端复制代码无需额外动作。
-
-### 项目 B：官网
-- **Root Directory**：`website/`，Framework Preset：**Other**，Build/Output 留空
-- `website/vercel.json` 已配置静态资源长缓存。
-
 ## 开源协议
 
 本项目基于 [Apache License 2.0](LICENSE)。Copyright © 2026 芥舟（JieZhou Travel Assistant）。
 
-你可以自由使用、修改、分发（含商业闭源），但需保留版权声明与许可文本；如你对本项目代码做了修改再分发，需在修改文件上标注变更。
+### 贡献
 
-## 贡献
-
-欢迎提 Issue 或 PR。保持纯本地、无后端的架构基调是项目的第一原则。
+欢迎提 Issue 或 PR！
