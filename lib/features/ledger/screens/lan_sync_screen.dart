@@ -35,6 +35,15 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
 
   String? get _gid => ref.read(activeGroupIdProvider).value;
 
+  /// 解析待同步的团 ID：优先活跃团，没有则取第一个可用团。
+  String? _resolveGroupId() {
+    final active = _gid;
+    if (active != null) return active;
+    final groups = ref.read(groupsProvider).valueOrNull ?? [];
+    if (groups.isNotEmpty) return groups.first.id;
+    return null;
+  }
+
   @override
   void dispose() {
     _codeCtrl.dispose();
@@ -51,9 +60,9 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
   }
 
   Future<void> _startHost() async {
-    final gid = _gid;
+    final gid = _resolveGroupId();
     if (gid == null) {
-      _toast('请先到「账本」新建/切换一个当前旅行团');
+      _toast('暂无账本可同步，请先新建账本');
       return;
     }
     setState(() {
@@ -136,10 +145,10 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
 
   Future<void> _push() async {
     final peer = _peer;
-    final gid = _gid;
+    final gid = _resolveGroupId();
     if (peer == null) return;
     if (gid == null) {
-      _toast('本地还没有当前旅行团可推送');
+      _toast('暂无账本可推送，请先新建账本');
       return;
     }
     setState(() => _peerStatus = '推送中…');

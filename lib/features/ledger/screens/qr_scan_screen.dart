@@ -221,12 +221,19 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
             const SizedBox(height: Spacing.md),
             TextButton.icon(
               onPressed: () async {
-                final gid = ref.read(activeGroupIdProvider).value;
-                if (gid == null) {
-                  _toast('请先到「账本」选择一个旅行团');
-                  return;
-                }
                 try {
+                  // 优先使用当前活跃团，没有则取第一个可用团
+                  String? gid = ref.read(activeGroupIdProvider).value;
+                  if (gid == null) {
+                    final groups = ref.read(groupsProvider).valueOrNull ?? [];
+                    if (groups.isNotEmpty) {
+                      gid = groups.first.id;
+                    }
+                  }
+                  if (gid == null) {
+                    _toast('暂无账本可导出，请先新建账本');
+                    return;
+                  }
                   final json = await exportGroupSnapshot(ref, gid);
                   final code = encodeSyncCode(json);
                   await Clipboard.setData(ClipboardData(text: code));
@@ -236,7 +243,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
                 }
               },
               icon: const Icon(Icons.upload_rounded, size: 18),
-              label: const Text('导出当前团同步码（复制）'),
+              label: const Text('导出同步码（复制）'),
             ),
           ],
         ),
