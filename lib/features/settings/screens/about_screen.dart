@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../platform/open_external.dart';
+import '../../../shared/app_meta.dart';
+import '../../../shared/check_update_dialog.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../theme/tokens.dart';
 
-/// 「关于」页：应用信息、功能亮点、数据与隐私、开源致谢、检查更新/反馈。
+/// 「关于」页：应用信息、功能亮点、数据与隐私、开源致谢、官网/检查更新/反馈。
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const String appName = '旅途助手';
-  static const String appVersion = 'v2.1.1';
+  static const String appName = kAppName;
+  static const String appVersion = kAppVersionLabel;
   static const String appDescription =
       '行程规划、出行清单、多人记账一站式管理，陪你记录每一段旅途。';
 
@@ -38,15 +41,19 @@ class AboutScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(Spacing.xl),
                 child: Column(
                   children: [
+                    // 应用 Logo：芥舟软件图标（圆形容器裁切展示）
                     Container(
                       width: 84,
                       height: 84,
-                      alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: scheme.primaryContainer,
                       ),
-                      child: const Text('✈️', style: TextStyle(fontSize: 42)),
+                      clipBehavior: Clip.antiAlias,
+                      child: const Image(
+                        image: AssetImage('assets/img/logo.png'),
+                        fit: BoxFit.cover,
+                      ),
                     ),
                     const SizedBox(height: Spacing.md),
                     Text(appName, style: Theme.of(context).textTheme.titleLarge),
@@ -142,6 +149,28 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: Spacing.lg),
+          // ---- 官网 ----
+          const SectionHeader(title: '官方网站'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+            child: Material(
+              color: scheme.surfaceContainerLow,
+              borderRadius: AppRadius.input,
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                leading: Icon(Icons.public, color: scheme.primary),
+                title: const Text(kAppName),
+                subtitle: const Text(kOfficialWebsite),
+                trailing: Icon(Icons.open_in_new_rounded,
+                    size: 20, color: scheme.onSurfaceVariant),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  openExternal(kOfficialWebsite);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: Spacing.lg),
           // ---- 操作 ----
           const SectionHeader(title: '其他'),
           Padding(
@@ -152,8 +181,7 @@ class AboutScreen extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: () {
                       HapticFeedback.selectionClick();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('当前已是最新版本')));
+                      showCheckUpdateDialog(context);
                     },
                     icon: const Icon(Icons.system_update_alt_rounded, size: 18),
                     label: const Text('检查更新'),
@@ -176,7 +204,7 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: Spacing.xl),
           Center(
-            child: Text('© 旅途助手 · 陪你记录每一段旅途',
+            child: Text('© 芥舟 · 陪你记录每一段旅途',
                 style: Theme.of(context).textTheme.labelSmall),
           ),
         ],

@@ -45,7 +45,7 @@ Map<String, dynamic> buildFullBackup({
 /// 解析并校验已解码的全量备份根节点；非法输入抛 [FormatException]。
 FullBackup parseFullBackupMap(Map<String, dynamic> root) {
   if (root['app'] != kBackupApp) {
-    throw const FormatException('不是「旅途助手」的备份文件');
+    throw const FormatException('不是「芥舟」的备份文件');
   }
   final version = root['version'];
   if (version is! int || version <= 0 || version > kFullBackupVersion) {

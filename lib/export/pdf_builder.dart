@@ -363,7 +363,7 @@ Future<Uint8List> buildTripPdf(
                         ),
                       ),
                       pw.Text(
-                        "旅途助手",
+                        "芥舟",
                         style: _textStyle(
                           size: 10,
                           color: PdfColor(1, 1, 1, 0.82),
@@ -463,7 +463,7 @@ Future<Uint8List> buildTripPdf(
         children: [
           pw.Expanded(
             child: pw.Text(
-              "旅途助手 · 旅行计划",
+              "芥舟 · 旅行计划",
               style: _textStyle(size: 8, color: _muted),
             ),
           ),

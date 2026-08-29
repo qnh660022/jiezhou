@@ -4,11 +4,12 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../platform/open_external.dart';
+import '../../shared/app_meta.dart';
 import '../../theme/tokens.dart';
 
 /// 官网下载页地址（Flutter 侧兜底拦截页跳转用；
 /// 首屏 HTML 层的拦截在 web/index.html，两处口径保持一致）。
-const String kWebsiteDownloadUrl = 'https://jiezhou.22006.dpdns.org/';
+const String kWebsiteDownloadUrl = kOfficialWebsite;
 
 class MobileNotSupportedScreen extends StatelessWidget {
   const MobileNotSupportedScreen({super.key});

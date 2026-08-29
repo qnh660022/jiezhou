@@ -8,7 +8,7 @@
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <application
-        android:label="旅途助手"
+        android:label="芥舟"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -55,6 +55,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- 官网链接跳转（ACTION_VIEW）在 Android 11+ 需声明可见性。 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

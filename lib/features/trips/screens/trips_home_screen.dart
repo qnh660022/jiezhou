@@ -11,6 +11,7 @@ import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
 import '../../../export/share_helper.dart';
 
+import '../../../shared/app_meta.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
@@ -57,7 +58,7 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
     return Scaffold(
       appBar: GlassAppBar(
         // 首屏毛玻璃大标题展示应用品牌（widget_test 冷启动断言依据）
-        largeTitle: '旅途助手',
+        largeTitle: kAppName,
         scrollController: _scroll,
         actions: [
           if (!kIsWeb)

@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../data/providers.dart';
 import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
+import '../../../platform/open_external.dart';
+import '../../../shared/app_meta.dart';
+import '../../../shared/check_update_dialog.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/travel_quotes.dart';
 import '../../../theme/theme_provider.dart';
@@ -16,7 +19,7 @@ import '../../ledger/ledger_providers.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  static const String _appVersion = 'v2.1.1';
+  static const String _appVersion = kAppVersionLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -148,13 +151,22 @@ class ProfileScreen extends ConsumerWidget {
         _StaggerIn(
           index: 9,
           child: _ProfileTile(
-            icon: Icons.system_update_alt_rounded,
-            title: '检查更新',
-            onTap: () => _toast(context, '当前已是最新版本'),
+            icon: Icons.public,
+            title: '官方网站',
+            subtitle: kOfficialWebsite,
+            onTap: () => openExternal(kOfficialWebsite),
           ),
         ),
         _StaggerIn(
           index: 10,
+          child: _ProfileTile(
+            icon: Icons.system_update_alt_rounded,
+            title: '检查更新',
+            onTap: () => showCheckUpdateDialog(context),
+          ),
+        ),
+        _StaggerIn(
+          index: 11,
           child: _ProfileTile(
             icon: Icons.feedback_outlined,
             title: '意见反馈',
@@ -265,9 +277,15 @@ class ProfileScreen extends ConsumerWidget {
                 onTap: () => context.push('/profile/about'),
               ),
               _ProfileTile(
+                icon: Icons.public,
+                title: '官方网站',
+                subtitle: kOfficialWebsite,
+                onTap: () => openExternal(kOfficialWebsite),
+              ),
+              _ProfileTile(
                 icon: Icons.system_update_alt_rounded,
                 title: '检查更新',
-                onTap: () => _toast(context, '当前已是最新版本'),
+                onTap: () => showCheckUpdateDialog(context),
               ),
               _ProfileTile(
                 icon: Icons.feedback_outlined,

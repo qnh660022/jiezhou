@@ -47,6 +47,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     curve: const Interval(0.65, 1.0, curve: Curves.easeOutCubic),
   );
 
+  // 简洁风附加动效：Logo 入场时向外扩散一圈淡淡的光环（一次性，不循环，
+  // 不增加无谓的常驻动画 —— 保持 pumpAndSettle 可收敛）。
+  late final Animation<double> _ringScale = Tween<double>(begin: 0.62, end: 2.1).animate(
+    CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.08, 0.72, curve: Curves.easeOutCubic),
+    ),
+  );
+
+  late final Animation<double> _ringFade = Tween<double>(begin: 0.5, end: 0.0).animate(
+    CurvedAnimation(parent: _controller, curve: const Interval(0.25, 1.0)),
+  );
+
   // 停留计时用第二时间轴驱动：与 vsync 帧同步推进，避免裸 Timer 在
   // 动画结束到触发之间产生无帧空窗（widget 测试的 pumpAndSettle 会
   // 提前返回，真机上亦消除对 wall-clock 的依赖）。
@@ -92,33 +105,60 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 渐变圆 Logo：primary -> tertiary，内放 ✈️
-            FadeTransition(
-              opacity: _logoFade,
-              child: ScaleTransition(
-                scale: _logoScale,
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [scheme.primary, scheme.tertiary],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: scheme.primary.withValues(alpha: 0.32),
-                        blurRadius: 32,
-                        offset: const Offset(0, 10),
+            // 渐变圆 Logo：primary -> tertiary，内放 ✈️；光环扩散一圈后淡出
+            SizedBox(
+              width: 120,
+              height: 120,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // 外层扩散光环（一次入场完成，见 _ringScale/_ringFade）
+                  FadeTransition(
+                    opacity: _ringFade,
+                    child: ScaleTransition(
+                      scale: _ringScale,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: scheme.primary.withValues(alpha: 0.4),
+                            width: 1.5,
+                          ),
+                        ),
                       ),
-                    ],
+                    ),
                   ),
-                  child: const Center(
-                    child: Text('✈️', style: TextStyle(fontSize: 44)),
+                  FadeTransition(
+                    opacity: _logoFade,
+                    child: ScaleTransition(
+                      scale: _logoScale,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [scheme.primary, scheme.tertiary],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: scheme.primary.withValues(alpha: 0.32),
+                              blurRadius: 32,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Text('✈️', style: TextStyle(fontSize: 44)),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
             const SizedBox(height: Spacing.xxl),
@@ -135,11 +175,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               ),
             ),
             const SizedBox(height: Spacing.sm),
-            // 副标题：更晚一拍淡入
+            // 副标题：更晚一拍淡入（芥舟品牌诗句）
             FadeTransition(
               opacity: _subtitleAnimation,
               child: Text(
-                '记录每一段旅途',
+                '以芥为舟，行万水千山',
                 style: Theme.of(context).textTheme.labelSmall,
               ),
             ),

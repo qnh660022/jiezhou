@@ -187,7 +187,7 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
                   Positioned(
                     bottom: Spacing.lg,
                     right: Spacing.xl,
-                    child: Text('旅途助手 ✈️',
+                    child: Text('芥舟 ✈️',
                         style: TextStyle(fontSize: AppFontSizes.caption, color: Colors.white.withValues(alpha: 0.65))),
                   ),
                 ],

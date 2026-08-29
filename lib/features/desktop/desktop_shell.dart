@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../shared/app_meta.dart';
 import '../../shared/widgets/floating_capsule_nav_bar.dart' show CapsuleTabItem;
 import '../../theme/theme_provider.dart';
 import '../../theme/tokens.dart';
@@ -284,19 +285,19 @@ class _Sidebar extends StatelessWidget {
                   Spacing.lg, Spacing.lg, Spacing.lg, Spacing.md),
               child: Row(
                 children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: CoverGradients.forest,
-                      borderRadius: BorderRadius.circular(8),
+                  // 品牌区：软件图标 + 产品名
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: const Image(
+                      image: AssetImage('assets/img/logo.png'),
+                      width: 30,
+                      height: 30,
+                      fit: BoxFit.cover,
                     ),
-                    child: const Text('🧳', style: TextStyle(fontSize: 16)),
                   ),
                   const SizedBox(width: Spacing.sm),
                   Flexible(
-                    child: Text('旅途助手',
+                    child: Text(kAppName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

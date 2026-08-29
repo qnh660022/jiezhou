@@ -135,7 +135,7 @@ class TripsRepository {
     if (looksLikeBackupEnvelope(bytes, acceptedMagics: [kTripBackupMagic])) {
       root = decodeBackup(bytes, acceptedMagics: [kTripBackupMagic]);
     } else {
-      throw const FormatException('不是「旅途助手」的行程备份文件');
+      throw const FormatException('不是「芥舟」的行程备份文件');
     }
     return importTripBackupMap(root);
   }

@@ -3,7 +3,7 @@
 /// 把备份数据（一个 JSON 对象）包成一段不易手改的二进制：
 ///   [magic 4B][version 1B][flags 1B][payloadLen 4B BE][payload]
 /// 其中 payload = GZip(JSON)。这样导出的文件既不是 .json，也不是明文，
-/// 而是「旅途助手」自己的格式，无法被其它软件直接打开。
+/// 而是「芥舟」自己的格式，无法被其它软件直接打开。
 ///
 /// 两种备份用不同魔数区分（即「另一格式」）：
 ///   * 旅游团备份  → 魔数 "TA1G"，建议扩展名 `.tav`
@@ -56,7 +56,7 @@ Map<String, dynamic> decodeBackup(Uint8List bytes,
   final magic = <int>[bytes[0], bytes[1], bytes[2], bytes[3]];
   final all = acceptedMagics ?? <List<int>>[kGroupBackupMagic, kTripBackupMagic];
   if (!all.any((m) => _sameMagic(m, magic))) {
-    throw const FormatException('不是「旅途助手」识别的备份文件');
+    throw const FormatException('不是「芥舟」识别的备份文件');
   }
   final version = bytes[4];
   if (version != _kVersion) {

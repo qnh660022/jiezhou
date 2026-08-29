@@ -18,8 +18,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 首屏大标题「旅途助手」
-    expect(find.text('旅途助手'), findsWidgets);
+    // 首屏大标题「芥舟」
+    expect(find.text('芥舟'), findsWidgets);
   });
 
   testWidgets('底栏切换到 AI Tab', (tester) async {

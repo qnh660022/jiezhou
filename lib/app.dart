@@ -8,6 +8,7 @@ import 'main.dart' show attachStartupServices;
 import 'platform/detect_env.dart' show isTestEnv;
 import 'features/desktop/mobile_not_supported_screen.dart';
 import 'router.dart';
+import 'shared/app_meta.dart';
 import 'theme/theme_provider.dart';
 import 'theme/tokens.dart';
 
@@ -75,7 +76,7 @@ class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp> {
     final isDark = themeKey == ThemeKeys.dark;
     final isSystem = themeKey == ThemeKeys.system;
     return MaterialApp.router(
-      title: '旅途助手',
+      title: kAppName,
       debugShowCheckedModeBanner: false,
       routerConfig: widget.router ?? appRouter,
       // Web 版仅支持桌面（宽屏）；手机浏览器直接显示拦截页。

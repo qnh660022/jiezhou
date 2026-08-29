@@ -86,7 +86,7 @@ TripBackup parseTripBackup(String raw) {
 /// 解析并校验已解码的备份根节点（二进制信封解码后直接走这里）。
 TripBackup parseTripBackupMap(Map<String, dynamic> root) {
   if (root['app'] != kTripBackupApp) {
-    throw FormatException('不是「旅途助手」的行程备份文件');
+    throw FormatException('不是「芥舟」的行程备份文件');
   }
   final version = root['version'];
   if (version is! int || version <= 0 || version > kTripBackupVersion) {

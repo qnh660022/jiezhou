@@ -33,7 +33,7 @@ class PrivacyScreen extends StatelessWidget {
                     Text('我们的承诺', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: Spacing.sm),
                     Text(
-                      '「旅途助手」是一款纯本地离线的工具应用。你的行程、清单、账本数据全部存储在你自己的设备上，我们不会收集、上传或共享你的任何个人数据。',
+                      '「芥舟」是一款纯本地离线的工具应用。你的行程、清单、账本数据全部存储在你自己的设备上，我们不会收集、上传或共享你的任何个人数据。',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],

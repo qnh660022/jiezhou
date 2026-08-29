@@ -102,6 +102,7 @@ flutter:
     - assets/fonts/CJKFont.ttf
     - assets/fonts/Roboto-Regular.ttf
     - assets/fonts/Roboto-Bold.ttf
+    - assets/img/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

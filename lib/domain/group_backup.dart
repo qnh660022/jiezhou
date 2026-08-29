@@ -113,7 +113,7 @@ GroupBackup parseGroupBackup(String raw) {
 
 /// 解析并校验已解码的备份根节点（二进制信封解码后直接走这里）。
 GroupBackup parseGroupBackupMap(Map<String, dynamic> root) {
-  if (root['app'] != kBackupApp) throw FormatException('不是「旅途助手」的备份文件');
+  if (root['app'] != kBackupApp) throw FormatException('不是「芥舟」的备份文件');
   final version = root['version'];
   if (version is! int || version <= 0 || version > kBackupVersion) {
     throw FormatException('不支持的备份版本: $version');
