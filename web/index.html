@@ -42,9 +42,39 @@
     @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
     #boot.hidden { opacity: 0; transition: opacity .3s; }
     flutter-view { width: 100%; height: 100%; }
+
+    /* 手机端拦截页（窄屏命中时显示，不加载 Flutter 引擎） */
+    #mobile-gate {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: #F7FBF8; padding: 32px;
+      font-family: system-ui, -apple-system, sans-serif; color: #5A5F5A;
+    }
+    #mobile-gate .card { max-width: 420px; text-align: center; }
+    #mobile-gate .icon {
+      width: 72px; height: 72px; margin: 0 auto; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 34px;
+      background: linear-gradient(135deg, #2E7D5B, #14532D);
+    }
+    #mobile-gate h1 { font-size: 19px; font-weight: 800; color: #1C1F1C; margin: 24px 0 12px; }
+    #mobile-gate p { font-size: 14px; line-height: 1.6; margin: 0 0 28px; }
+    #mobile-gate a.btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px; border-radius: 999px; text-decoration: none;
+      background: #2E7D5B; color: #fff; font-size: 15px; font-weight: 600;
+    }
   </style>
 </head>
 <body>
+  <!-- 手机端拦截页：JS 命中窄屏时显示 -->
+  <div id="mobile-gate" hidden>
+    <div class="card">
+      <div class="icon">📱</div>
+      <h1>Web 版暂不支持手机端访问</h1>
+      <p>请使用电脑浏览器访问，<br>或前往官网下载 APK 安装到手机。</p>
+      <a class="btn" href="https://jiezhou.22006.dpdns.org/" target="_blank" rel="noopener">前往官网下载 APK</a>
+    </div>
+  </div>
+
   <div id="boot">
     <div class="logo">🧳</div>
     <div>旅途助手加载中…</div>
@@ -52,14 +82,28 @@
   </div>
 
   <script>
-    // Flutter render 后隐藏首屏提示
-    window.addEventListener('flutter-first-frame', function () {
-      var el = document.getElementById('boot');
-      if (el) { el.classList.add('hidden'); setTimeout(function(){ el.remove(); }, 350); }
-    });
-    setTimeout(function () { var el = document.getElementById('boot'); if (el) el.remove(); }, 15000);
+    // 启动分流：窄屏（<1024，与 Flutter 侧 MediaQuery 口径一致）直接拦截，
+    // 不注入 flutter_bootstrap.js —— 手机端零引擎下载、首屏即拦截页。
+    (function () {
+      if (window.innerWidth < 1024) {
+        var gate = document.getElementById('mobile-gate');
+        var boot = document.getElementById('boot');
+        if (gate) gate.hidden = false;
+        if (boot) boot.remove();
+        return;
+      }
+      // 桌面端：正常引导 Flutter
+      var s = document.createElement('script');
+      s.src = 'flutter_bootstrap.js';
+      s.async = true;
+      document.body.appendChild(s);
+      // Flutter render 后隐藏首屏提示
+      window.addEventListener('flutter-first-frame', function () {
+        var el = document.getElementById('boot');
+        if (el) { el.classList.add('hidden'); setTimeout(function(){ el.remove(); }, 350); }
+      });
+      setTimeout(function () { var el = document.getElementById('boot'); if (el) el.remove(); }, 15000);
+    })();
   </script>
-
-  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

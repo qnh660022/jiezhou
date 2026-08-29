@@ -6,8 +6,9 @@ import 'package:flutter/material.dart';
 import '../../platform/open_external.dart';
 import '../../theme/tokens.dart';
 
-/// TODO: 官方下载页地址（占位）。拿到地址后填到这里即可启用「前往官网」跳转。
-const String kWebsiteDownloadUrl = '';
+/// 官网下载页地址（Flutter 侧兜底拦截页跳转用；
+/// 首屏 HTML 层的拦截在 web/index.html，两处口径保持一致）。
+const String kWebsiteDownloadUrl = 'https://jiezhou.22006.dpdns.org/';
 
 class MobileNotSupportedScreen extends StatelessWidget {
   const MobileNotSupportedScreen({super.key});
