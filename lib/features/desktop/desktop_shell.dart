@@ -28,6 +28,7 @@ class DesktopShell extends ConsumerStatefulWidget {
 class _DesktopShellState extends ConsumerState<DesktopShell> {
   double _sidebarWidth = DesktopLayout.sidebarWidth;
   bool _hoveringResize = false;
+  bool _showDataWarning = true; // 会话级数据安全提醒，关闭后本次不再显示
 
   int get _index => widget.shell.currentIndex;
 
@@ -66,6 +67,8 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
             onSync: () => showSyncCenter(context),
             onTheme: _cycleTheme,
           ),
+          if (_showDataWarning)
+            _DataWarningBanner(onDismiss: () => setState(() => _showDataWarning = false)),
           Expanded(
             child: CallbackShortcuts(
               bindings: {
@@ -369,6 +372,50 @@ class _NavItem extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 数据安全提醒横幅：Web 版数据仅存浏览器，无后端同步，建议定期备份到手机端。
+class _DataWarningBanner extends StatelessWidget {
+  const _DataWarningBanner({required this.onDismiss});
+
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.xl, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer.withValues(alpha: 0.65),
+        border: Border(bottom: BorderSide(color: scheme.error.withValues(alpha: 0.3))),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline_rounded, size: 16, color: scheme.onErrorContainer),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: Text(
+              'Web 版数据仅保存在本浏览器，无后端同步，关闭页面或清除缓存可能导致数据丢失。'
+              '建议定期通过「与手机同步」将数据备份到手机端。',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: scheme.onErrorContainer,
+                height: 1.4,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: onDismiss,
+            child: Padding(
+              padding: const EdgeInsets.only(left: Spacing.sm),
+              child: Icon(Icons.close_rounded, size: 16, color: scheme.onErrorContainer),
+            ),
+          ),
+        ],
       ),
     );
   }
