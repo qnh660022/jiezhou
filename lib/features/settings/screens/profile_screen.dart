@@ -16,7 +16,7 @@ import '../../ledger/ledger_providers.dart';
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  static const String _appVersion = 'v2.1.0';
+  static const String _appVersion = 'v2.1.1';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

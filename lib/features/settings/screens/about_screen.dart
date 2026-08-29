@@ -11,7 +11,7 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const String appName = '旅途助手';
-  static const String appVersion = 'v2.1.0';
+  static const String appVersion = 'v2.1.1';
   static const String appDescription =
       '行程规划、出行清单、多人记账一站式管理，陪你记录每一段旅途。';
 

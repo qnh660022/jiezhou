@@ -22,7 +22,7 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    /* 首屏加载提示（Flutter 就绪前） */
+    /* 首屏加载提示（Flutter 就绪前）——默认可见，仅桌面生效 */
     html, body { margin: 0; padding: 0; height: 100%; background: #F7FBF8; }
     #boot {
       position: fixed; inset: 0; display: flex; flex-direction: column;
@@ -43,9 +43,9 @@
     #boot.hidden { opacity: 0; transition: opacity .3s; }
     flutter-view { width: 100%; height: 100%; }
 
-    /* 手机端拦截页（窄屏命中时显示，不加载 Flutter 引擎） */
+    /* 手机端拦截页：默认隐藏，窄屏命中时显示（不加载 Flutter 引擎） */
     #mobile-gate {
-      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
       background: #F7FBF8; padding: 32px;
       font-family: system-ui, -apple-system, sans-serif; color: #5A5F5A;
     }
@@ -62,11 +62,22 @@
       padding: 14px 28px; border-radius: 999px; text-decoration: none;
       background: #2E7D5B; color: #fff; font-size: 15px; font-weight: 600;
     }
+
+    /*
+     * 关键：用纯 CSS 媒体查询控制首屏可见性（与 JS 的 <1024、Flutter 侧
+     * MediaQuery <1024 同口径，取 1023px 即窄于 1024）。CSS 在首帧绘制前
+     * 就已生效，手机端从第一像素起就只显示拦截页，彻底杜绝
+     * 「旅途助手加载中…」先闪现、拦截页后出现的时序问题。
+     */
+    @media (max-width: 1023px) {
+      #mobile-gate { display: flex; }
+      #boot { display: none; }
+    }
   </style>
 </head>
 <body>
-  <!-- 手机端拦截页：JS 命中窄屏时显示 -->
-  <div id="mobile-gate" hidden>
+  <!-- 手机端拦截页：可见性由 CSS 媒体查询决定（窄屏显示，不加载 Flutter 引擎） -->
+  <div id="mobile-gate">
     <div class="card">
       <div class="icon">📱</div>
       <h1>Web 版暂不支持手机端访问</h1>
@@ -82,13 +93,12 @@
   </div>
 
   <script>
-    // 启动分流：窄屏（<1024，与 Flutter 侧 MediaQuery 口径一致）直接拦截，
-    // 不注入 flutter_bootstrap.js —— 手机端零引擎下载、首屏即拦截页。
+    // 启动分流（可见性已由上方 CSS 媒体查询保证首帧即正确）：
+    // 窄屏（<1024，与 CSS/Flutter 侧口径一致）直接拦截，不加载 Flutter 引擎，
+    // 手机端零引擎下载；这里只负责「不引导 engine」与收尾清理。
     (function () {
       if (window.innerWidth < 1024) {
-        var gate = document.getElementById('mobile-gate');
         var boot = document.getElementById('boot');
-        if (gate) gate.hidden = false;
         if (boot) boot.remove();
         return;
       }
