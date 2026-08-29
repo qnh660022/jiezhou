@@ -28,43 +28,9 @@ class DesktopShell extends ConsumerStatefulWidget {
 class _DesktopShellState extends ConsumerState<DesktopShell> {
   double _sidebarWidth = DesktopLayout.sidebarWidth;
   bool _hoveringResize = false;
+  bool _showWarn = true; // 数据安全提醒横幅（关闭后本次会话不再显示）
 
   int get _index => widget.shell.currentIndex;
-
-  @override
-  void initState() {
-    super.initState();
-    // 首帧后弹出数据安全提醒（MaterialBanner 由 ScaffoldMessenger 管理，
-    // 不受 Column 布局影响，确保渲染）。
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _showDataWarning();
-    });
-  }
-
-  void _showDataWarning() {
-    final scheme = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).showMaterialBanner(
-      MaterialBanner(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        backgroundColor: scheme.errorContainer,
-        content: Text(
-          'Web 版数据仅保存在本浏览器，无后端同步，'
-          '关闭页面或清除缓存可能导致数据丢失。'
-          '建议定期通过「与手机同步」将数据备份到手机端。',
-          style: TextStyle(fontSize: 13, color: scheme.onErrorContainer, height: 1.4),
-        ),
-        leading: Icon(Icons.info_outline_rounded, color: scheme.onErrorContainer),
-        actions: [
-          TextButton(
-            onPressed: () => ScaffoldMessenger.of(context).hideCurrentMaterialBanner(),
-            style: TextButton.styleFrom(foregroundColor: scheme.onErrorContainer),
-            child: const Text('知道了'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _quickNew() {
     switch (_index) {
@@ -101,6 +67,10 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
             onSync: () => showSyncCenter(context),
             onTheme: _cycleTheme,
           ),
+          // 数据安全提醒：内联横幅（不使用 MaterialBanner，嵌套 Scaffold 下不渲染），
+          // 关闭后本次会话隐藏；再次冷启动仍会显示。
+          if (_showWarn)
+            _DataWarnBar(onClose: () => setState(() => _showWarn = false)),
           Expanded(
             child: CallbackShortcuts(
               bindings: {
@@ -238,6 +208,47 @@ class _TopBar extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             onPressed: onTheme,
             icon: const Icon(Icons.palette_outlined, size: 19),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 数据安全提醒横幅（内联渲染在顶部工具栏正下方，任何嵌套 Scaffold 下都可见）。
+class _DataWarnBar extends StatelessWidget {
+  const _DataWarnBar({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant, width: 1)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 18, color: scheme.onErrorContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Web 版数据仅保存在本浏览器，无后端同步，关闭页面或清除缓存可能导致数据丢失。'
+              '建议定期通过顶部「同步」图标将数据备份到手机端。',
+              style: TextStyle(
+                  fontSize: 12.5, height: 1.35, color: scheme.onErrorContainer),
+            ),
+          ),
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: '关闭提醒（本次会话）',
+            visualDensity: VisualDensity.compact,
+            onPressed: onClose,
+            icon: Icon(Icons.close_rounded, size: 18, color: scheme.onErrorContainer),
           ),
         ],
       ),

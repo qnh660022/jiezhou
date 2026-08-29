@@ -12,6 +12,7 @@ import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
+import '../../../export/backup_format.dart';
 import '../../../export/share_helper.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
@@ -366,7 +367,7 @@ class GroupListScreen extends ConsumerWidget {
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['tav', 'json', 'txt'],
+        allowedExtensions: ['tav', 'tavA', 'json', 'txt'],
         withData: true,
       );
       if (result.isEmpty) return;
@@ -374,6 +375,16 @@ class GroupListScreen extends ConsumerWidget {
       final bytes = await picked.readAsBytes();
       if (bytes.isEmpty) return;
       final ext = (picked.extension ?? '').toLowerCase();
+      // 全量备份（.tavA / 电脑端「导出全量备份」）：合并导入，不要求本端已有团。
+      if (looksLikeBackupEnvelope(bytes, acceptedMagics: [kFullBackupMagic])) {
+        final summary =
+            await importFullBackupFile(ref, bytes, replace: false);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(summary)));
+        }
+        return;
+      }
       final summary = ext == 'tav'
           ? await importGroupBackupFile(ref, bytes)
           : await importGroupFromText(ref, utf8.decode(bytes));

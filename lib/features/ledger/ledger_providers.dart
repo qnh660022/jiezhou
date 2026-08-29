@@ -653,6 +653,16 @@ Future<String> importFullBackupFile(
   return report.toString();
 }
 
+/// 导出「全量同步码」JSON：全部团 + 未绑团行程。不依赖任何团存在（无需先建团）。
+Future<String> exportFullSyncJson(WidgetRef ref) =>
+    ref.read(ledgerRepoProvider).exportFullBackupJson();
+
+/// 导入「全量同步码」JSON：LWW 合并，源端团不存在时自动创建，返回人类可读摘要。
+Future<String> importFullSyncJson(WidgetRef ref, String raw) async {
+  final report = await ref.read(ledgerRepoProvider).importFullBackupRawJson(raw);
+  return report.toString();
+}
+
 /// 安全文件名基线（去掉路径分隔等非法字符）
 String _safeFileBase(String raw) {
   final cleaned = raw.replaceAll(RegExp(r'[\\/:*?"<>|\r\n\t]'), '_').trim();

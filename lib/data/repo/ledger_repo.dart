@@ -675,9 +675,9 @@ class LedgerRepository {
     return _insertFullBackup(result);
   }
 
-  // === 全量备份（.tavA） ===
-  /// 导出全量备份：全部团（每团整包）+ 未绑团行程，打包为二进制 .tavA。
-  Future<Uint8List> exportFullBackupBytes() async {
+  // === 全量备份（.tavA / 同步码） ===
+  /// 组装全量备份根结构：全部团（每团整包）+ 未绑团行程（含安排/清单）。
+  Future<Map<String, dynamic>> _buildFullBackupRoot() async {
     final allGroups = await (db.select(db.groups)).get();
     final groups = <Map<String, dynamic>>[];
     for (final g in allGroups) {
@@ -699,8 +699,20 @@ class LedgerRepository {
         'checklist': [for (final c in checklist) c.toJson()],
       });
     }
-    final root = buildFullBackup(groups: groups, standaloneTrips: standalone);
+    return buildFullBackup(groups: groups, standaloneTrips: standalone);
+  }
+
+  /// 导出全量备份：全部团（每团整包）+ 未绑团行程，打包为二进制 .tavA。
+  Future<Uint8List> exportFullBackupBytes() async {
+    final root = await _buildFullBackupRoot();
     return encodeBackup(kFullBackupMagic, root);
+  }
+
+  /// 导出全量快照为 JSON（与 .tavA 同一结构、不含信封），供「二维码/口令码」使用。
+  /// 不依赖任何团存在：一个团都没有时也能导出（至少带走未绑团行程）。
+  Future<String> exportFullBackupJson() async {
+    final root = await _buildFullBackupRoot();
+    return jsonEncode(root);
   }
 
   /// 导入全量备份：replace=true 先清空全部数据再合并（恢复）；false 则逐团 LWW 合并。
@@ -709,6 +721,20 @@ class LedgerRepository {
     required bool replace,
   }) async {
     final root = decodeBackup(bytes, acceptedMagics: [kFullBackupMagic]);
+    return importFullBackupRoot(root, replace: replace);
+  }
+
+  /// 导入全量同步码 JSON（口令码/扫码粘贴）：恒为 LWW 合并（不给覆盖恢复入口）。
+  Future<FullImportReport> importFullBackupRawJson(String raw) async {
+    final root = (jsonDecode(raw) as Map).cast<String, dynamic>();
+    return importFullBackupRoot(root, replace: false);
+  }
+
+  /// 全量备份导入内核：先按需清空，再逐团 LWW 合并 + 独立行程 upsert。
+  Future<FullImportReport> importFullBackupRoot(
+    Map<String, dynamic> root, {
+    required bool replace,
+  }) async {
     final backup = parseFullBackupMap(root);
     final report = fullImportReportFor(backup, replace: replace);
     if (replace) {

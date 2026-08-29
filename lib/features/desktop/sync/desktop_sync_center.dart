@@ -1,6 +1,7 @@
 /// 桌面「与手机同步」中心：全量/单团备份文件互传 + 二维码 + 口令码。
 /// 无后端；浏览器受限能力（局域网）不出现。
 library;
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -40,6 +41,7 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
   List<String> _chunks = const [];
   int _page = 0;
   String _qrNote = '';
+  Timer? _pageTimer; // 多页二维码自动翻页（配合手机端自动连扫）
 
   // 口令码粘贴
   final _pasteCtl = TextEditingController();
@@ -47,8 +49,19 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
 
   @override
   void dispose() {
+    _pageTimer?.cancel();
     _pasteCtl.dispose();
     super.dispose();
+  }
+
+  /// 多页二维码每 5s 自动翻页循环，手机端「自动连扫」时无需手动点页码。
+  void _startPageAutoAdvance() {
+    _pageTimer?.cancel();
+    if (_chunks.length <= 1) return;
+    _pageTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      setState(() => _page = (_page + 1) % _chunks.length);
+    });
   }
 
   void _toast(String m) {
@@ -56,15 +69,6 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(m)));
-  }
-
-  /// 解析待导出的团 ID：优先活跃团，没有则取第一个可用团。
-  String? _resolveGroupId() {
-    final active = ref.read(activeGroupIdProvider).value;
-    if (active != null) return active;
-    final groups = ref.read(groupsProvider).valueOrNull ?? [];
-    if (groups.isNotEmpty) return groups.first.id;
-    return null;
   }
 
   Future<void> _run(String label, Future<String> Function() job) async {
@@ -128,14 +132,10 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
   }
 
   // ---------- 二维码 ----------
+  /// 生成「全量同步码」二维码：全部团 + 未绑团行程，不依赖先建团。
   Future<void> _buildQr() async {
-    final gid = ref.read(activeGroupIdProvider).value;
-    if (gid == null) {
-      _toast('请先到「账本」选择一个旅行团');
-      return;
-    }
     await _run('生成二维码', () async {
-      final json = await exportGroupSnapshot(ref, gid);
+      final json = await exportFullSyncJson(ref);
       final code = encodeSyncCode(json);
       final chunks = chunkSyncCode(code);
       if (mounted) {
@@ -143,10 +143,15 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
           _code = code;
           _chunks = chunks;
           _page = 0;
-          _qrNote = '共 ${chunks.length} 页 · 手机「扫码同步」逐页扫描；扫描完成后自动合并';
+          _qrNote = chunks.length == 1
+              ? '共 1 张 · 手机「扫码同步」对准即可，数据一张装下'
+              : '共 ${chunks.length} 页 · 手机「扫码同步」自动连扫，全部扫完自动合并导入';
         });
+        _startPageAutoAdvance();
       }
-      return '已生成 ${chunks.length} 页二维码';
+      return chunks.length == 1
+          ? '已生成二维码（1 张）'
+          : '已生成 ${chunks.length} 页二维码，手机端自动连扫导入';
     });
   }
 
@@ -171,6 +176,9 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
     await _run('导入', () async {
       final json = decodeSyncCode(text);
       final obj = jsonDecode(json);
+      if (obj is Map && obj['groups'] is List && obj['standaloneTrips'] is List) {
+        return importFullSyncJson(ref, json);
+      }
       if (obj is Map && obj['group'] is Map) {
         return mergeGroupSnapshot(ref, json);
       }
@@ -276,8 +284,8 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
         _ActionCard(
           icon: Icons.qr_code_2_rounded,
           color: scheme.primary,
-          title: '生成二维码（全部账本 + 行程快照）',
-          subtitle: '数据较多时自动分页；手机「扫码同步」逐页扫描',
+          title: '生成二维码（全部数据：团 + 账单 + 行程 + 清单）',
+          subtitle: '数据少时 1 张；多页时手机端自动连扫，无需逐张手动确认',
           busy: _busy,
           onTap: _buildQr,
         ),
@@ -296,11 +304,21 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
                   QrImageView(
                     data: _chunks[_page],
                     version: QrVersions.auto,
-                    size: 220,
+                    size: 250,
+                    errorCorrectionLevel: QrErrorCorrectLevel.L,
                   ),
                   const SizedBox(height: Spacing.sm),
-                  Text('第 ${_page + 1} / ${_chunks.length} 页',
+                  Text(_chunks.length == 1
+                      ? '共 1 张 · 手机对准即可'
+                      : '第 ${_page + 1} / ${_chunks.length} 页（自动翻页）',
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black87)),
+                  if (_chunks.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('大数据无法一张装下；手机端会自动连扫每页。数据很长时用「口令码」粘贴更稳。',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                    ),
                 ],
               ),
             ),
@@ -342,7 +360,7 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
         Text('手机导出 → 本机粘贴导入',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant)),
         const SizedBox(height: Spacing.xs),
-        Text('手机端在账本/行程的「导出同步码」复制内容，粘贴到下方；本端同步码也可复制后发到手机端粘贴。',
+        Text('手机端在「扫码同步」页复制全量/当前团同步码，粘贴到下方；本端"导出同步码"也会复制全量同步码，可发到手机端「扫码同步」页粘贴导入。',
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
         const SizedBox(height: Spacing.md),
         TextField(
@@ -368,7 +386,7 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
               child: OutlinedButton.icon(
                 onPressed: _exportCurrentCode,
                 icon: const Icon(Icons.upload_rounded, size: 18),
-                label: const Text('导出同步码'),
+                label: const Text('导出全量同步码'),
               ),
             ),
           ],
@@ -382,15 +400,13 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
     );
   }
 
+  /// 导出当前端全量同步码（所有团 + 未绑团行程）复制到剪贴板，供手机端粘贴导入。
+  /// 不要求先建团：本地一个团都没有也能导出（至少携带未绑团行程）。
   Future<void> _exportCurrentCode() async {
-    final gid = _resolveGroupId();
-    if (gid == null) {
-      _toast('暂无账本可导出，请先在手机端同步数据');
-      return;
-    }
     await _run('导出同步码', () async {
-      final json = await exportGroupSnapshot(ref, gid);
+      final json = await exportFullSyncJson(ref);
       final code = encodeSyncCode(json);
+      final chunks = chunkSyncCode(code);
       if (mounted) {
         setState(() {
           _code = code;
@@ -399,7 +415,9 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
         });
       }
       await Clipboard.setData(ClipboardData(text: code));
-      return '已复制同步码，粘贴给手机端导入';
+      return chunks.length == 1
+          ? '已复制全量同步码，粘贴给手机端导入'
+          : '已复制全量同步码（${chunks.length} 页），粘贴给手机端导入';
     });
   }
 }

@@ -9,7 +9,10 @@ import 'dart:convert';
 import '../../../platform/gzip.dart';
 
 /// 单块内容最大字符数（保证单张二维码可容纳，且便于复制粘贴）
-const int kSyncCodeChunkLen = 800;
+/// 桌面端二维码按 ECC-L 渲染，实测 ~900 字符时对应 QR 版本约 21-22（101-105 模块），
+/// 手机实时扫码贴近屏幕仍可稳定识别；再放大单码容量会明显降低可读性，
+/// 超大快照请走「口令码 / 备份文件」，或依赖扫码页的自动连扫。
+const int kSyncCodeChunkLen = 900;
 
 /// 允许的最大块数（超出则提示改用文件互传）
 const int kSyncCodeMaxChunks = 12;
