@@ -73,5 +73,19 @@ nul
 /scripts/_build_bg.ps1
 # 与 AI 的规划会话笔记
 .zcode/
+.trae/
+
+# Flutter 本机工具状态（随机器变化，不入库）
+.flutter_tool_state
+
+# 根目录构建调试产物（out.js*，不入库）
+/out.js
+/out.js.deps
+/out.js.map
+
+# drift worker 编译产物（构建时由 dart compile js 重新生成；源码 web/drift_worker.dart 与 sqlite3.wasm 需入库）
+web/drift_worker.dart.js
+web/drift_worker.dart.js.deps
+web/drift_worker.dart.js.map
 # 验收报告（可能含个人项目背景，公开前先审阅）
 /docs/*.md

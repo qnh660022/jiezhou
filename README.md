@@ -1,61 +1,122 @@
-# 旅途助手 2.0（travel_assistant）
+# 芥舟 · 旅途助手（JieZhou Travel Assistant）
 
-Flutter 安卓原生 App：**行程规划 + 出行清单 + AA 记账**三大主线，纯本地离线运行，Material3 + 苹果级质感 UI。
+> 以芥为舟，行万水千山。
 
-- 应用名：旅途助手
-- 包名：com.travel.assistant.v2
-- 技术栈：flutter_riverpod / go_router / drift(SQLite) / dio / flutter_map / fl_chart / pdf 等（金额一律 int 分存储，仅展示层格式化）
+**芥舟**是一款纯本地离线运行的个人旅途工具，围绕出行三大主线：**行程规划 · 出行清单 · AA 记账**。所有数据只保存在你设备上，不上传任何服务器，无广告、无账号、无追踪。
 
-## 构建三步
+跨平台：**Android（原生 App）+ Web（浏览器即用，桌面端专属布局）**。
 
-> 前提：Windows + Git Bash / PowerShell。全部工具链落在 D:\AI\env ，不污染系统。
+## 功能一览
 
-1. **安装工具链**（首次一次即可，全程国内镜像）
-   ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup_env.ps1
-   ```
-   进度看 D:\AI\env\setup.log ，出现 DONE 工具链全部就绪 即完成。
+### 🗺️ 行程规划
+- 行程编辑：日期范围、目的地、往返交通、同行成员
+- 城市/景点离线库与在线 POI 补充（高德/QQ 地图可选，未配置自动降级离线+免费源）
+- 行程地图、导出图片海报 / PDF / 格式备份（.tat/.tav）
+- 机场库、国家/城市时区与天气信息（行程累计透明）
 
-2. **一键构建**
-   ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_apk.ps1
-   ```
-   脚本幂等：自动加载环境、gradle wrapper 换腾讯镜像（保持生成版本）、settings.gradle 注入阿里云镜像置顶（google()/mavenCentral() 保留回退）、pub get、build_runner、analyze(0 error)、test(全绿)、打包。
+### ✅ 出行清单
+- 按行程管理清单，内置常用场景模板（证件、衣物、数码…）与智能推荐
+- 拖拽排序、快捷标记、进度卡片
 
-3. **取产物**
-   build/app/outputs/flutter-apk/app-debug.apk
+### 💰 AA 记账
+- 团购分摊：明细账、账单（正/负口径统一）、成员榜只看未结清
+- 一键结算引擎（Settle），支持多成员最优债务清算
+- 收支统计图表、预算预警、CSV 导入导出
+- 局域网协同同步（移动端），无网络也能多端汇总
 
-## 工具链与清理
+### 🔐 隐私与数据
+- 数据全部存储在本地 SQLite（Android）或浏览器 IndexedDB（Web）
+- 备份/恢复：跨端交换使用 `.tat` / `.tav` 文件
+- 全程无任何后端服务
 
-- 位置：D:\AI\env （jdk / android-sdk / flutter / gradle-home / pub-cache）
-- 环境注入：每次构建前由脚本 source scripts/env.local.ps1（JAVA_HOME / ANDROID_HOME / PUB 镜像等）
-- 完全卸载：直接删除 D:\AI\env 整目录（不改系统 PATH、不写注册表）
+## 在线体验
 
-## 目录速览
+| | 地址 |
+| --- | --- |
+| Web 应用（芥舟） | `https://app.你的域名.com`（Vercel） |
+| 官网 | `https://你的域名.com`（Vercel） |
+
+> 上线后将上述占位替换为真实链接。Web 端为能力适配版：无 AI 对话、无局域网协同，其余功能一致。
+
+## 本地运行与构建
+
+环境要求：[Flutter SDK](https://docs.flutter.dev/get-started/install)（stable，Dart SDK `>=3.13.1`）。
+
+```bash
+# 1. 拉取依赖 + 生成代码（drift / json 序列化）
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+
+# 2a. 运行 Android（设备/模拟器）
+flutter run
+
+# 2b. 运行 Web（本地调试）
+flutter build web --release
+# 然后随意用静态服务器托管 build/web，或：
+
+# 2c. 本地预览 build/web（镜像 Vercel 行为，含 wasm/SPA 回退）
+node scripts/preview.mjs    # http://localhost:8080
+```
+
+构建 Android 安装包（APK）：
+
+```bash
+flutter build apk --release
+# 产物：build/app/outputs/flutter-apk/app-release.apk
+```
+
+> 首次 Web 构建前，请确认 `web/drift_worker.dart.js` 由 `dart compile js -O4 -o web/drift_worker.dart.js web/drift_worker.dart` 生成（产物不入库，已 gitignore）。
+
+## 技术栈
+
+- **框架**：Flutter（Material 3 设计系统 + 自研 tokens 主题令牌）
+- **状态管理**：flutter_riverpod
+- **本地数据库**：drift（SQLite）+ sqlite3-WASM（Web）/ IndexedDB
+- **路由**：go_router（Web 端支持深链 & 桌面布局分流）
+- **其他**：dio、flutter_map、fl_chart、pdf、share_plus 等
+- **金额口径**：一律 int 分存储，仅展示层格式化；退款统一负数冲减
+
+## 目录结构
 
 ```
 lib/
-  main.dart app.dart router.dart      # 入口 / 根组件 / 路由+5Tab 底栏
-  theme/                              # tokens.dart 设计令牌 + theme_provider.dart 主题持久化
-  shared/widgets/                     # GlassAppBar/悬浮胶囊底栏/底部抽屉/金额文本/骨架屏等通用件
+  main.dart / app.dart / router.dart   # 入口 / 根组件 / 路由（移动+桌面分流）
+  core/                                # 金额、日期、UID、错误恢复等基础能力
+  data/
+    db/                                # drift 表结构与 DAO
+    repo/                              # 访问仓储
+    seed/                              # 离线种子数据（机场、城市、货币、清单模板…）
+    services/                          # POI / 天气 / 航班 / 汇率（可配置密钥，含免费降级）
+  domain/                              # 结算引擎、统计、备份、CSV、分摊等纯逻辑
+  export/                              # 海报 / PDF / 备份格式与平台分享
   features/
-    trips/ checklist/ ledger/ settings/   # 各业务线屏幕
-scripts/
-  setup_env.ps1                       # 工具链安装（幂等）
-  build_apk.ps1                       # 一键构建（幂等）
-test/widget_test.dart                  # 冒烟测试
+    trips/ checklist/ ledger/          # 三大主线（移动 + 桌面 Workbench）
+    desktop/                           # 桌面壳、命令面板、上下文菜单、同步中心
+    settings/                          # 主题、隐私、关于等
+  platform/                            # Web/IO 平台适配（db/fs/gzip/通知/右键守卫…）
+website/                               # 官网静态站（独立 Vercel 项目，见 README 下文）
+scripts/                               # 构建与本地预览脚本
+test/                                  # 单元 + Widget 测试
 ```
 
-## 团队分工
+## 部署（Vercel，同一仓库两个项目）
 
-| 成员 | 负责 |
-| --- | --- |
-| scaffolder | 工程骨架 / 设计系统 tokens / 路由底栏 / 通用组件 / 构建脚本 |
-| data-engineer | drift 表结构 / repository / 领域模型（lib/core、lib/data、lib/domain） |
-| trips-ui | 行程规划主线 UI |
-| checklist-ui | 清单主线 UI |
-| ledger-ui | 记账主线 UI |
-| integrator | 数据接线 / 联调 / 地图导出分享集成 |
-| qa-reviewer | 代码评审 / 测试把关 |
+### 项目 A：Web 应用
+- **Root Directory**：`./`，Framework Preset：**Other**
+- **Build Command**：`bash scripts/build_web.sh`（脚本会自动安装 Flutter stable SDK，首次构建约 3–5 分钟）
+- **Output Directory**：`build/web`
+- 顶层的 `vercel.json` 已配置 SPA 回退 + wasm 类型 + COOP/COEP 头，Web 端复制代码无需额外动作。
 
-> 规范提醒：颜色一律取自 lib/theme/tokens.dart 语义角色；模态用 showDraggableSheet；空状态用 EmptyState；加载用 SkeletonBox。
+### 项目 B：官网
+- **Root Directory**：`website/`，Framework Preset：**Other**，Build/Output 留空
+- `website/vercel.json` 已配置静态资源长缓存。
+
+## 开源协议
+
+本项目基于 [Apache License 2.0](LICENSE)。Copyright © 2026 芥舟（JieZhou Travel Assistant）。
+
+你可以自由使用、修改、分发（含商业闭源），但需保留版权声明与许可文本；如你对本项目代码做了修改再分发，需在修改文件上标注变更。
+
+## 贡献
+
+欢迎提 Issue 或 PR。保持纯本地、无后端的架构基调是项目的第一原则。

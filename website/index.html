@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>芥舟 · 旅途助手 — 以芥为舟，行万水千山</title>
+  <meta name="description" content="芥舟（旅途助手）是一叶以芥子为楫、可离线航行的旅行之舟。行程规划 · 出行清单 · AA 记账，三大主线，纯本地运行，V2.1.1。" />
+  <meta property="og:title" content="芥舟 · 旅途助手" />
+  <meta property="og:description" content="以芥为舟，行万水千山。行程规划 · 出行清单 · AA 记账，纯本地离线运行。" />
+  <meta property="og:image" content="assets/logo.png" />
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- 全页流萤粒子 -->
+  <canvas id="dust" aria-hidden="true"></canvas>
+
+  <!-- 导航 -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="#top">
+        <img class="brand-logo" src="assets/logo.png" alt="芥舟 logo" />
+        <span class="brand-name">芥舟</span>
+        <span class="brand-sub">旅途助手</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="#story">品牌故事</a>
+        <a href="#features">功能</a>
+        <a href="#more">更多能力</a>
+        <a href="#highlights">亮点</a>
+        <a href="#get">下载</a>
+      </nav>
+      <a class="nav-cta" href="#get">开始旅程</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero：月下烟波，一叶扁舟 -->
+    <section class="hero">
+      <!-- 素月 -->
+      <div class="moon" aria-hidden="true">
+        <div class="moon-core"></div>
+        <div class="moon-halo"></div>
+      </div>
+
+      <!-- 一叶扁舟：全页唯一插画记忆点 -->
+      <div class="boat" aria-hidden="true">
+        <svg viewBox="0 0 220 110">
+          <path class="boat-hull" d="M30,74 C60,92 160,92 190,74 C164,84 56,84 30,74 Z"/>
+          <path class="boat-hull-lite" d="M38,76 C60,86 160,86 182,76 Z"/>
+          <line class="boat-mast" x1="110" y1="22" x2="118" y2="78"/>
+          <path class="boat-sail" d="M112,24 C96,40 92,60 110,76 Z"/>
+          <path class="boat-sail-2" d="M118,24 C138,44 140,62 120,76 Z"/>
+        </svg>
+        <div class="wake"></div>
+      </div>
+
+      <div class="hero-content">
+        <p class="hero-version">旅途助手 · VERSION 2.1.1</p>
+        <h1 class="hero-title">芥<span class="hl">舟</span></h1>
+        <p class="hero-slogan">以芥为舟 · 泛于万顷烟波</p>
+        <p class="hero-desc">芥舟，是为旅途而生的离线助手——<br class="br-sm" />行程 · 清单 · AA 记账，一舟尽纳。</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#get"><span class="btn-icon">↓</span> 载舟启航</a>
+          <a class="btn btn-ghost" href="#get">在线体验</a>
+        </div>
+      </div>
+
+      <div class="hero-scroll" aria-hidden="true"><span></span></div>
+    </section>
+
+    <!-- 特色：一路航向的滚动字条 -->
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span>行程规划</span><span>·</span><span>出行清单</span><span>·</span>
+        <span>AA 记账</span><span>·</span><span>预算提醒</span><span>·</span>
+        <span>成员结算</span><span>·</span><span>地图导览</span><span>·</span>
+        <span>天气航班</span><span>·</span><span>离线运行</span><span>·</span>
+        <span>隐私优先</span><span>·</span>
+        <span>行程规划</span><span>·</span><span>出行清单</span><span>·</span>
+        <span>AA 记账</span><span>·</span><span>预算提醒</span><span>·</span>
+        <span>成员结算</span><span>·</span><span>地图导览</span><span>·</span>
+        <span>天气航班</span><span>·</span><span>离线运行</span><span>·</span>
+        <span>隐私优先</span><span>·</span>
+      </div>
+    </div>
+
+    <!-- 品牌故事 -->
+    <section class="section story" id="story">
+      <div class="section-inner">
+        <p class="eyebrow">BRAND STORY · 名起</p>
+        <h2 class="section-title">覆杯水于坳堂，则芥为之舟</h2>
+        <div class="story-body">
+          <div class="story-quote">
+            <blockquote>
+              覆杯水于坳堂之上，则芥为之舟；<br />
+              置杯焉则胶，水浅而舟大也。
+            </blockquote>
+            <cite>——《庄子 · 逍遥游》</cite>
+          </div>
+          <p>
+            芥，本是微小的种子。当一洼清水承载起一枚芥子，它便化为一叶足以远行的舟。
+            芥舟取名于此——再小的行囊，也能装下一段宏大的旅程；再远的远方，也能被一划一桨地抵达。
+            我们把纷繁的行程、清单与账单，安放在这一叶轻舟之上，
+            月下烟波里，载你稳稳地驶过每一程山水、每一片人海。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 功能：三大主线，逐一细说 -->
+    <section class="section features" id="features">
+      <div class="section-inner">
+        <p class="eyebrow">OUR CRAFT · 三大主线</p>
+        <h2 class="section-title">一叶扁舟，三种行法</h2>
+        <p class="lead">芥舟把一趟旅程收敛成三件最要紧的事——去哪、带什么、花了多少。三条主线各自独立，又在指间彼此打通。</p>
+
+        <!-- 01 行程 -->
+        <div class="feat feat-trip">
+          <div class="feat-visual">
+            <div class="panel panel-trip">
+              <div class="p-title">第 1 程 · 杭州 3 日</div>
+              <div class="tl">
+                <div class="tl-row"><i class="tl-dot"></i><span><b>D1</b> 出发 · 12:40 落地</span><em>机场值机</em></div>
+                <div class="tl-row"><i class="tl-dot"></i><span><b>D2</b> 西湖 · 苏堤</span><em>☀ 22°C</em></div>
+                <div class="tl-row"><i class="tl-dot"></i><span><b>D3</b> 九溪 · 徒步</span><em>晴 · 微风</em></div>
+                <div class="tl-row"><i class="tl-dot"></i><span><b>D4</b> 返程返航</span><em>—</em></div>
+              </div>
+              <div class="p-foot">☁ 天气已接入 · 🗺 地图导航</div>
+            </div>
+          </div>
+          <div class="feat-text">
+            <span class="f-index">01 · 行程规划</span>
+            <h3>把「去哪」排成一条顺畅的时间线</h3>
+            <p>从敲定出发那天起，交通、住宿、景点便逐项码进同一条时间线。点开任一程，地图定位、天气、航班情报一次取齐，不必在几个 App 之间来回横跳。</p>
+            <p>若不想从零规划，自带行程模板与精选路线——挑一个，连返程该买到哪天，都替你料理好了。</p>
+            <ul>
+              <li>多天行程时间线，串起交通·住宿·风景</li>
+              <li>地图导览与点位，路线一眼定位</li>
+              <li>天气 · 航班 · 目的地情报统合随取</li>
+              <li>模板与精选路线，一键从零到出发</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 02 清单 -->
+        <div class="feat feat-list">
+          <div class="feat-text">
+            <span class="f-index">02 · 出行清单</span>
+            <h3>把「带什么」备得妥帖而不冗余</h3>
+            <p>证件、药品、充电线……每一种物品，都按旅程场景归进对应的智能模板。临行前三两分钟，逐项打勾，进度一目了然。</p>
+            <p>清单会照着你的行程，自动荐上容易漏的备查项；也有现成模板可随时补齐。你只管轻装，剩下的交给它。</p>
+            <ul>
+              <li>分类清单，查缺补漏一目了然</li>
+              <li>随场景切换的智能模板</li>
+              <li>按事项智能推荐备查项</li>
+              <li>勾选进度追踪，出发前不留盲区</li>
+            </ul>
+          </div>
+          <div class="feat-visual">
+            <div class="panel panel-list">
+              <div class="p-title">出发前 · 行李清点</div>
+              <div class="cl-item done">护照 / 签证</div>
+              <div class="cl-item done">充电器 · 转接头</div>
+              <div class="cl-item done">常备药品</div>
+              <div class="cl-item">防晒 · 墨镜</div>
+              <div class="cl-item">运动鞋 · 雨伞</div>
+              <div class="cl-bar"><i style="width:72%"></i></div>
+              <div class="cl-note">9 / 12 已备齐</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 03 记账 -->
+        <div class="feat feat-ledger">
+          <div class="feat-visual">
+            <div class="panel panel-ledger">
+              <div class="p-title">缘起 · 浙江 账本</div>
+              <div class="lg-row"><span>🍜 河坊街小吃</span><b>¥ 126</b></div>
+              <div class="lg-row"><span>🏨 民宿 · 3 晚</span><b>¥ 1260</b></div>
+              <div class="lg-row"><span>🚕 打车 · 分摊</span><b>−¥ 92</b></div>
+              <div class="lg-row lg-refund"><span>退款 · 门票</span><b>−¥ 60</b></div>
+              <div class="lg-settle"><span>静静 应收 · 小舟 应付</span><b>¥ 695</b></div>
+            </div>
+          </div>
+          <div class="feat-text">
+            <span class="f-index">03 · AA 记账</span>
+            <h3>把「花了多少」算得清清楚楚</h3>
+            <p>旅途里的每一笔，随记随清：谁付、谁收、谁该给谁多少，系统自动分摊。退款、优惠也按同一口径冲减，零头都不含糊。</p>
+            <p>预算设好，逼近阈值便轻轻兜住；旅程结束，一键生成结算单，再以 PDF、纪念海报或 CSV 快照，随时留档、分享。</p>
+            <ul>
+              <li>明细记账，多人 · 分类随记随清</li>
+              <li>预算提醒，超额及时兜住</li>
+              <li>成员 AA 自动结算，零头也明</li>
+              <li>分类统计 · PDF / 海报 / CSV 导出</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 更多能力：求精不多，逐条细说 -->
+    <section class="section more" id="more">
+      <div class="section-inner">
+        <p class="eyebrow">MORE CAPABILITIES · 细节赋能</p>
+        <h2 class="section-title">舟小，也样样俱全</h2>
+        <p class="lead">不铺张也求凝练，只挑几处真正顺手、常被忽略的细节，逐条展开说给你听。</p>
+        <div class="plist">
+          <div class="prow">
+            <span class="pnum">01</span>
+            <div class="pbody">
+              <h4>预算引擎</h4>
+              <p>按旅程与分类设定预算，逼近阈值便温柔提醒——不是斥责，是在超支前先让你看清。</p>
+            </div>
+            <span class="ptag">预算 · 提醒</span>
+          </div>
+          <div class="prow">
+            <span class="pnum">02</span>
+            <div class="pbody">
+              <h4>局域网协作</h4>
+              <p>同一网络下的旅伴共享一款账本，各记各的，记录在设备间自动合并，账目始终对得上。</p>
+            </div>
+            <span class="ptag">共享 · 自动合并</span>
+          </div>
+          <div class="prow">
+            <span class="pnum">03</span>
+            <div class="pbody">
+              <h4>跨端备份迁移</h4>
+              <p>用 .tav / .tat 备份自由穿梭，换机、跨端同步都从容，数据始终稳稳跟手。</p>
+            </div>
+            <span class="ptag">.tav · .tat</span>
+          </div>
+          <div class="prow">
+            <span class="pnum">04</span>
+            <div class="pbody">
+              <h4>导出与分享</h4>
+              <p>账本成 PDF、旅程成纪念海报、数据成 CSV 快照，一路的回忆，随时打包带走。</p>
+            </div>
+            <span class="ptag">PDF · 海报 · CSV</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 亮点 -->
+    <section class="section highlights" id="highlights">
+      <div class="section-inner">
+        <p class="eyebrow">WHY JIEZHOU · 为何是芥舟</p>
+        <h2 class="section-title">轻舟虽小，稳渡重洋</h2>
+        <div class="highlights-grid">
+          <div class="hl-item">
+            <div class="hl-icon">🕊</div>
+            <h4>纯本地离线</h4>
+            <p>数据存于设备，无云端依赖。无网之下，旅途依旧。</p>
+          </div>
+          <div class="hl-item">
+            <div class="hl-icon">🔀</div>
+            <h4>跨设备迁移</h4>
+            <p>以 .tav / .tat 备份自由穿梭，换机迁移毫不费力。</p>
+          </div>
+          <div class="hl-item">
+            <div class="hl-icon">✦</div>
+            <h4>苹果级质感</h4>
+            <p>Material 3 之上，毛玻璃、动效与留白，处处克制而精致。</p>
+          </div>
+          <div class="hl-item">
+            <div class="hl-icon">↗</div>
+            <h4>导出与分享</h4>
+            <p>PDF 账本、海报记录、CSV 快照，把回忆打包带走。</p>
+          </div>
+          <div class="hl-item">
+            <div class="hl-icon">𝆺𝅥</div>
+            <h4>明细与结算</h4>
+            <p>退款、优惠、多人分摊，零头的每一分都算得明明白白。</p>
+          </div>
+          <div class="hl-item">
+            <div class="hl-icon">🔒</div>
+            <h4>隐私优先</h4>
+            <p>核心能力不依赖云端，你的行程与账单只属于你自己。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 下载 / 体验 -->
+    <section class="section get" id="get">
+      <div class="section-inner">
+        <div class="get-card">
+          <div class="get-glow"></div>
+          <p class="eyebrow">GET STARTED · 载舟启航</p>
+          <h2 class="section-title">把旅程，放进这一叶舟</h2>
+          <p class="get-sub">芥舟 V2.1.1 · 现可下载 · 安卓 / 网页在线体验</p>
+          <div class="get-actions">
+            <a class="btn btn-primary" href="#" data-coming="安卓 APK 下载链接尚未配置，敬请期待">下载安卓版</a>
+            <a class="btn btn-ghost" href="#" data-coming="在线网页版入口尚未配置，敬请期待">网页在线版</a>
+          </div>
+          <div class="get-docs">
+            <a class="doc-link" href="#" data-coming="使用文档页正在制作中，稍后开放">使用文档 <span class="doc-arrow">→</span></a>
+            <a class="doc-link" href="#" data-coming="版本更新日志正在制作中，稍后开放">更新日志 <span class="doc-arrow">→</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 页脚 -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img class="brand-logo" src="assets/logo.png" alt="芥舟" />
+        <span>芥舟 · 旅途助手</span>
+      </div>
+      <p class="footer-tag">覆杯水于坳堂之上，则芥为之舟。</p>
+      <p class="footer-meta">V2.1.1 · 纯本地离线运行 · © 2026 芥舟</p>
+    </div>
+  </footer>
+
+  <div class="toast" role="status" aria-live="polite"></div>
+  <script src="js/main.js"></script>
+</body>
+</html>
