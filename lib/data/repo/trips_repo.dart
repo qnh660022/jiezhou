@@ -6,6 +6,7 @@ import "../db/database.dart";
 import "../../core/uid.dart";
 import "../../domain/trip_backup.dart";
 import "../../export/backup_format.dart";
+import "../sync/sync_outbox_service.dart";
 
 class TripsRepository {
   TripsRepository(this.db);
@@ -30,6 +31,7 @@ class TripsRepository {
   Future<String> createTrip({required String name, required String dest, String emoji="✈️", String cover="ocean", required int start, required int end, String note="", String? groupId}) async {
     final id = newId("trip"); final now = DateTime.now().millisecondsSinceEpoch;
     await db.into(db.trips).insert(TripsCompanion(id:Value(id),name:Value(name),destination:Value(dest),emoji:Value(emoji),cover:Value(cover),startEpochDay:Value(start),endEpochDay:Value(end),note:Value(note),groupId:Value(groupId),createdAt:Value(now),updatedAt:Value(now)));
+    SyncOutboxService.notifyWrite("trips", id);
     return id;
   }
 
@@ -45,6 +47,7 @@ class TripsRepository {
   Future<void> updateTrip(Trip trip) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     await (db.update(db.trips)..where((t)=>t.id.equals(trip.id))).write(TripsCompanion(name:Value(trip.name),destination:Value(trip.destination),emoji:Value(trip.emoji),cover:Value(trip.cover),startEpochDay:Value(trip.startEpochDay),endEpochDay:Value(trip.endEpochDay),note:Value(trip.note),groupId:Value(trip.groupId),archived:Value(trip.archived),updatedAt:Value(now)));
+    SyncOutboxService.notifyWrite("trips", trip.id);
   }
 
   Future<void> deleteTrip(String id) async {
@@ -53,9 +56,10 @@ class TripsRepository {
     await (db.delete(db.checklistItems)..where((c)=>c.tripId.equals(id))).go();
     await (db.delete(db.albumPhotos)..where((a)=>a.tripId.equals(id))).go();
     await (db.delete(db.trips)..where((t)=>t.id.equals(id))).go();
+    SyncOutboxService.notifyWrite("trips", id, op: "delete");
   }
 
-  Future<void> archiveTrip(String id, bool v) => (db.update(db.trips)..where((t)=>t.id.equals(id))).write(TripsCompanion(archived:Value(v),updatedAt:Value(DateTime.now().millisecondsSinceEpoch)));
+  Future<void> archiveTrip(String id, bool v) async { await (db.update(db.trips)..where((t)=>t.id.equals(id))).write(TripsCompanion(archived:Value(v),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("trips", id); }
 
   Future<String> copyTrip(String srcId) async {
     final newId_ = newId("trip"); final now = DateTime.now().millisecondsSinceEpoch;
@@ -68,16 +72,18 @@ class TripsRepository {
   }
 
   // ===== Item CRUD =====
-  Future<void> insertItem(TripItemsCompanion c) => db.into(db.tripItems).insert(c);
-  Future<void> updateItem(String id, TripItemsCompanion c) => (db.update(db.tripItems)..where((t)=>t.id.equals(id))).write(c.copyWith(updatedAt:Value(DateTime.now().millisecondsSinceEpoch)));
+  Future<void> insertItem(TripItemsCompanion c) async { await db.into(db.tripItems).insert(c); SyncOutboxService.notifyWrite("trip_items", c.id.value); }
+  Future<void> updateItem(String id, TripItemsCompanion c) async { await (db.update(db.tripItems)..where((t)=>t.id.equals(id))).write(c.copyWith(updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("trip_items", id); }
   Future<void> saveItem(TripItem item) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     await (db.update(db.tripItems)..where((t)=>t.id.equals(item.id))).write(TripItemsCompanion(name:Value(item.name),address:Value(item.address),type:Value(item.type),lat:Value(item.lat),lng:Value(item.lng),photoUri:Value(item.photoUri),startTimeMin:Value(item.startTimeMin),durationMin:Value(item.durationMin),costCents:Value(item.costCents),costCurrency:Value(item.costCurrency),note:Value(item.note),fromName:Value(item.fromName),fromAddress:Value(item.fromAddress),fromLat:Value(item.fromLat),fromLng:Value(item.fromLng),toName:Value(item.toName),toAddress:Value(item.toAddress),toLat:Value(item.toLat),toLng:Value(item.toLng),flightNo:Value(item.flightNo),sortOrder:Value(item.sortOrder),dateEpochDay:Value(item.dateEpochDay),updatedAt:Value(now)));
+    SyncOutboxService.notifyWrite("trip_items", item.id);
   }
 
   Future<void> deleteItem(String id) async {
     await (db.update(db.expenses)..where((e)=>e.tripItemId.equals(id))).write(ExpensesCompanion(tripItemId:Value(null)));
     await (db.delete(db.tripItems)..where((t)=>t.id.equals(id))).go();
+    SyncOutboxService.notifyWrite("trip_items", id, op: "delete");
   }
 
   // ===== Date range management =====
@@ -87,7 +93,8 @@ class TripsRepository {
       if (d < s) d = s;
       if (d > e) d = e;
       if (d != i.dateEpochDay) {
-        await (db.update(db.tripItems)..where((t)=>t.id.equals(i.id))).write(TripItemsCompanion(dateEpochDay:Value(d)));
+        await (db.update(db.tripItems)..where((t)=>t.id.equals(i.id))).write(TripItemsCompanion(dateEpochDay:Value(d),updatedAt:Value(DateTime.now().millisecondsSinceEpoch)));
+        SyncOutboxService.notifyWrite("trip_items", i.id);
       }
     }
     await (db.update(db.trips)..where((t)=>t.id.equals(tid))).write(TripsCompanion(startEpochDay:Value(s),endEpochDay:Value(e),updatedAt:Value(DateTime.now().millisecondsSinceEpoch)));

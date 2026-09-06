@@ -375,9 +375,10 @@ abstract final class AppTextStyles {
       );
 }
 
-/// 全局 ThemeData 构建入口（app.dart 共用；dark 主题也由此返回）
-ThemeData buildAppTheme(String themeKey) {
-  final scheme = AppSchemes.schemeFor(themeKey);
+/// 全局 ThemeData 构建入口（app.dart 共用；dark 主题也由此返回）。
+/// [overrideScheme] 供 buildAppThemeFor 注入 (family,brightness) 解析出的配色。
+ThemeData buildAppTheme(String themeKey, {ColorScheme? overrideScheme}) {
+  final scheme = overrideScheme ?? AppSchemes.schemeFor(themeKey);
   final isDark = scheme.brightness == Brightness.dark;
   return ThemeData(
     useMaterial3: true,
@@ -543,4 +544,319 @@ abstract final class SemanticColors {
   static const Color income = Color(0xFF1E9E6A); // 收入绿
   static const Color expense = Color(0xFFD9553F); // 支出红
   static const Color warning = Color(0xFFE8A13C); // 预警橙
+}
+
+
+// ============================================================
+// V2.6 主题深化：ThemeStyle（气质字段）+ 深色专属板 + 12 卡直选 + 节律令牌
+// ============================================================
+
+/// 主题族（6 族）：mint 薄荷 / sky 晴空 / sun 落日 / bloom 花信 / nebula 星河 / night 夜航石墨。
+enum ThemeFamily { mint, sky, sun, bloom, nebula, night }
+
+/// 亮暗三态。
+enum ThemeBrightnessMode { light, dark, system }
+
+/// 卡片质感种类（§5.3）：soft / flat / edged / soft+shadow。
+enum CardKind { soft, flat, edged, softShadow }
+
+/// 字体风格档：modern（现状无衬线）/ serif（标题衬线）。
+enum FontMode { modern, serif }
+
+/// 圆角密度档：soft=card 28/input 18；standard=24/16；clean=16/12。
+enum RadiusDensity { soft, standard, clean }
+
+/// 主题族气质描述（§5.3；深色各有一份）。
+class ThemeStyle {
+  const ThemeStyle({
+    required this.family,
+    required this.displayName,
+    required this.seed,
+    required this.brightness,
+    required this.signatureGradient,
+    required this.glassTint,
+    required this.iconTileBase,
+    required this.motionTempo,
+    required this.serifHeadline,
+    required this.cardKind,
+  });
+
+  final String family; // mint|sky|sun|bloom|nebula|night
+  final String displayName; // 浅/深各自的展示名
+  final Color seed;
+  final Brightness brightness;
+  final List<Color> signatureGradient; // 长度 2
+  final Color glassTint; // 毛玻璃叠加色（低透明）
+  final Color iconTileBase; // 图标底色
+  final double motionTempo; // 0.8~1.3
+  final bool serifHeadline; // 标题衬线（mint/bloom）
+  final CardKind cardKind;
+
+  bool get isDark => brightness == Brightness.dark;
+}
+
+/// 十二张直选卡的气质表（§5.3 差异关系不可变；初始色值可微调）。
+abstract final class ThemeStyles {
+  static const List<Color> _gMint = [Color(0xFF00A878), Color(0xFF56CCF2)];
+  static const List<Color> _gSky = [Color(0xFF2F80ED), Color(0xFF56CCF2)];
+  static const List<Color> _gSun = [Color(0xFFF2994A), Color(0xFFF55E45)];
+  static const List<Color> _gBloom = [Color(0xFFF06B9C), Color(0xFFFFB6C1)];
+  static const List<Color> _gNebula = [Color(0xFF7B61FF), Color(0xFFC58BF2)];
+  static const List<Color> _gNight = [Color(0xFF3A3F4B), Color(0xFF14161C)];
+
+  static const ThemeStyle mint = ThemeStyle(
+      family: 'mint',
+      displayName: '薄荷·山水',
+      seed: Color(0xFF00A878),
+      brightness: Brightness.light,
+      signatureGradient: _gMint,
+      glassTint: Color(0x1456CCF2),
+      iconTileBase: Color(0xFFEAF7F0),
+      motionTempo: 0.95,
+      serifHeadline: true,
+      cardKind: CardKind.soft);
+
+  static const ThemeStyle sky = ThemeStyle(
+      family: 'sky',
+      displayName: '晴空·天蓝',
+      seed: Color(0xFF2F80ED),
+      brightness: Brightness.light,
+      signatureGradient: _gSky,
+      glassTint: Color(0x142F80ED),
+      iconTileBase: Color(0xFFEAF2FC),
+      motionTempo: 1.00,
+      serifHeadline: false,
+      cardKind: CardKind.flat);
+
+  static const ThemeStyle sun = ThemeStyle(
+      family: 'sun',
+      displayName: '落日·活力橙',
+      seed: Color(0xFFF2994A),
+      brightness: Brightness.light,
+      signatureGradient: _gSun,
+      glassTint: Color(0x14F2994A),
+      iconTileBase: Color(0xFFFDF1E2),
+      motionTempo: 1.20,
+      serifHeadline: false,
+      cardKind: CardKind.edged);
+
+  static const ThemeStyle bloom = ThemeStyle(
+      family: 'bloom',
+      displayName: '花信·樱花粉',
+      seed: Color(0xFFF06B9C),
+      brightness: Brightness.light,
+      signatureGradient: _gBloom,
+      glassTint: Color(0x14F06B9C),
+      iconTileBase: Color(0xFFFCE9F0),
+      motionTempo: 0.90,
+      serifHeadline: true,
+      cardKind: CardKind.soft);
+
+  static const ThemeStyle nebula = ThemeStyle(
+      family: 'nebula',
+      displayName: '星河·星空紫',
+      seed: Color(0xFF7B61FF),
+      brightness: Brightness.light,
+      signatureGradient: _gNebula,
+      glassTint: Color(0x147B61FF),
+      iconTileBase: Color(0xFFF0ECFF),
+      motionTempo: 1.05,
+      serifHeadline: false,
+      cardKind: CardKind.softShadow);
+
+  static const ThemeStyle night = ThemeStyle(
+      family: 'night',
+      displayName: '夜航·石墨',
+      seed: Color(0xFF3A3F4B),
+      brightness: Brightness.dark,
+      signatureGradient: _gNight,
+      glassTint: Color(0x0D3A3F4B),
+      iconTileBase: Color(0xFF23262E),
+      motionTempo: 1.00,
+      serifHeadline: false,
+      cardKind: CardKind.flat);
+
+  // 专属深色（展示名见 §5.3：夜山/夜海/夜炉/夜花/夜穹）
+  static final ThemeStyle mintDark = _darkOf(mint, '夜山', const Color(0xFF0E1A14));
+  static final ThemeStyle skyDark = _darkOf(sky, '夜海', const Color(0xFF0C1622));
+  static final ThemeStyle sunDark = _darkOf(sun, '夜炉', const Color(0xFF1E1409));
+  static final ThemeStyle bloomDark = _darkOf(bloom, '夜花', const Color(0xFF1C0E14));
+  static final ThemeStyle nebulaDark = _darkOf(nebula, '夜穹', const Color(0xFF120F1E));
+
+  static ThemeStyle _darkOf(ThemeStyle light, String name, Color tintBase) =>
+      ThemeStyle(
+        family: light.family,
+        displayName: name,
+        seed: light.seed,
+        brightness: Brightness.dark,
+        signatureGradient: [light.signatureGradient.last, tintBase],
+        glassTint: light.glassTint.withValues(alpha: 0.05),
+        iconTileBase:
+            Color.alphaBlend(light.seed.withValues(alpha: 0.16), tintBase),
+        motionTempo: light.motionTempo,
+        serifHeadline: light.serifHeadline,
+        cardKind: light.cardKind,
+      );
+
+  static List<ThemeStyle> get lightStyles =>
+      const [mint, sky, sun, bloom, nebula];
+
+  static List<ThemeStyle> get darkStyles =>
+      [mintDark, skyDark, sunDark, bloomDark, nebulaDark, night];
+
+  static ThemeStyle? of(String family, Brightness brightness) {
+    for (final s in [...lightStyles, ...darkStyles]) {
+      if (s.family == family && s.brightness == brightness) return s;
+    }
+    return null;
+  }
+}
+
+/// 动效节律令牌（§5.7）：全部动画时长 × 当前 family 的 motionTempo。
+abstract final class MotionTokens {
+  /// [baseMs] 为标准时长；返回按节律缩放并夹紧到 60~600ms 的时长。
+  static Duration durationFor(int baseMs, double tempo) {
+    final scaled = (baseMs * tempo).round().clamp(60, 600);
+    return Duration(milliseconds: scaled);
+  }
+}
+
+/// 圆角密度档位的具体数值（buildAppThemeFor 消费）。
+extension RadiusDensityX on RadiusDensity {
+  double get cardValue => switch (this) {
+        RadiusDensity.soft => 28,
+        RadiusDensity.standard => 24,
+        RadiusDensity.clean => 16,
+      };
+
+  double get inputValue => switch (this) {
+        RadiusDensity.soft => 18,
+        RadiusDensity.standard => 16,
+        RadiusDensity.clean => 12,
+      };
+}
+
+/// 深色专属板：fromSeed(dark) 基础上做三点微调（§5.3）：
+/// ① primary 提亮一档；② surface 与 surfaceContainerHighest 拉开层级；
+/// ③ 正文对比度保证 ≥4.5:1。
+ColorScheme _darkSchemeOf(Color seed) {
+  final base =
+      ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
+  final hsl = HSLColor.fromColor(seed);
+  final brightened = hsl
+      .withLightness((hsl.lightness + 0.28).clamp(0.0, 0.82))
+      .toColor();
+  return base.copyWith(
+    primary: brightened,
+    onPrimary: const Color(0xFF10131A),
+    surface: const Color(0xFF14161C),
+    surfaceContainerLowest: const Color(0xFF0E1015),
+    surfaceContainerLow: const Color(0xFF1A1D24),
+    surfaceContainer: const Color(0xFF1E222B),
+    surfaceContainerHigh: const Color(0xFF282C36),
+    surfaceContainerHighest: const Color(0xFF333845),
+    onSurface: const Color(0xFFE4E6EE),
+    onSurfaceVariant: const Color(0xFFA8ADC0),
+    outlineVariant: const Color(0xFF33384A),
+  );
+}
+
+/// (family, brightness) → ColorScheme（浅色板复用 AppSchemes 现有五套）。
+ColorScheme schemeForFb(ThemeFamily family, ThemeBrightnessMode brightness) {
+  final dark = brightness == ThemeBrightnessMode.dark ||
+      family == ThemeFamily.night;
+  if (dark) {
+    return switch (family) {
+      ThemeFamily.mint => _darkSchemeOf(const Color(0xFF00A878)),
+      ThemeFamily.sky => _darkSchemeOf(const Color(0xFF2F80ED)),
+      ThemeFamily.sun => _darkSchemeOf(const Color(0xFFF2994A)),
+      ThemeFamily.bloom => _darkSchemeOf(const Color(0xFFF06B9C)),
+      ThemeFamily.nebula || ThemeFamily.night =>
+        _darkSchemeOf(const Color(0xFF7B61FF)),
+    };
+  }
+  return switch (family) {
+    ThemeFamily.mint => AppSchemes.mintGreen,
+    ThemeFamily.sky => AppSchemes.skyBlue,
+    ThemeFamily.sun => AppSchemes.vibrantOrange,
+    ThemeFamily.bloom => AppSchemes.sakuraPink,
+    ThemeFamily.nebula => AppSchemes.starryPurple,
+    ThemeFamily.night => AppSchemes.graphiteDark,
+  };
+}
+
+/// 当前 family 的气质表（system 态在调用前先解析成 light/dark）。
+ThemeStyle themeStyleFor(ThemeFamily family, ThemeBrightnessMode brightness) {
+  final b =
+      (brightness == ThemeBrightnessMode.dark || family == ThemeFamily.night)
+          ? Brightness.dark
+          : Brightness.light;
+  return ThemeStyles.of(family.name, b) ?? ThemeStyles.night;
+}
+
+/// V2.6 ThemeData 组合入口：family×brightness + 衬线标题 + 圆角密度。
+/// [radiusDensity] 缺省 standard（现状值）。
+ThemeData buildAppThemeFor(
+  ThemeFamily family,
+  ThemeBrightnessMode brightness, {
+  FontMode fontMode = FontMode.serif,
+  RadiusDensity radiusDensity = RadiusDensity.standard,
+}) {
+  final style = themeStyleFor(family, brightness);
+  final scheme = schemeForFb(family, brightness);
+  final legacyKey = family == ThemeFamily.night
+      ? ThemeKeys.dark
+      : switch (family) {
+          ThemeFamily.mint => ThemeKeys.green,
+          ThemeFamily.sky => ThemeKeys.blue,
+          ThemeFamily.sun => ThemeKeys.orange,
+          ThemeFamily.bloom => ThemeKeys.pink,
+          ThemeFamily.nebula => ThemeKeys.purple,
+          ThemeFamily.night => ThemeKeys.dark,
+        };
+  final data = buildAppTheme(legacyKey, overrideScheme: scheme);
+  // 标题衬线：family.trait 且 fontMode=serif → 标题字族指向衬线，回退系统宋体
+  final useSerif = style.serifHeadline && fontMode == FontMode.serif;
+  const serifFamily = 'SerifTitle';
+  const serifFallback = [
+    'SerifTitleFallback',
+    'Noto Serif SC',
+    'Source Han Serif SC',
+    'serif'
+  ];
+  TextStyle serifify(TextStyle? t) => useSerif
+      ? (t ?? const TextStyle()).copyWith(
+          fontFamily: serifFamily,
+          fontFamilyFallback: serifFallback,
+          letterSpacing: (t?.letterSpacing ?? 0) + 0.2)
+      : (t ?? const TextStyle());
+  final textTheme = data.textTheme.copyWith(
+    displayLarge: serifify(data.textTheme.displayLarge),
+    displayMedium: serifify(data.textTheme.displayMedium),
+    headlineMedium: serifify(data.textTheme.headlineMedium),
+    headlineSmall: serifify(data.textTheme.headlineSmall),
+    titleLarge: serifify(data.textTheme.titleLarge),
+  );
+  // 圆角密度档（§5.5）：作用于 ThemeData 组件级圆角
+  final cardRadius = BorderRadius.circular(radiusDensity.cardValue);
+  final inputRadius = BorderRadius.circular(radiusDensity.inputValue);
+  return data.copyWith(
+    textTheme: textTheme,
+    cardTheme: CardThemeData(
+      shape: RoundedRectangleBorder(borderRadius: cardRadius),
+      elevation: style.cardKind == CardKind.softShadow ? 2 : 0,
+      clipBehavior: Clip.antiAlias,
+    ),
+    dialogTheme:
+        DialogThemeData(shape: RoundedRectangleBorder(borderRadius: cardRadius)),
+    inputDecorationTheme: data.inputDecorationTheme.copyWith(
+      border: OutlineInputBorder(
+          borderRadius: inputRadius, borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: inputRadius, borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: inputRadius,
+          borderSide: BorderSide(color: scheme.primary, width: 1.5)),
+    ),
+  );
 }

@@ -2,6 +2,9 @@
 ///
 /// 约定：App 内 rate 表示「1 外币 = ? CNY」；接口返回「1 CNY = ? 外币」，
 /// 落盘时取倒数。
+///
+/// V2.6 治理（§6.2）：幂等 GET 失败 300ms 后重试 1 次；超时 8s/15s；
+/// 12h 内不重复请求（refreshIfStale 原语义保留）。
 library;
 import "dart:convert";
 import "package:dio/dio.dart";
@@ -12,7 +15,12 @@ import "../../seed/currencies.dart";
 import "../../repo/prefs_repo.dart";
 
 class ExchangeRateServiceImpl implements ExchangeRateService {
-  ExchangeRateServiceImpl(this._prefs, [Dio? dio]) : _dio = dio ?? Dio();
+  ExchangeRateServiceImpl(this._prefs, [Dio? dio])
+      : _dio = dio ??
+            Dio(BaseOptions(
+              connectTimeout: const Duration(seconds: 8),
+              receiveTimeout: const Duration(seconds: 15),
+            ));
   final PrefsRepository _prefs;
   final Dio _dio;
 
@@ -35,10 +43,14 @@ class ExchangeRateServiceImpl implements ExchangeRateService {
       if (hours != null && hours < _staleHours) return false;
     }
     try {
-      final resp = await _dio.get(
-        'https://open.er-api.com/v6/latest/CNY',
-        options: Options(sendTimeout: const Duration(seconds: 8), receiveTimeout: const Duration(seconds: 8)),
-      );
+      Response<dynamic> resp;
+      try {
+        resp = await _dio.get('https://open.er-api.com/v6/latest/CNY');
+      } catch (_) {
+        // 幂等 GET：300ms 后重试 1 次（§6.2）
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        resp = await _dio.get('https://open.er-api.com/v6/latest/CNY');
+      }
       final data = resp.data;
       if (data is! Map || data['rates'] is! Map) return false;
       final rates = (data['rates'] as Map).cast<String, dynamic>();

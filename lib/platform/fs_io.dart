@@ -23,6 +23,49 @@ Future<void> clearTempDir() async {
   } catch (_) {}
 }
 
+Future<String?> writableDir() async {
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    return dir.path;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// 原子写：先写同目录临时文件再 rename，防进程被杀产生半文件。
+/// 父目录不存在时自动递归创建（如 guide_cache/city/、guide_cache/raw/）。
+Future<void> writeFileString(String path, String content) async {
+  final f = File(path);
+  try {
+    await f.parent.create(recursive: true);
+  } catch (_) {}
+  final tmp = File('${f.path}.tmp');
+  await tmp.writeAsString(content, flush: true);
+  try {
+    await tmp.rename(path);
+  } catch (_) {
+    await tmp.copy(path);
+    await tmp.delete();
+  }
+}
+
+Future<String?> readFileString(String path) async {
+  try {
+    final f = File(path);
+    if (!await f.exists()) return null;
+    return f.readAsString();
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> deleteFile(String path) async {
+  try {
+    final f = File(path);
+    if (await f.exists()) await f.delete();
+  } catch (_) {}
+}
+
 Future<void> persistErrorLog(String detail) async {
   try {
     final dir = await getApplicationDocumentsDirectory();

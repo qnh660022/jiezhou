@@ -5699,6 +5699,3093 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   }
 }
 
+class $SyncOutboxTable extends SyncOutbox
+    with TableInfo<$SyncOutboxTable, SyncOutboxData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncOutboxTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entityMeta = const VerificationMeta('entity');
+  @override
+  late final GeneratedColumn<String> entity = GeneratedColumn<String>(
+    'entity',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _rowIdMeta = const VerificationMeta('rowId');
+  @override
+  late final GeneratedColumn<String> rowId = GeneratedColumn<String>(
+    'row_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _opMeta = const VerificationMeta('op');
+  @override
+  late final GeneratedColumn<String> op = GeneratedColumn<String>(
+    'op',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedMsMeta = const VerificationMeta(
+    'updatedMs',
+  );
+  @override
+  late final GeneratedColumn<int> updatedMs = GeneratedColumn<int>(
+    'updated_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attemptCountMeta = const VerificationMeta(
+    'attemptCount',
+  );
+  @override
+  late final GeneratedColumn<int> attemptCount = GeneratedColumn<int>(
+    'attempt_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    entity,
+    rowId,
+    op,
+    updatedMs,
+    attemptCount,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_outbox';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncOutboxData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entity')) {
+      context.handle(
+        _entityMeta,
+        entity.isAcceptableOrUnknown(data['entity']!, _entityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityMeta);
+    }
+    if (data.containsKey('row_id')) {
+      context.handle(
+        _rowIdMeta,
+        rowId.isAcceptableOrUnknown(data['row_id']!, _rowIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_rowIdMeta);
+    }
+    if (data.containsKey('op')) {
+      context.handle(_opMeta, op.isAcceptableOrUnknown(data['op']!, _opMeta));
+    } else if (isInserting) {
+      context.missing(_opMeta);
+    }
+    if (data.containsKey('updated_ms')) {
+      context.handle(
+        _updatedMsMeta,
+        updatedMs.isAcceptableOrUnknown(data['updated_ms']!, _updatedMsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedMsMeta);
+    }
+    if (data.containsKey('attempt_count')) {
+      context.handle(
+        _attemptCountMeta,
+        attemptCount.isAcceptableOrUnknown(
+          data['attempt_count']!,
+          _attemptCountMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entity, rowId};
+  @override
+  SyncOutboxData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncOutboxData(
+      entity: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity'],
+      )!,
+      rowId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}row_id'],
+      )!,
+      op: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}op'],
+      )!,
+      updatedMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_ms'],
+      )!,
+      attemptCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempt_count'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncOutboxTable createAlias(String alias) {
+    return $SyncOutboxTable(attachedDatabase, alias);
+  }
+}
+
+class SyncOutboxData extends DataClass implements Insertable<SyncOutboxData> {
+  final String entity;
+  final String rowId;
+  final String op;
+  final int updatedMs;
+  final int attemptCount;
+  const SyncOutboxData({
+    required this.entity,
+    required this.rowId,
+    required this.op,
+    required this.updatedMs,
+    required this.attemptCount,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entity'] = Variable<String>(entity);
+    map['row_id'] = Variable<String>(rowId);
+    map['op'] = Variable<String>(op);
+    map['updated_ms'] = Variable<int>(updatedMs);
+    map['attempt_count'] = Variable<int>(attemptCount);
+    return map;
+  }
+
+  SyncOutboxCompanion toCompanion(bool nullToAbsent) {
+    return SyncOutboxCompanion(
+      entity: Value(entity),
+      rowId: Value(rowId),
+      op: Value(op),
+      updatedMs: Value(updatedMs),
+      attemptCount: Value(attemptCount),
+    );
+  }
+
+  factory SyncOutboxData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncOutboxData(
+      entity: serializer.fromJson<String>(json['entity']),
+      rowId: serializer.fromJson<String>(json['rowId']),
+      op: serializer.fromJson<String>(json['op']),
+      updatedMs: serializer.fromJson<int>(json['updatedMs']),
+      attemptCount: serializer.fromJson<int>(json['attemptCount']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entity': serializer.toJson<String>(entity),
+      'rowId': serializer.toJson<String>(rowId),
+      'op': serializer.toJson<String>(op),
+      'updatedMs': serializer.toJson<int>(updatedMs),
+      'attemptCount': serializer.toJson<int>(attemptCount),
+    };
+  }
+
+  SyncOutboxData copyWith({
+    String? entity,
+    String? rowId,
+    String? op,
+    int? updatedMs,
+    int? attemptCount,
+  }) => SyncOutboxData(
+    entity: entity ?? this.entity,
+    rowId: rowId ?? this.rowId,
+    op: op ?? this.op,
+    updatedMs: updatedMs ?? this.updatedMs,
+    attemptCount: attemptCount ?? this.attemptCount,
+  );
+  SyncOutboxData copyWithCompanion(SyncOutboxCompanion data) {
+    return SyncOutboxData(
+      entity: data.entity.present ? data.entity.value : this.entity,
+      rowId: data.rowId.present ? data.rowId.value : this.rowId,
+      op: data.op.present ? data.op.value : this.op,
+      updatedMs: data.updatedMs.present ? data.updatedMs.value : this.updatedMs,
+      attemptCount: data.attemptCount.present
+          ? data.attemptCount.value
+          : this.attemptCount,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncOutboxData(')
+          ..write('entity: $entity, ')
+          ..write('rowId: $rowId, ')
+          ..write('op: $op, ')
+          ..write('updatedMs: $updatedMs, ')
+          ..write('attemptCount: $attemptCount')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(entity, rowId, op, updatedMs, attemptCount);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncOutboxData &&
+          other.entity == this.entity &&
+          other.rowId == this.rowId &&
+          other.op == this.op &&
+          other.updatedMs == this.updatedMs &&
+          other.attemptCount == this.attemptCount);
+}
+
+class SyncOutboxCompanion extends UpdateCompanion<SyncOutboxData> {
+  final Value<String> entity;
+  final Value<String> rowId;
+  final Value<String> op;
+  final Value<int> updatedMs;
+  final Value<int> attemptCount;
+  final Value<int> rowid;
+  const SyncOutboxCompanion({
+    this.entity = const Value.absent(),
+    this.rowId = const Value.absent(),
+    this.op = const Value.absent(),
+    this.updatedMs = const Value.absent(),
+    this.attemptCount = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncOutboxCompanion.insert({
+    required String entity,
+    required String rowId,
+    required String op,
+    required int updatedMs,
+    this.attemptCount = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : entity = Value(entity),
+       rowId = Value(rowId),
+       op = Value(op),
+       updatedMs = Value(updatedMs);
+  static Insertable<SyncOutboxData> custom({
+    Expression<String>? entity,
+    Expression<String>? rowId,
+    Expression<String>? op,
+    Expression<int>? updatedMs,
+    Expression<int>? attemptCount,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entity != null) 'entity': entity,
+      if (rowId != null) 'row_id': rowId,
+      if (op != null) 'op': op,
+      if (updatedMs != null) 'updated_ms': updatedMs,
+      if (attemptCount != null) 'attempt_count': attemptCount,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncOutboxCompanion copyWith({
+    Value<String>? entity,
+    Value<String>? rowId,
+    Value<String>? op,
+    Value<int>? updatedMs,
+    Value<int>? attemptCount,
+    Value<int>? rowid,
+  }) {
+    return SyncOutboxCompanion(
+      entity: entity ?? this.entity,
+      rowId: rowId ?? this.rowId,
+      op: op ?? this.op,
+      updatedMs: updatedMs ?? this.updatedMs,
+      attemptCount: attemptCount ?? this.attemptCount,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entity.present) {
+      map['entity'] = Variable<String>(entity.value);
+    }
+    if (rowId.present) {
+      map['row_id'] = Variable<String>(rowId.value);
+    }
+    if (op.present) {
+      map['op'] = Variable<String>(op.value);
+    }
+    if (updatedMs.present) {
+      map['updated_ms'] = Variable<int>(updatedMs.value);
+    }
+    if (attemptCount.present) {
+      map['attempt_count'] = Variable<int>(attemptCount.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncOutboxCompanion(')
+          ..write('entity: $entity, ')
+          ..write('rowId: $rowId, ')
+          ..write('op: $op, ')
+          ..write('updatedMs: $updatedMs, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SyncMetaTable extends SyncMeta
+    with TableInfo<$SyncMetaTable, SyncMetaData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncMetaTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _entityMeta = const VerificationMeta('entity');
+  @override
+  late final GeneratedColumn<String> entity = GeneratedColumn<String>(
+    'entity',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastPulledMsMeta = const VerificationMeta(
+    'lastPulledMs',
+  );
+  @override
+  late final GeneratedColumn<int> lastPulledMs = GeneratedColumn<int>(
+    'last_pulled_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [entity, lastPulledMs];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_meta';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncMetaData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('entity')) {
+      context.handle(
+        _entityMeta,
+        entity.isAcceptableOrUnknown(data['entity']!, _entityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityMeta);
+    }
+    if (data.containsKey('last_pulled_ms')) {
+      context.handle(
+        _lastPulledMsMeta,
+        lastPulledMs.isAcceptableOrUnknown(
+          data['last_pulled_ms']!,
+          _lastPulledMsMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {entity};
+  @override
+  SyncMetaData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncMetaData(
+      entity: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity'],
+      )!,
+      lastPulledMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_pulled_ms'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncMetaTable createAlias(String alias) {
+    return $SyncMetaTable(attachedDatabase, alias);
+  }
+}
+
+class SyncMetaData extends DataClass implements Insertable<SyncMetaData> {
+  final String entity;
+  final int lastPulledMs;
+  const SyncMetaData({required this.entity, required this.lastPulledMs});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['entity'] = Variable<String>(entity);
+    map['last_pulled_ms'] = Variable<int>(lastPulledMs);
+    return map;
+  }
+
+  SyncMetaCompanion toCompanion(bool nullToAbsent) {
+    return SyncMetaCompanion(
+      entity: Value(entity),
+      lastPulledMs: Value(lastPulledMs),
+    );
+  }
+
+  factory SyncMetaData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncMetaData(
+      entity: serializer.fromJson<String>(json['entity']),
+      lastPulledMs: serializer.fromJson<int>(json['lastPulledMs']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'entity': serializer.toJson<String>(entity),
+      'lastPulledMs': serializer.toJson<int>(lastPulledMs),
+    };
+  }
+
+  SyncMetaData copyWith({String? entity, int? lastPulledMs}) => SyncMetaData(
+    entity: entity ?? this.entity,
+    lastPulledMs: lastPulledMs ?? this.lastPulledMs,
+  );
+  SyncMetaData copyWithCompanion(SyncMetaCompanion data) {
+    return SyncMetaData(
+      entity: data.entity.present ? data.entity.value : this.entity,
+      lastPulledMs: data.lastPulledMs.present
+          ? data.lastPulledMs.value
+          : this.lastPulledMs,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncMetaData(')
+          ..write('entity: $entity, ')
+          ..write('lastPulledMs: $lastPulledMs')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(entity, lastPulledMs);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncMetaData &&
+          other.entity == this.entity &&
+          other.lastPulledMs == this.lastPulledMs);
+}
+
+class SyncMetaCompanion extends UpdateCompanion<SyncMetaData> {
+  final Value<String> entity;
+  final Value<int> lastPulledMs;
+  final Value<int> rowid;
+  const SyncMetaCompanion({
+    this.entity = const Value.absent(),
+    this.lastPulledMs = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncMetaCompanion.insert({
+    required String entity,
+    this.lastPulledMs = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : entity = Value(entity);
+  static Insertable<SyncMetaData> custom({
+    Expression<String>? entity,
+    Expression<int>? lastPulledMs,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (entity != null) 'entity': entity,
+      if (lastPulledMs != null) 'last_pulled_ms': lastPulledMs,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncMetaCompanion copyWith({
+    Value<String>? entity,
+    Value<int>? lastPulledMs,
+    Value<int>? rowid,
+  }) {
+    return SyncMetaCompanion(
+      entity: entity ?? this.entity,
+      lastPulledMs: lastPulledMs ?? this.lastPulledMs,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (entity.present) {
+      map['entity'] = Variable<String>(entity.value);
+    }
+    if (lastPulledMs.present) {
+      map['last_pulled_ms'] = Variable<int>(lastPulledMs.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncMetaCompanion(')
+          ..write('entity: $entity, ')
+          ..write('lastPulledMs: $lastPulledMs, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SharedGroupsTable extends SharedGroups
+    with TableInfo<$SharedGroupsTable, SharedGroup> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SharedGroupsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _iconMeta = const VerificationMeta('icon');
+  @override
+  late final GeneratedColumn<String> icon = GeneratedColumn<String>(
+    'icon',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("📁"),
+  );
+  static const VerificationMeta _budgetEnabledMeta = const VerificationMeta(
+    'budgetEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> budgetEnabled = GeneratedColumn<bool>(
+    'budget_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("budget_enabled" IN (0, 1))',
+    ),
+    defaultValue: Constant(false),
+  );
+  static const VerificationMeta _budgetCentsMeta = const VerificationMeta(
+    'budgetCents',
+  );
+  @override
+  late final GeneratedColumn<int> budgetCents = GeneratedColumn<int>(
+    'budget_cents',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
+    'archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("archived" IN (0, 1))',
+    ),
+    defaultValue: Constant(false),
+  );
+  static const VerificationMeta _archivedAtMsMeta = const VerificationMeta(
+    'archivedAtMs',
+  );
+  @override
+  late final GeneratedColumn<int> archivedAtMs = GeneratedColumn<int>(
+    'archived_at_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    icon,
+    budgetEnabled,
+    budgetCents,
+    archived,
+    archivedAtMs,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shared_groups';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SharedGroup> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('icon')) {
+      context.handle(
+        _iconMeta,
+        icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
+      );
+    }
+    if (data.containsKey('budget_enabled')) {
+      context.handle(
+        _budgetEnabledMeta,
+        budgetEnabled.isAcceptableOrUnknown(
+          data['budget_enabled']!,
+          _budgetEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('budget_cents')) {
+      context.handle(
+        _budgetCentsMeta,
+        budgetCents.isAcceptableOrUnknown(
+          data['budget_cents']!,
+          _budgetCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
+      );
+    }
+    if (data.containsKey('archived_at_ms')) {
+      context.handle(
+        _archivedAtMsMeta,
+        archivedAtMs.isAcceptableOrUnknown(
+          data['archived_at_ms']!,
+          _archivedAtMsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SharedGroup map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SharedGroup(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      icon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon'],
+      )!,
+      budgetEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}budget_enabled'],
+      )!,
+      budgetCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}budget_cents'],
+      ),
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}archived'],
+      )!,
+      archivedAtMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}archived_at_ms'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SharedGroupsTable createAlias(String alias) {
+    return $SharedGroupsTable(attachedDatabase, alias);
+  }
+}
+
+class SharedGroup extends DataClass implements Insertable<SharedGroup> {
+  final String id;
+  final String name;
+  final String icon;
+  final bool budgetEnabled;
+  final int? budgetCents;
+  final bool archived;
+  final int? archivedAtMs;
+  final int createdAt;
+  final int updatedAt;
+  const SharedGroup({
+    required this.id,
+    required this.name,
+    required this.icon,
+    required this.budgetEnabled,
+    this.budgetCents,
+    required this.archived,
+    this.archivedAtMs,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['icon'] = Variable<String>(icon);
+    map['budget_enabled'] = Variable<bool>(budgetEnabled);
+    if (!nullToAbsent || budgetCents != null) {
+      map['budget_cents'] = Variable<int>(budgetCents);
+    }
+    map['archived'] = Variable<bool>(archived);
+    if (!nullToAbsent || archivedAtMs != null) {
+      map['archived_at_ms'] = Variable<int>(archivedAtMs);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SharedGroupsCompanion toCompanion(bool nullToAbsent) {
+    return SharedGroupsCompanion(
+      id: Value(id),
+      name: Value(name),
+      icon: Value(icon),
+      budgetEnabled: Value(budgetEnabled),
+      budgetCents: budgetCents == null && nullToAbsent
+          ? const Value.absent()
+          : Value(budgetCents),
+      archived: Value(archived),
+      archivedAtMs: archivedAtMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(archivedAtMs),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SharedGroup.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SharedGroup(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      icon: serializer.fromJson<String>(json['icon']),
+      budgetEnabled: serializer.fromJson<bool>(json['budgetEnabled']),
+      budgetCents: serializer.fromJson<int?>(json['budgetCents']),
+      archived: serializer.fromJson<bool>(json['archived']),
+      archivedAtMs: serializer.fromJson<int?>(json['archivedAtMs']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'icon': serializer.toJson<String>(icon),
+      'budgetEnabled': serializer.toJson<bool>(budgetEnabled),
+      'budgetCents': serializer.toJson<int?>(budgetCents),
+      'archived': serializer.toJson<bool>(archived),
+      'archivedAtMs': serializer.toJson<int?>(archivedAtMs),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SharedGroup copyWith({
+    String? id,
+    String? name,
+    String? icon,
+    bool? budgetEnabled,
+    Value<int?> budgetCents = const Value.absent(),
+    bool? archived,
+    Value<int?> archivedAtMs = const Value.absent(),
+    int? createdAt,
+    int? updatedAt,
+  }) => SharedGroup(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    icon: icon ?? this.icon,
+    budgetEnabled: budgetEnabled ?? this.budgetEnabled,
+    budgetCents: budgetCents.present ? budgetCents.value : this.budgetCents,
+    archived: archived ?? this.archived,
+    archivedAtMs: archivedAtMs.present ? archivedAtMs.value : this.archivedAtMs,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SharedGroup copyWithCompanion(SharedGroupsCompanion data) {
+    return SharedGroup(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      icon: data.icon.present ? data.icon.value : this.icon,
+      budgetEnabled: data.budgetEnabled.present
+          ? data.budgetEnabled.value
+          : this.budgetEnabled,
+      budgetCents: data.budgetCents.present
+          ? data.budgetCents.value
+          : this.budgetCents,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      archivedAtMs: data.archivedAtMs.present
+          ? data.archivedAtMs.value
+          : this.archivedAtMs,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedGroup(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('icon: $icon, ')
+          ..write('budgetEnabled: $budgetEnabled, ')
+          ..write('budgetCents: $budgetCents, ')
+          ..write('archived: $archived, ')
+          ..write('archivedAtMs: $archivedAtMs, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    icon,
+    budgetEnabled,
+    budgetCents,
+    archived,
+    archivedAtMs,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SharedGroup &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.icon == this.icon &&
+          other.budgetEnabled == this.budgetEnabled &&
+          other.budgetCents == this.budgetCents &&
+          other.archived == this.archived &&
+          other.archivedAtMs == this.archivedAtMs &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SharedGroupsCompanion extends UpdateCompanion<SharedGroup> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> icon;
+  final Value<bool> budgetEnabled;
+  final Value<int?> budgetCents;
+  final Value<bool> archived;
+  final Value<int?> archivedAtMs;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const SharedGroupsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.icon = const Value.absent(),
+    this.budgetEnabled = const Value.absent(),
+    this.budgetCents = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.archivedAtMs = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SharedGroupsCompanion.insert({
+    required String id,
+    required String name,
+    this.icon = const Value.absent(),
+    this.budgetEnabled = const Value.absent(),
+    this.budgetCents = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.archivedAtMs = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<SharedGroup> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? icon,
+    Expression<bool>? budgetEnabled,
+    Expression<int>? budgetCents,
+    Expression<bool>? archived,
+    Expression<int>? archivedAtMs,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (icon != null) 'icon': icon,
+      if (budgetEnabled != null) 'budget_enabled': budgetEnabled,
+      if (budgetCents != null) 'budget_cents': budgetCents,
+      if (archived != null) 'archived': archived,
+      if (archivedAtMs != null) 'archived_at_ms': archivedAtMs,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SharedGroupsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? icon,
+    Value<bool>? budgetEnabled,
+    Value<int?>? budgetCents,
+    Value<bool>? archived,
+    Value<int?>? archivedAtMs,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SharedGroupsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      budgetEnabled: budgetEnabled ?? this.budgetEnabled,
+      budgetCents: budgetCents ?? this.budgetCents,
+      archived: archived ?? this.archived,
+      archivedAtMs: archivedAtMs ?? this.archivedAtMs,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (icon.present) {
+      map['icon'] = Variable<String>(icon.value);
+    }
+    if (budgetEnabled.present) {
+      map['budget_enabled'] = Variable<bool>(budgetEnabled.value);
+    }
+    if (budgetCents.present) {
+      map['budget_cents'] = Variable<int>(budgetCents.value);
+    }
+    if (archived.present) {
+      map['archived'] = Variable<bool>(archived.value);
+    }
+    if (archivedAtMs.present) {
+      map['archived_at_ms'] = Variable<int>(archivedAtMs.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedGroupsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('icon: $icon, ')
+          ..write('budgetEnabled: $budgetEnabled, ')
+          ..write('budgetCents: $budgetCents, ')
+          ..write('archived: $archived, ')
+          ..write('archivedAtMs: $archivedAtMs, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SharedMembersTable extends SharedMembers
+    with TableInfo<$SharedMembersTable, SharedMember> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SharedMembersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _colorIndexMeta = const VerificationMeta(
+    'colorIndex',
+  );
+  @override
+  late final GeneratedColumn<int> colorIndex = GeneratedColumn<int>(
+    'color_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    groupId,
+    name,
+    colorIndex,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shared_members';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SharedMember> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('color_index')) {
+      context.handle(
+        _colorIndexMeta,
+        colorIndex.isAcceptableOrUnknown(data['color_index']!, _colorIndexMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SharedMember map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SharedMember(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      colorIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}color_index'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SharedMembersTable createAlias(String alias) {
+    return $SharedMembersTable(attachedDatabase, alias);
+  }
+}
+
+class SharedMember extends DataClass implements Insertable<SharedMember> {
+  final String id;
+  final String groupId;
+  final String name;
+  final int colorIndex;
+  final int createdAt;
+  const SharedMember({
+    required this.id,
+    required this.groupId,
+    required this.name,
+    required this.colorIndex,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['group_id'] = Variable<String>(groupId);
+    map['name'] = Variable<String>(name);
+    map['color_index'] = Variable<int>(colorIndex);
+    map['created_at'] = Variable<int>(createdAt);
+    return map;
+  }
+
+  SharedMembersCompanion toCompanion(bool nullToAbsent) {
+    return SharedMembersCompanion(
+      id: Value(id),
+      groupId: Value(groupId),
+      name: Value(name),
+      colorIndex: Value(colorIndex),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory SharedMember.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SharedMember(
+      id: serializer.fromJson<String>(json['id']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      name: serializer.fromJson<String>(json['name']),
+      colorIndex: serializer.fromJson<int>(json['colorIndex']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'groupId': serializer.toJson<String>(groupId),
+      'name': serializer.toJson<String>(name),
+      'colorIndex': serializer.toJson<int>(colorIndex),
+      'createdAt': serializer.toJson<int>(createdAt),
+    };
+  }
+
+  SharedMember copyWith({
+    String? id,
+    String? groupId,
+    String? name,
+    int? colorIndex,
+    int? createdAt,
+  }) => SharedMember(
+    id: id ?? this.id,
+    groupId: groupId ?? this.groupId,
+    name: name ?? this.name,
+    colorIndex: colorIndex ?? this.colorIndex,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  SharedMember copyWithCompanion(SharedMembersCompanion data) {
+    return SharedMember(
+      id: data.id.present ? data.id.value : this.id,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      name: data.name.present ? data.name.value : this.name,
+      colorIndex: data.colorIndex.present
+          ? data.colorIndex.value
+          : this.colorIndex,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedMember(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('name: $name, ')
+          ..write('colorIndex: $colorIndex, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, groupId, name, colorIndex, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SharedMember &&
+          other.id == this.id &&
+          other.groupId == this.groupId &&
+          other.name == this.name &&
+          other.colorIndex == this.colorIndex &&
+          other.createdAt == this.createdAt);
+}
+
+class SharedMembersCompanion extends UpdateCompanion<SharedMember> {
+  final Value<String> id;
+  final Value<String> groupId;
+  final Value<String> name;
+  final Value<int> colorIndex;
+  final Value<int> createdAt;
+  final Value<int> rowid;
+  const SharedMembersCompanion({
+    this.id = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.colorIndex = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SharedMembersCompanion.insert({
+    required String id,
+    required String groupId,
+    required String name,
+    this.colorIndex = const Value.absent(),
+    required int createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       groupId = Value(groupId),
+       name = Value(name),
+       createdAt = Value(createdAt);
+  static Insertable<SharedMember> custom({
+    Expression<String>? id,
+    Expression<String>? groupId,
+    Expression<String>? name,
+    Expression<int>? colorIndex,
+    Expression<int>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (groupId != null) 'group_id': groupId,
+      if (name != null) 'name': name,
+      if (colorIndex != null) 'color_index': colorIndex,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SharedMembersCompanion copyWith({
+    Value<String>? id,
+    Value<String>? groupId,
+    Value<String>? name,
+    Value<int>? colorIndex,
+    Value<int>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return SharedMembersCompanion(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      name: name ?? this.name,
+      colorIndex: colorIndex ?? this.colorIndex,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (colorIndex.present) {
+      map['color_index'] = Variable<int>(colorIndex.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedMembersCompanion(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('name: $name, ')
+          ..write('colorIndex: $colorIndex, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SharedExpensesTable extends SharedExpenses
+    with TableInfo<$SharedExpensesTable, SharedExpense> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SharedExpensesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateEpochDayMeta = const VerificationMeta(
+    'dateEpochDay',
+  );
+  @override
+  late final GeneratedColumn<int> dateEpochDay = GeneratedColumn<int>(
+    'date_epoch_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(0),
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _categoryKeyMeta = const VerificationMeta(
+    'categoryKey',
+  );
+  @override
+  late final GeneratedColumn<String> categoryKey = GeneratedColumn<String>(
+    'category_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("other"),
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("normal"),
+  );
+  static const VerificationMeta _amountCentsMeta = const VerificationMeta(
+    'amountCents',
+  );
+  @override
+  late final GeneratedColumn<int> amountCents = GeneratedColumn<int>(
+    'amount_cents',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(0),
+  );
+  static const VerificationMeta _currencyMeta = const VerificationMeta(
+    'currency',
+  );
+  @override
+  late final GeneratedColumn<String> currency = GeneratedColumn<String>(
+    'currency',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("CNY"),
+  );
+  static const VerificationMeta _rateMeta = const VerificationMeta('rate');
+  @override
+  late final GeneratedColumn<double> rate = GeneratedColumn<double>(
+    'rate',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: Constant(1.0),
+  );
+  static const VerificationMeta _amountForeignCentsMeta =
+      const VerificationMeta('amountForeignCents');
+  @override
+  late final GeneratedColumn<int> amountForeignCents = GeneratedColumn<int>(
+    'amount_foreign_cents',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _payersJsonMeta = const VerificationMeta(
+    'payersJson',
+  );
+  @override
+  late final GeneratedColumn<String> payersJson = GeneratedColumn<String>(
+    'payers_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("[]"),
+  );
+  static const VerificationMeta _sharesJsonMeta = const VerificationMeta(
+    'sharesJson',
+  );
+  @override
+  late final GeneratedColumn<String> sharesJson = GeneratedColumn<String>(
+    'shares_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("[]"),
+  );
+  static const VerificationMeta _shareModeMeta = const VerificationMeta(
+    'shareMode',
+  );
+  @override
+  late final GeneratedColumn<String> shareMode = GeneratedColumn<String>(
+    'share_mode',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("equal"),
+  );
+  static const VerificationMeta _portionsJsonMeta = const VerificationMeta(
+    'portionsJson',
+  );
+  @override
+  late final GeneratedColumn<String> portionsJson = GeneratedColumn<String>(
+    'portions_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _settledRoundIdMeta = const VerificationMeta(
+    'settledRoundId',
+  );
+  @override
+  late final GeneratedColumn<String> settledRoundId = GeneratedColumn<String>(
+    'settled_round_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tripIdMeta = const VerificationMeta('tripId');
+  @override
+  late final GeneratedColumn<String> tripId = GeneratedColumn<String>(
+    'trip_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tripItemIdMeta = const VerificationMeta(
+    'tripItemId',
+  );
+  @override
+  late final GeneratedColumn<String> tripItemId = GeneratedColumn<String>(
+    'trip_item_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    groupId,
+    dateEpochDay,
+    title,
+    categoryKey,
+    type,
+    amountCents,
+    currency,
+    rate,
+    amountForeignCents,
+    payersJson,
+    sharesJson,
+    shareMode,
+    portionsJson,
+    note,
+    settledRoundId,
+    tripId,
+    tripItemId,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shared_expenses';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SharedExpense> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('date_epoch_day')) {
+      context.handle(
+        _dateEpochDayMeta,
+        dateEpochDay.isAcceptableOrUnknown(
+          data['date_epoch_day']!,
+          _dateEpochDayMeta,
+        ),
+      );
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    }
+    if (data.containsKey('category_key')) {
+      context.handle(
+        _categoryKeyMeta,
+        categoryKey.isAcceptableOrUnknown(
+          data['category_key']!,
+          _categoryKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    }
+    if (data.containsKey('amount_cents')) {
+      context.handle(
+        _amountCentsMeta,
+        amountCents.isAcceptableOrUnknown(
+          data['amount_cents']!,
+          _amountCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('currency')) {
+      context.handle(
+        _currencyMeta,
+        currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta),
+      );
+    }
+    if (data.containsKey('rate')) {
+      context.handle(
+        _rateMeta,
+        rate.isAcceptableOrUnknown(data['rate']!, _rateMeta),
+      );
+    }
+    if (data.containsKey('amount_foreign_cents')) {
+      context.handle(
+        _amountForeignCentsMeta,
+        amountForeignCents.isAcceptableOrUnknown(
+          data['amount_foreign_cents']!,
+          _amountForeignCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('payers_json')) {
+      context.handle(
+        _payersJsonMeta,
+        payersJson.isAcceptableOrUnknown(data['payers_json']!, _payersJsonMeta),
+      );
+    }
+    if (data.containsKey('shares_json')) {
+      context.handle(
+        _sharesJsonMeta,
+        sharesJson.isAcceptableOrUnknown(data['shares_json']!, _sharesJsonMeta),
+      );
+    }
+    if (data.containsKey('share_mode')) {
+      context.handle(
+        _shareModeMeta,
+        shareMode.isAcceptableOrUnknown(data['share_mode']!, _shareModeMeta),
+      );
+    }
+    if (data.containsKey('portions_json')) {
+      context.handle(
+        _portionsJsonMeta,
+        portionsJson.isAcceptableOrUnknown(
+          data['portions_json']!,
+          _portionsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('settled_round_id')) {
+      context.handle(
+        _settledRoundIdMeta,
+        settledRoundId.isAcceptableOrUnknown(
+          data['settled_round_id']!,
+          _settledRoundIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('trip_id')) {
+      context.handle(
+        _tripIdMeta,
+        tripId.isAcceptableOrUnknown(data['trip_id']!, _tripIdMeta),
+      );
+    }
+    if (data.containsKey('trip_item_id')) {
+      context.handle(
+        _tripItemIdMeta,
+        tripItemId.isAcceptableOrUnknown(
+          data['trip_item_id']!,
+          _tripItemIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SharedExpense map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SharedExpense(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      dateEpochDay: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}date_epoch_day'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      categoryKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category_key'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      amountCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}amount_cents'],
+      )!,
+      currency: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}currency'],
+      )!,
+      rate: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rate'],
+      )!,
+      amountForeignCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}amount_foreign_cents'],
+      ),
+      payersJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payers_json'],
+      )!,
+      sharesJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}shares_json'],
+      )!,
+      shareMode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}share_mode'],
+      )!,
+      portionsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}portions_json'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      )!,
+      settledRoundId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}settled_round_id'],
+      ),
+      tripId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trip_id'],
+      ),
+      tripItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trip_item_id'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SharedExpensesTable createAlias(String alias) {
+    return $SharedExpensesTable(attachedDatabase, alias);
+  }
+}
+
+class SharedExpense extends DataClass implements Insertable<SharedExpense> {
+  final String id;
+  final String groupId;
+  final int dateEpochDay;
+  final String title;
+  final String categoryKey;
+  final String type;
+  final int amountCents;
+  final String currency;
+  final double rate;
+  final int? amountForeignCents;
+  final String payersJson;
+  final String sharesJson;
+  final String shareMode;
+  final String? portionsJson;
+  final String note;
+  final String? settledRoundId;
+  final String? tripId;
+  final String? tripItemId;
+  final int createdAt;
+  const SharedExpense({
+    required this.id,
+    required this.groupId,
+    required this.dateEpochDay,
+    required this.title,
+    required this.categoryKey,
+    required this.type,
+    required this.amountCents,
+    required this.currency,
+    required this.rate,
+    this.amountForeignCents,
+    required this.payersJson,
+    required this.sharesJson,
+    required this.shareMode,
+    this.portionsJson,
+    required this.note,
+    this.settledRoundId,
+    this.tripId,
+    this.tripItemId,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['group_id'] = Variable<String>(groupId);
+    map['date_epoch_day'] = Variable<int>(dateEpochDay);
+    map['title'] = Variable<String>(title);
+    map['category_key'] = Variable<String>(categoryKey);
+    map['type'] = Variable<String>(type);
+    map['amount_cents'] = Variable<int>(amountCents);
+    map['currency'] = Variable<String>(currency);
+    map['rate'] = Variable<double>(rate);
+    if (!nullToAbsent || amountForeignCents != null) {
+      map['amount_foreign_cents'] = Variable<int>(amountForeignCents);
+    }
+    map['payers_json'] = Variable<String>(payersJson);
+    map['shares_json'] = Variable<String>(sharesJson);
+    map['share_mode'] = Variable<String>(shareMode);
+    if (!nullToAbsent || portionsJson != null) {
+      map['portions_json'] = Variable<String>(portionsJson);
+    }
+    map['note'] = Variable<String>(note);
+    if (!nullToAbsent || settledRoundId != null) {
+      map['settled_round_id'] = Variable<String>(settledRoundId);
+    }
+    if (!nullToAbsent || tripId != null) {
+      map['trip_id'] = Variable<String>(tripId);
+    }
+    if (!nullToAbsent || tripItemId != null) {
+      map['trip_item_id'] = Variable<String>(tripItemId);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    return map;
+  }
+
+  SharedExpensesCompanion toCompanion(bool nullToAbsent) {
+    return SharedExpensesCompanion(
+      id: Value(id),
+      groupId: Value(groupId),
+      dateEpochDay: Value(dateEpochDay),
+      title: Value(title),
+      categoryKey: Value(categoryKey),
+      type: Value(type),
+      amountCents: Value(amountCents),
+      currency: Value(currency),
+      rate: Value(rate),
+      amountForeignCents: amountForeignCents == null && nullToAbsent
+          ? const Value.absent()
+          : Value(amountForeignCents),
+      payersJson: Value(payersJson),
+      sharesJson: Value(sharesJson),
+      shareMode: Value(shareMode),
+      portionsJson: portionsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(portionsJson),
+      note: Value(note),
+      settledRoundId: settledRoundId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(settledRoundId),
+      tripId: tripId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tripId),
+      tripItemId: tripItemId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tripItemId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory SharedExpense.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SharedExpense(
+      id: serializer.fromJson<String>(json['id']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      dateEpochDay: serializer.fromJson<int>(json['dateEpochDay']),
+      title: serializer.fromJson<String>(json['title']),
+      categoryKey: serializer.fromJson<String>(json['categoryKey']),
+      type: serializer.fromJson<String>(json['type']),
+      amountCents: serializer.fromJson<int>(json['amountCents']),
+      currency: serializer.fromJson<String>(json['currency']),
+      rate: serializer.fromJson<double>(json['rate']),
+      amountForeignCents: serializer.fromJson<int?>(json['amountForeignCents']),
+      payersJson: serializer.fromJson<String>(json['payersJson']),
+      sharesJson: serializer.fromJson<String>(json['sharesJson']),
+      shareMode: serializer.fromJson<String>(json['shareMode']),
+      portionsJson: serializer.fromJson<String?>(json['portionsJson']),
+      note: serializer.fromJson<String>(json['note']),
+      settledRoundId: serializer.fromJson<String?>(json['settledRoundId']),
+      tripId: serializer.fromJson<String?>(json['tripId']),
+      tripItemId: serializer.fromJson<String?>(json['tripItemId']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'groupId': serializer.toJson<String>(groupId),
+      'dateEpochDay': serializer.toJson<int>(dateEpochDay),
+      'title': serializer.toJson<String>(title),
+      'categoryKey': serializer.toJson<String>(categoryKey),
+      'type': serializer.toJson<String>(type),
+      'amountCents': serializer.toJson<int>(amountCents),
+      'currency': serializer.toJson<String>(currency),
+      'rate': serializer.toJson<double>(rate),
+      'amountForeignCents': serializer.toJson<int?>(amountForeignCents),
+      'payersJson': serializer.toJson<String>(payersJson),
+      'sharesJson': serializer.toJson<String>(sharesJson),
+      'shareMode': serializer.toJson<String>(shareMode),
+      'portionsJson': serializer.toJson<String?>(portionsJson),
+      'note': serializer.toJson<String>(note),
+      'settledRoundId': serializer.toJson<String?>(settledRoundId),
+      'tripId': serializer.toJson<String?>(tripId),
+      'tripItemId': serializer.toJson<String?>(tripItemId),
+      'createdAt': serializer.toJson<int>(createdAt),
+    };
+  }
+
+  SharedExpense copyWith({
+    String? id,
+    String? groupId,
+    int? dateEpochDay,
+    String? title,
+    String? categoryKey,
+    String? type,
+    int? amountCents,
+    String? currency,
+    double? rate,
+    Value<int?> amountForeignCents = const Value.absent(),
+    String? payersJson,
+    String? sharesJson,
+    String? shareMode,
+    Value<String?> portionsJson = const Value.absent(),
+    String? note,
+    Value<String?> settledRoundId = const Value.absent(),
+    Value<String?> tripId = const Value.absent(),
+    Value<String?> tripItemId = const Value.absent(),
+    int? createdAt,
+  }) => SharedExpense(
+    id: id ?? this.id,
+    groupId: groupId ?? this.groupId,
+    dateEpochDay: dateEpochDay ?? this.dateEpochDay,
+    title: title ?? this.title,
+    categoryKey: categoryKey ?? this.categoryKey,
+    type: type ?? this.type,
+    amountCents: amountCents ?? this.amountCents,
+    currency: currency ?? this.currency,
+    rate: rate ?? this.rate,
+    amountForeignCents: amountForeignCents.present
+        ? amountForeignCents.value
+        : this.amountForeignCents,
+    payersJson: payersJson ?? this.payersJson,
+    sharesJson: sharesJson ?? this.sharesJson,
+    shareMode: shareMode ?? this.shareMode,
+    portionsJson: portionsJson.present ? portionsJson.value : this.portionsJson,
+    note: note ?? this.note,
+    settledRoundId: settledRoundId.present
+        ? settledRoundId.value
+        : this.settledRoundId,
+    tripId: tripId.present ? tripId.value : this.tripId,
+    tripItemId: tripItemId.present ? tripItemId.value : this.tripItemId,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  SharedExpense copyWithCompanion(SharedExpensesCompanion data) {
+    return SharedExpense(
+      id: data.id.present ? data.id.value : this.id,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      dateEpochDay: data.dateEpochDay.present
+          ? data.dateEpochDay.value
+          : this.dateEpochDay,
+      title: data.title.present ? data.title.value : this.title,
+      categoryKey: data.categoryKey.present
+          ? data.categoryKey.value
+          : this.categoryKey,
+      type: data.type.present ? data.type.value : this.type,
+      amountCents: data.amountCents.present
+          ? data.amountCents.value
+          : this.amountCents,
+      currency: data.currency.present ? data.currency.value : this.currency,
+      rate: data.rate.present ? data.rate.value : this.rate,
+      amountForeignCents: data.amountForeignCents.present
+          ? data.amountForeignCents.value
+          : this.amountForeignCents,
+      payersJson: data.payersJson.present
+          ? data.payersJson.value
+          : this.payersJson,
+      sharesJson: data.sharesJson.present
+          ? data.sharesJson.value
+          : this.sharesJson,
+      shareMode: data.shareMode.present ? data.shareMode.value : this.shareMode,
+      portionsJson: data.portionsJson.present
+          ? data.portionsJson.value
+          : this.portionsJson,
+      note: data.note.present ? data.note.value : this.note,
+      settledRoundId: data.settledRoundId.present
+          ? data.settledRoundId.value
+          : this.settledRoundId,
+      tripId: data.tripId.present ? data.tripId.value : this.tripId,
+      tripItemId: data.tripItemId.present
+          ? data.tripItemId.value
+          : this.tripItemId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedExpense(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('dateEpochDay: $dateEpochDay, ')
+          ..write('title: $title, ')
+          ..write('categoryKey: $categoryKey, ')
+          ..write('type: $type, ')
+          ..write('amountCents: $amountCents, ')
+          ..write('currency: $currency, ')
+          ..write('rate: $rate, ')
+          ..write('amountForeignCents: $amountForeignCents, ')
+          ..write('payersJson: $payersJson, ')
+          ..write('sharesJson: $sharesJson, ')
+          ..write('shareMode: $shareMode, ')
+          ..write('portionsJson: $portionsJson, ')
+          ..write('note: $note, ')
+          ..write('settledRoundId: $settledRoundId, ')
+          ..write('tripId: $tripId, ')
+          ..write('tripItemId: $tripItemId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    groupId,
+    dateEpochDay,
+    title,
+    categoryKey,
+    type,
+    amountCents,
+    currency,
+    rate,
+    amountForeignCents,
+    payersJson,
+    sharesJson,
+    shareMode,
+    portionsJson,
+    note,
+    settledRoundId,
+    tripId,
+    tripItemId,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SharedExpense &&
+          other.id == this.id &&
+          other.groupId == this.groupId &&
+          other.dateEpochDay == this.dateEpochDay &&
+          other.title == this.title &&
+          other.categoryKey == this.categoryKey &&
+          other.type == this.type &&
+          other.amountCents == this.amountCents &&
+          other.currency == this.currency &&
+          other.rate == this.rate &&
+          other.amountForeignCents == this.amountForeignCents &&
+          other.payersJson == this.payersJson &&
+          other.sharesJson == this.sharesJson &&
+          other.shareMode == this.shareMode &&
+          other.portionsJson == this.portionsJson &&
+          other.note == this.note &&
+          other.settledRoundId == this.settledRoundId &&
+          other.tripId == this.tripId &&
+          other.tripItemId == this.tripItemId &&
+          other.createdAt == this.createdAt);
+}
+
+class SharedExpensesCompanion extends UpdateCompanion<SharedExpense> {
+  final Value<String> id;
+  final Value<String> groupId;
+  final Value<int> dateEpochDay;
+  final Value<String> title;
+  final Value<String> categoryKey;
+  final Value<String> type;
+  final Value<int> amountCents;
+  final Value<String> currency;
+  final Value<double> rate;
+  final Value<int?> amountForeignCents;
+  final Value<String> payersJson;
+  final Value<String> sharesJson;
+  final Value<String> shareMode;
+  final Value<String?> portionsJson;
+  final Value<String> note;
+  final Value<String?> settledRoundId;
+  final Value<String?> tripId;
+  final Value<String?> tripItemId;
+  final Value<int> createdAt;
+  final Value<int> rowid;
+  const SharedExpensesCompanion({
+    this.id = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.dateEpochDay = const Value.absent(),
+    this.title = const Value.absent(),
+    this.categoryKey = const Value.absent(),
+    this.type = const Value.absent(),
+    this.amountCents = const Value.absent(),
+    this.currency = const Value.absent(),
+    this.rate = const Value.absent(),
+    this.amountForeignCents = const Value.absent(),
+    this.payersJson = const Value.absent(),
+    this.sharesJson = const Value.absent(),
+    this.shareMode = const Value.absent(),
+    this.portionsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    this.settledRoundId = const Value.absent(),
+    this.tripId = const Value.absent(),
+    this.tripItemId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SharedExpensesCompanion.insert({
+    required String id,
+    required String groupId,
+    this.dateEpochDay = const Value.absent(),
+    this.title = const Value.absent(),
+    this.categoryKey = const Value.absent(),
+    this.type = const Value.absent(),
+    this.amountCents = const Value.absent(),
+    this.currency = const Value.absent(),
+    this.rate = const Value.absent(),
+    this.amountForeignCents = const Value.absent(),
+    this.payersJson = const Value.absent(),
+    this.sharesJson = const Value.absent(),
+    this.shareMode = const Value.absent(),
+    this.portionsJson = const Value.absent(),
+    this.note = const Value.absent(),
+    this.settledRoundId = const Value.absent(),
+    this.tripId = const Value.absent(),
+    this.tripItemId = const Value.absent(),
+    required int createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       groupId = Value(groupId),
+       createdAt = Value(createdAt);
+  static Insertable<SharedExpense> custom({
+    Expression<String>? id,
+    Expression<String>? groupId,
+    Expression<int>? dateEpochDay,
+    Expression<String>? title,
+    Expression<String>? categoryKey,
+    Expression<String>? type,
+    Expression<int>? amountCents,
+    Expression<String>? currency,
+    Expression<double>? rate,
+    Expression<int>? amountForeignCents,
+    Expression<String>? payersJson,
+    Expression<String>? sharesJson,
+    Expression<String>? shareMode,
+    Expression<String>? portionsJson,
+    Expression<String>? note,
+    Expression<String>? settledRoundId,
+    Expression<String>? tripId,
+    Expression<String>? tripItemId,
+    Expression<int>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (groupId != null) 'group_id': groupId,
+      if (dateEpochDay != null) 'date_epoch_day': dateEpochDay,
+      if (title != null) 'title': title,
+      if (categoryKey != null) 'category_key': categoryKey,
+      if (type != null) 'type': type,
+      if (amountCents != null) 'amount_cents': amountCents,
+      if (currency != null) 'currency': currency,
+      if (rate != null) 'rate': rate,
+      if (amountForeignCents != null)
+        'amount_foreign_cents': amountForeignCents,
+      if (payersJson != null) 'payers_json': payersJson,
+      if (sharesJson != null) 'shares_json': sharesJson,
+      if (shareMode != null) 'share_mode': shareMode,
+      if (portionsJson != null) 'portions_json': portionsJson,
+      if (note != null) 'note': note,
+      if (settledRoundId != null) 'settled_round_id': settledRoundId,
+      if (tripId != null) 'trip_id': tripId,
+      if (tripItemId != null) 'trip_item_id': tripItemId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SharedExpensesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? groupId,
+    Value<int>? dateEpochDay,
+    Value<String>? title,
+    Value<String>? categoryKey,
+    Value<String>? type,
+    Value<int>? amountCents,
+    Value<String>? currency,
+    Value<double>? rate,
+    Value<int?>? amountForeignCents,
+    Value<String>? payersJson,
+    Value<String>? sharesJson,
+    Value<String>? shareMode,
+    Value<String?>? portionsJson,
+    Value<String>? note,
+    Value<String?>? settledRoundId,
+    Value<String?>? tripId,
+    Value<String?>? tripItemId,
+    Value<int>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return SharedExpensesCompanion(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      dateEpochDay: dateEpochDay ?? this.dateEpochDay,
+      title: title ?? this.title,
+      categoryKey: categoryKey ?? this.categoryKey,
+      type: type ?? this.type,
+      amountCents: amountCents ?? this.amountCents,
+      currency: currency ?? this.currency,
+      rate: rate ?? this.rate,
+      amountForeignCents: amountForeignCents ?? this.amountForeignCents,
+      payersJson: payersJson ?? this.payersJson,
+      sharesJson: sharesJson ?? this.sharesJson,
+      shareMode: shareMode ?? this.shareMode,
+      portionsJson: portionsJson ?? this.portionsJson,
+      note: note ?? this.note,
+      settledRoundId: settledRoundId ?? this.settledRoundId,
+      tripId: tripId ?? this.tripId,
+      tripItemId: tripItemId ?? this.tripItemId,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (dateEpochDay.present) {
+      map['date_epoch_day'] = Variable<int>(dateEpochDay.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (categoryKey.present) {
+      map['category_key'] = Variable<String>(categoryKey.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (amountCents.present) {
+      map['amount_cents'] = Variable<int>(amountCents.value);
+    }
+    if (currency.present) {
+      map['currency'] = Variable<String>(currency.value);
+    }
+    if (rate.present) {
+      map['rate'] = Variable<double>(rate.value);
+    }
+    if (amountForeignCents.present) {
+      map['amount_foreign_cents'] = Variable<int>(amountForeignCents.value);
+    }
+    if (payersJson.present) {
+      map['payers_json'] = Variable<String>(payersJson.value);
+    }
+    if (sharesJson.present) {
+      map['shares_json'] = Variable<String>(sharesJson.value);
+    }
+    if (shareMode.present) {
+      map['share_mode'] = Variable<String>(shareMode.value);
+    }
+    if (portionsJson.present) {
+      map['portions_json'] = Variable<String>(portionsJson.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (settledRoundId.present) {
+      map['settled_round_id'] = Variable<String>(settledRoundId.value);
+    }
+    if (tripId.present) {
+      map['trip_id'] = Variable<String>(tripId.value);
+    }
+    if (tripItemId.present) {
+      map['trip_item_id'] = Variable<String>(tripItemId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedExpensesCompanion(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('dateEpochDay: $dateEpochDay, ')
+          ..write('title: $title, ')
+          ..write('categoryKey: $categoryKey, ')
+          ..write('type: $type, ')
+          ..write('amountCents: $amountCents, ')
+          ..write('currency: $currency, ')
+          ..write('rate: $rate, ')
+          ..write('amountForeignCents: $amountForeignCents, ')
+          ..write('payersJson: $payersJson, ')
+          ..write('sharesJson: $sharesJson, ')
+          ..write('shareMode: $shareMode, ')
+          ..write('portionsJson: $portionsJson, ')
+          ..write('note: $note, ')
+          ..write('settledRoundId: $settledRoundId, ')
+          ..write('tripId: $tripId, ')
+          ..write('tripItemId: $tripItemId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SharedSettlementsTable extends SharedSettlements
+    with TableInfo<$SharedSettlementsTable, SharedSettlement> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SharedSettlementsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("active"),
+  );
+  static const VerificationMeta _transfersJsonMeta = const VerificationMeta(
+    'transfersJson',
+  );
+  @override
+  late final GeneratedColumn<String> transfersJson = GeneratedColumn<String>(
+    'transfers_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("[]"),
+  );
+  static const VerificationMeta _expenseIdsJsonMeta = const VerificationMeta(
+    'expenseIdsJson',
+  );
+  @override
+  late final GeneratedColumn<String> expenseIdsJson = GeneratedColumn<String>(
+    'expense_ids_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("[]"),
+  );
+  static const VerificationMeta _roundNoMeta = const VerificationMeta(
+    'roundNo',
+  );
+  @override
+  late final GeneratedColumn<int> roundNo = GeneratedColumn<int>(
+    'round_no',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(1),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _completedAtMeta = const VerificationMeta(
+    'completedAt',
+  );
+  @override
+  late final GeneratedColumn<int> completedAt = GeneratedColumn<int>(
+    'completed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    groupId,
+    status,
+    transfersJson,
+    expenseIdsJson,
+    roundNo,
+    createdAt,
+    completedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shared_settlements';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SharedSettlement> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('transfers_json')) {
+      context.handle(
+        _transfersJsonMeta,
+        transfersJson.isAcceptableOrUnknown(
+          data['transfers_json']!,
+          _transfersJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('expense_ids_json')) {
+      context.handle(
+        _expenseIdsJsonMeta,
+        expenseIdsJson.isAcceptableOrUnknown(
+          data['expense_ids_json']!,
+          _expenseIdsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('round_no')) {
+      context.handle(
+        _roundNoMeta,
+        roundNo.isAcceptableOrUnknown(data['round_no']!, _roundNoMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('completed_at')) {
+      context.handle(
+        _completedAtMeta,
+        completedAt.isAcceptableOrUnknown(
+          data['completed_at']!,
+          _completedAtMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SharedSettlement map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SharedSettlement(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      transfersJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}transfers_json'],
+      )!,
+      expenseIdsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}expense_ids_json'],
+      )!,
+      roundNo: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}round_no'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      completedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}completed_at'],
+      ),
+    );
+  }
+
+  @override
+  $SharedSettlementsTable createAlias(String alias) {
+    return $SharedSettlementsTable(attachedDatabase, alias);
+  }
+}
+
+class SharedSettlement extends DataClass
+    implements Insertable<SharedSettlement> {
+  final String id;
+  final String groupId;
+  final String status;
+  final String transfersJson;
+  final String expenseIdsJson;
+  final int roundNo;
+  final int createdAt;
+  final int? completedAt;
+  const SharedSettlement({
+    required this.id,
+    required this.groupId,
+    required this.status,
+    required this.transfersJson,
+    required this.expenseIdsJson,
+    required this.roundNo,
+    required this.createdAt,
+    this.completedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['group_id'] = Variable<String>(groupId);
+    map['status'] = Variable<String>(status);
+    map['transfers_json'] = Variable<String>(transfersJson);
+    map['expense_ids_json'] = Variable<String>(expenseIdsJson);
+    map['round_no'] = Variable<int>(roundNo);
+    map['created_at'] = Variable<int>(createdAt);
+    if (!nullToAbsent || completedAt != null) {
+      map['completed_at'] = Variable<int>(completedAt);
+    }
+    return map;
+  }
+
+  SharedSettlementsCompanion toCompanion(bool nullToAbsent) {
+    return SharedSettlementsCompanion(
+      id: Value(id),
+      groupId: Value(groupId),
+      status: Value(status),
+      transfersJson: Value(transfersJson),
+      expenseIdsJson: Value(expenseIdsJson),
+      roundNo: Value(roundNo),
+      createdAt: Value(createdAt),
+      completedAt: completedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(completedAt),
+    );
+  }
+
+  factory SharedSettlement.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SharedSettlement(
+      id: serializer.fromJson<String>(json['id']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      status: serializer.fromJson<String>(json['status']),
+      transfersJson: serializer.fromJson<String>(json['transfersJson']),
+      expenseIdsJson: serializer.fromJson<String>(json['expenseIdsJson']),
+      roundNo: serializer.fromJson<int>(json['roundNo']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      completedAt: serializer.fromJson<int?>(json['completedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'groupId': serializer.toJson<String>(groupId),
+      'status': serializer.toJson<String>(status),
+      'transfersJson': serializer.toJson<String>(transfersJson),
+      'expenseIdsJson': serializer.toJson<String>(expenseIdsJson),
+      'roundNo': serializer.toJson<int>(roundNo),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'completedAt': serializer.toJson<int?>(completedAt),
+    };
+  }
+
+  SharedSettlement copyWith({
+    String? id,
+    String? groupId,
+    String? status,
+    String? transfersJson,
+    String? expenseIdsJson,
+    int? roundNo,
+    int? createdAt,
+    Value<int?> completedAt = const Value.absent(),
+  }) => SharedSettlement(
+    id: id ?? this.id,
+    groupId: groupId ?? this.groupId,
+    status: status ?? this.status,
+    transfersJson: transfersJson ?? this.transfersJson,
+    expenseIdsJson: expenseIdsJson ?? this.expenseIdsJson,
+    roundNo: roundNo ?? this.roundNo,
+    createdAt: createdAt ?? this.createdAt,
+    completedAt: completedAt.present ? completedAt.value : this.completedAt,
+  );
+  SharedSettlement copyWithCompanion(SharedSettlementsCompanion data) {
+    return SharedSettlement(
+      id: data.id.present ? data.id.value : this.id,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      status: data.status.present ? data.status.value : this.status,
+      transfersJson: data.transfersJson.present
+          ? data.transfersJson.value
+          : this.transfersJson,
+      expenseIdsJson: data.expenseIdsJson.present
+          ? data.expenseIdsJson.value
+          : this.expenseIdsJson,
+      roundNo: data.roundNo.present ? data.roundNo.value : this.roundNo,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      completedAt: data.completedAt.present
+          ? data.completedAt.value
+          : this.completedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedSettlement(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('status: $status, ')
+          ..write('transfersJson: $transfersJson, ')
+          ..write('expenseIdsJson: $expenseIdsJson, ')
+          ..write('roundNo: $roundNo, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('completedAt: $completedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    groupId,
+    status,
+    transfersJson,
+    expenseIdsJson,
+    roundNo,
+    createdAt,
+    completedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SharedSettlement &&
+          other.id == this.id &&
+          other.groupId == this.groupId &&
+          other.status == this.status &&
+          other.transfersJson == this.transfersJson &&
+          other.expenseIdsJson == this.expenseIdsJson &&
+          other.roundNo == this.roundNo &&
+          other.createdAt == this.createdAt &&
+          other.completedAt == this.completedAt);
+}
+
+class SharedSettlementsCompanion extends UpdateCompanion<SharedSettlement> {
+  final Value<String> id;
+  final Value<String> groupId;
+  final Value<String> status;
+  final Value<String> transfersJson;
+  final Value<String> expenseIdsJson;
+  final Value<int> roundNo;
+  final Value<int> createdAt;
+  final Value<int?> completedAt;
+  final Value<int> rowid;
+  const SharedSettlementsCompanion({
+    this.id = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.status = const Value.absent(),
+    this.transfersJson = const Value.absent(),
+    this.expenseIdsJson = const Value.absent(),
+    this.roundNo = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.completedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SharedSettlementsCompanion.insert({
+    required String id,
+    required String groupId,
+    this.status = const Value.absent(),
+    this.transfersJson = const Value.absent(),
+    this.expenseIdsJson = const Value.absent(),
+    this.roundNo = const Value.absent(),
+    required int createdAt,
+    this.completedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       groupId = Value(groupId),
+       createdAt = Value(createdAt);
+  static Insertable<SharedSettlement> custom({
+    Expression<String>? id,
+    Expression<String>? groupId,
+    Expression<String>? status,
+    Expression<String>? transfersJson,
+    Expression<String>? expenseIdsJson,
+    Expression<int>? roundNo,
+    Expression<int>? createdAt,
+    Expression<int>? completedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (groupId != null) 'group_id': groupId,
+      if (status != null) 'status': status,
+      if (transfersJson != null) 'transfers_json': transfersJson,
+      if (expenseIdsJson != null) 'expense_ids_json': expenseIdsJson,
+      if (roundNo != null) 'round_no': roundNo,
+      if (createdAt != null) 'created_at': createdAt,
+      if (completedAt != null) 'completed_at': completedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SharedSettlementsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? groupId,
+    Value<String>? status,
+    Value<String>? transfersJson,
+    Value<String>? expenseIdsJson,
+    Value<int>? roundNo,
+    Value<int>? createdAt,
+    Value<int?>? completedAt,
+    Value<int>? rowid,
+  }) {
+    return SharedSettlementsCompanion(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      status: status ?? this.status,
+      transfersJson: transfersJson ?? this.transfersJson,
+      expenseIdsJson: expenseIdsJson ?? this.expenseIdsJson,
+      roundNo: roundNo ?? this.roundNo,
+      createdAt: createdAt ?? this.createdAt,
+      completedAt: completedAt ?? this.completedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (transfersJson.present) {
+      map['transfers_json'] = Variable<String>(transfersJson.value);
+    }
+    if (expenseIdsJson.present) {
+      map['expense_ids_json'] = Variable<String>(expenseIdsJson.value);
+    }
+    if (roundNo.present) {
+      map['round_no'] = Variable<int>(roundNo.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (completedAt.present) {
+      map['completed_at'] = Variable<int>(completedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedSettlementsCompanion(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('status: $status, ')
+          ..write('transfersJson: $transfersJson, ')
+          ..write('expenseIdsJson: $expenseIdsJson, ')
+          ..write('roundNo: $roundNo, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('completedAt: $completedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5711,6 +8798,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ExpensesTable expenses = $ExpensesTable(this);
   late final $SettlementsTable settlements = $SettlementsTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
+  late final $SyncOutboxTable syncOutbox = $SyncOutboxTable(this);
+  late final $SyncMetaTable syncMeta = $SyncMetaTable(this);
+  late final $SharedGroupsTable sharedGroups = $SharedGroupsTable(this);
+  late final $SharedMembersTable sharedMembers = $SharedMembersTable(this);
+  late final $SharedExpensesTable sharedExpenses = $SharedExpensesTable(this);
+  late final $SharedSettlementsTable sharedSettlements =
+      $SharedSettlementsTable(this);
   late final TripsDao tripsDao = TripsDao(this as AppDatabase);
   late final GroupsDao groupsDao = GroupsDao(this as AppDatabase);
   late final ExpensesDao expensesDao = ExpensesDao(this as AppDatabase);
@@ -5731,6 +8825,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     expenses,
     settlements,
     categories,
+    syncOutbox,
+    syncMeta,
+    sharedGroups,
+    sharedMembers,
+    sharedExpenses,
+    sharedSettlements,
   ];
 }
 
@@ -6203,8 +9303,10 @@ class $$GroupsTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$GroupsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$GroupsTable, Group>(table),
+                  $$GroupsTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback:
@@ -6557,7 +9659,7 @@ class $$MembersTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$MembersTable, Member>(table),
                   $$MembersTableReferences(db, table, e),
                 ),
               )
@@ -7071,8 +10173,10 @@ class $$TripsTableTableManager
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$TripsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable<$TripsTable, Trip>(table),
+                  $$TripsTableReferences(db, table, e),
+                ),
               )
               .toList(),
           prefetchHooksCallback:
@@ -7806,7 +10910,7 @@ class $$TripItemsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$TripItemsTable, TripItem>(table),
                   $$TripItemsTableReferences(db, table, e),
                 ),
               )
@@ -8123,7 +11227,7 @@ class $$AlbumPhotosTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$AlbumPhotosTable, AlbumPhoto>(table),
                   $$AlbumPhotosTableReferences(db, table, e),
                 ),
               )
@@ -8401,7 +11505,16 @@ class $$ChecklistItemsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$ChecklistItemsTable, ChecklistItem>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ChecklistItemsTable,
+                    ChecklistItem
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -8960,7 +12073,7 @@ class $$ExpensesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$ExpensesTable, Expense>(table),
                   $$ExpensesTableReferences(db, table, e),
                 ),
               )
@@ -9338,7 +12451,7 @@ class $$SettlementsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$SettlementsTable, Settlement>(table),
                   $$SettlementsTableReferences(db, table, e),
                 ),
               )
@@ -9552,7 +12665,16 @@ class $$CategoriesTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$CategoriesTable, Category>(table),
+                  BaseReferences<_$AppDatabase, $CategoriesTable, Category>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -9571,6 +12693,1649 @@ typedef $$CategoriesTableProcessedTableManager =
       $$CategoriesTableUpdateCompanionBuilder,
       (Category, BaseReferences<_$AppDatabase, $CategoriesTable, Category>),
       Category,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncOutboxTableCreateCompanionBuilder = SyncOutboxCompanion Function({
+  required String entity,
+  required String rowId,
+  required String op,
+  required int updatedMs,
+  Value<int> attemptCount,
+  Value<int> rowid,
+});
+typedef $$SyncOutboxTableUpdateCompanionBuilder = SyncOutboxCompanion Function({
+  Value<String> entity,
+  Value<String> rowId,
+  Value<String> op,
+  Value<int> updatedMs,
+  Value<int> attemptCount,
+  Value<int> rowid,
+});
+
+class $$SyncOutboxTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncOutboxTable> {
+  $$SyncOutboxTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get entity => $composableBuilder(
+    column: $table.entity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get rowId => $composableBuilder(
+    column: $table.rowId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get op => $composableBuilder(
+    column: $table.op,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedMs => $composableBuilder(
+    column: $table.updatedMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncOutboxTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncOutboxTable> {
+  $$SyncOutboxTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get entity => $composableBuilder(
+    column: $table.entity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get rowId => $composableBuilder(
+    column: $table.rowId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get op => $composableBuilder(
+    column: $table.op,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedMs => $composableBuilder(
+    column: $table.updatedMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncOutboxTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncOutboxTable> {
+  $$SyncOutboxTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get entity =>
+      $composableBuilder(column: $table.entity, builder: (column) => column);
+
+  GeneratedColumn<String> get rowId =>
+      $composableBuilder(column: $table.rowId, builder: (column) => column);
+
+  GeneratedColumn<String> get op =>
+      $composableBuilder(column: $table.op, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedMs =>
+      $composableBuilder(column: $table.updatedMs, builder: (column) => column);
+
+  GeneratedColumn<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => column,
+  );
+}
+
+class $$SyncOutboxTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncOutboxTable,
+          SyncOutboxData,
+          $$SyncOutboxTableFilterComposer,
+          $$SyncOutboxTableOrderingComposer,
+          $$SyncOutboxTableAnnotationComposer,
+          $$SyncOutboxTableCreateCompanionBuilder,
+          $$SyncOutboxTableUpdateCompanionBuilder,
+          (
+            SyncOutboxData,
+            BaseReferences<_$AppDatabase, $SyncOutboxTable, SyncOutboxData>,
+          ),
+          SyncOutboxData,
+          PrefetchHooks Function()
+        > {
+  $$SyncOutboxTableTableManager(_$AppDatabase db, $SyncOutboxTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncOutboxTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncOutboxTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncOutboxTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> entity = const Value.absent(),
+                Value<String> rowId = const Value.absent(),
+                Value<String> op = const Value.absent(),
+                Value<int> updatedMs = const Value.absent(),
+                Value<int> attemptCount = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncOutboxCompanion(
+                entity: entity,
+                rowId: rowId,
+                op: op,
+                updatedMs: updatedMs,
+                attemptCount: attemptCount,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String entity,
+                required String rowId,
+                required String op,
+                required int updatedMs,
+                Value<int> attemptCount = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncOutboxCompanion.insert(
+                entity: entity,
+                rowId: rowId,
+                op: op,
+                updatedMs: updatedMs,
+                attemptCount: attemptCount,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SyncOutboxTable, SyncOutboxData>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SyncOutboxTable,
+                    SyncOutboxData
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncOutboxTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncOutboxTable,
+      SyncOutboxData,
+      $$SyncOutboxTableFilterComposer,
+      $$SyncOutboxTableOrderingComposer,
+      $$SyncOutboxTableAnnotationComposer,
+      $$SyncOutboxTableCreateCompanionBuilder,
+      $$SyncOutboxTableUpdateCompanionBuilder,
+      (
+        SyncOutboxData,
+        BaseReferences<_$AppDatabase, $SyncOutboxTable, SyncOutboxData>,
+      ),
+      SyncOutboxData,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncMetaTableCreateCompanionBuilder = SyncMetaCompanion Function({
+  required String entity,
+  Value<int> lastPulledMs,
+  Value<int> rowid,
+});
+typedef $$SyncMetaTableUpdateCompanionBuilder = SyncMetaCompanion Function({
+  Value<String> entity,
+  Value<int> lastPulledMs,
+  Value<int> rowid,
+});
+
+class $$SyncMetaTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncMetaTable> {
+  $$SyncMetaTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get entity => $composableBuilder(
+    column: $table.entity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastPulledMs => $composableBuilder(
+    column: $table.lastPulledMs,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncMetaTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncMetaTable> {
+  $$SyncMetaTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get entity => $composableBuilder(
+    column: $table.entity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastPulledMs => $composableBuilder(
+    column: $table.lastPulledMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncMetaTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncMetaTable> {
+  $$SyncMetaTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get entity =>
+      $composableBuilder(column: $table.entity, builder: (column) => column);
+
+  GeneratedColumn<int> get lastPulledMs => $composableBuilder(
+    column: $table.lastPulledMs,
+    builder: (column) => column,
+  );
+}
+
+class $$SyncMetaTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncMetaTable,
+          SyncMetaData,
+          $$SyncMetaTableFilterComposer,
+          $$SyncMetaTableOrderingComposer,
+          $$SyncMetaTableAnnotationComposer,
+          $$SyncMetaTableCreateCompanionBuilder,
+          $$SyncMetaTableUpdateCompanionBuilder,
+          (
+            SyncMetaData,
+            BaseReferences<_$AppDatabase, $SyncMetaTable, SyncMetaData>,
+          ),
+          SyncMetaData,
+          PrefetchHooks Function()
+        > {
+  $$SyncMetaTableTableManager(_$AppDatabase db, $SyncMetaTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncMetaTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncMetaTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncMetaTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> entity = const Value.absent(),
+                Value<int> lastPulledMs = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncMetaCompanion(
+                entity: entity,
+                lastPulledMs: lastPulledMs,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String entity,
+                Value<int> lastPulledMs = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncMetaCompanion.insert(
+                entity: entity,
+                lastPulledMs: lastPulledMs,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SyncMetaTable, SyncMetaData>(table),
+                  BaseReferences<_$AppDatabase, $SyncMetaTable, SyncMetaData>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncMetaTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncMetaTable,
+      SyncMetaData,
+      $$SyncMetaTableFilterComposer,
+      $$SyncMetaTableOrderingComposer,
+      $$SyncMetaTableAnnotationComposer,
+      $$SyncMetaTableCreateCompanionBuilder,
+      $$SyncMetaTableUpdateCompanionBuilder,
+      (
+        SyncMetaData,
+        BaseReferences<_$AppDatabase, $SyncMetaTable, SyncMetaData>,
+      ),
+      SyncMetaData,
+      PrefetchHooks Function()
+    >;
+typedef $$SharedGroupsTableCreateCompanionBuilder =
+    SharedGroupsCompanion Function({
+      required String id,
+      required String name,
+      Value<String> icon,
+      Value<bool> budgetEnabled,
+      Value<int?> budgetCents,
+      Value<bool> archived,
+      Value<int?> archivedAtMs,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SharedGroupsTableUpdateCompanionBuilder =
+    SharedGroupsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> icon,
+      Value<bool> budgetEnabled,
+      Value<int?> budgetCents,
+      Value<bool> archived,
+      Value<int?> archivedAtMs,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$SharedGroupsTableFilterComposer
+    extends Composer<_$AppDatabase, $SharedGroupsTable> {
+  $$SharedGroupsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get budgetEnabled => $composableBuilder(
+    column: $table.budgetEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get budgetCents => $composableBuilder(
+    column: $table.budgetCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get archivedAtMs => $composableBuilder(
+    column: $table.archivedAtMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SharedGroupsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SharedGroupsTable> {
+  $$SharedGroupsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get budgetEnabled => $composableBuilder(
+    column: $table.budgetEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get budgetCents => $composableBuilder(
+    column: $table.budgetCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get archivedAtMs => $composableBuilder(
+    column: $table.archivedAtMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SharedGroupsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SharedGroupsTable> {
+  $$SharedGroupsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get icon =>
+      $composableBuilder(column: $table.icon, builder: (column) => column);
+
+  GeneratedColumn<bool> get budgetEnabled => $composableBuilder(
+    column: $table.budgetEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get budgetCents => $composableBuilder(
+    column: $table.budgetCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<int> get archivedAtMs => $composableBuilder(
+    column: $table.archivedAtMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SharedGroupsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SharedGroupsTable,
+          SharedGroup,
+          $$SharedGroupsTableFilterComposer,
+          $$SharedGroupsTableOrderingComposer,
+          $$SharedGroupsTableAnnotationComposer,
+          $$SharedGroupsTableCreateCompanionBuilder,
+          $$SharedGroupsTableUpdateCompanionBuilder,
+          (
+            SharedGroup,
+            BaseReferences<_$AppDatabase, $SharedGroupsTable, SharedGroup>,
+          ),
+          SharedGroup,
+          PrefetchHooks Function()
+        > {
+  $$SharedGroupsTableTableManager(_$AppDatabase db, $SharedGroupsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SharedGroupsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SharedGroupsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SharedGroupsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> icon = const Value.absent(),
+                Value<bool> budgetEnabled = const Value.absent(),
+                Value<int?> budgetCents = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<int?> archivedAtMs = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SharedGroupsCompanion(
+                id: id,
+                name: name,
+                icon: icon,
+                budgetEnabled: budgetEnabled,
+                budgetCents: budgetCents,
+                archived: archived,
+                archivedAtMs: archivedAtMs,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                Value<String> icon = const Value.absent(),
+                Value<bool> budgetEnabled = const Value.absent(),
+                Value<int?> budgetCents = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<int?> archivedAtMs = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SharedGroupsCompanion.insert(
+                id: id,
+                name: name,
+                icon: icon,
+                budgetEnabled: budgetEnabled,
+                budgetCents: budgetCents,
+                archived: archived,
+                archivedAtMs: archivedAtMs,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SharedGroupsTable, SharedGroup>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SharedGroupsTable,
+                    SharedGroup
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SharedGroupsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SharedGroupsTable,
+      SharedGroup,
+      $$SharedGroupsTableFilterComposer,
+      $$SharedGroupsTableOrderingComposer,
+      $$SharedGroupsTableAnnotationComposer,
+      $$SharedGroupsTableCreateCompanionBuilder,
+      $$SharedGroupsTableUpdateCompanionBuilder,
+      (
+        SharedGroup,
+        BaseReferences<_$AppDatabase, $SharedGroupsTable, SharedGroup>,
+      ),
+      SharedGroup,
+      PrefetchHooks Function()
+    >;
+typedef $$SharedMembersTableCreateCompanionBuilder =
+    SharedMembersCompanion Function({
+      required String id,
+      required String groupId,
+      required String name,
+      Value<int> colorIndex,
+      required int createdAt,
+      Value<int> rowid,
+    });
+typedef $$SharedMembersTableUpdateCompanionBuilder =
+    SharedMembersCompanion Function({
+      Value<String> id,
+      Value<String> groupId,
+      Value<String> name,
+      Value<int> colorIndex,
+      Value<int> createdAt,
+      Value<int> rowid,
+    });
+
+class $$SharedMembersTableFilterComposer
+    extends Composer<_$AppDatabase, $SharedMembersTable> {
+  $$SharedMembersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get colorIndex => $composableBuilder(
+    column: $table.colorIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SharedMembersTableOrderingComposer
+    extends Composer<_$AppDatabase, $SharedMembersTable> {
+  $$SharedMembersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get colorIndex => $composableBuilder(
+    column: $table.colorIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SharedMembersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SharedMembersTable> {
+  $$SharedMembersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get groupId =>
+      $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get colorIndex => $composableBuilder(
+    column: $table.colorIndex,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$SharedMembersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SharedMembersTable,
+          SharedMember,
+          $$SharedMembersTableFilterComposer,
+          $$SharedMembersTableOrderingComposer,
+          $$SharedMembersTableAnnotationComposer,
+          $$SharedMembersTableCreateCompanionBuilder,
+          $$SharedMembersTableUpdateCompanionBuilder,
+          (
+            SharedMember,
+            BaseReferences<_$AppDatabase, $SharedMembersTable, SharedMember>,
+          ),
+          SharedMember,
+          PrefetchHooks Function()
+        > {
+  $$SharedMembersTableTableManager(_$AppDatabase db, $SharedMembersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SharedMembersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SharedMembersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SharedMembersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<int> colorIndex = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SharedMembersCompanion(
+                id: id,
+                groupId: groupId,
+                name: name,
+                colorIndex: colorIndex,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String groupId,
+                required String name,
+                Value<int> colorIndex = const Value.absent(),
+                required int createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SharedMembersCompanion.insert(
+                id: id,
+                groupId: groupId,
+                name: name,
+                colorIndex: colorIndex,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SharedMembersTable, SharedMember>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SharedMembersTable,
+                    SharedMember
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SharedMembersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SharedMembersTable,
+      SharedMember,
+      $$SharedMembersTableFilterComposer,
+      $$SharedMembersTableOrderingComposer,
+      $$SharedMembersTableAnnotationComposer,
+      $$SharedMembersTableCreateCompanionBuilder,
+      $$SharedMembersTableUpdateCompanionBuilder,
+      (
+        SharedMember,
+        BaseReferences<_$AppDatabase, $SharedMembersTable, SharedMember>,
+      ),
+      SharedMember,
+      PrefetchHooks Function()
+    >;
+typedef $$SharedExpensesTableCreateCompanionBuilder =
+    SharedExpensesCompanion Function({
+      required String id,
+      required String groupId,
+      Value<int> dateEpochDay,
+      Value<String> title,
+      Value<String> categoryKey,
+      Value<String> type,
+      Value<int> amountCents,
+      Value<String> currency,
+      Value<double> rate,
+      Value<int?> amountForeignCents,
+      Value<String> payersJson,
+      Value<String> sharesJson,
+      Value<String> shareMode,
+      Value<String?> portionsJson,
+      Value<String> note,
+      Value<String?> settledRoundId,
+      Value<String?> tripId,
+      Value<String?> tripItemId,
+      required int createdAt,
+      Value<int> rowid,
+    });
+typedef $$SharedExpensesTableUpdateCompanionBuilder =
+    SharedExpensesCompanion Function({
+      Value<String> id,
+      Value<String> groupId,
+      Value<int> dateEpochDay,
+      Value<String> title,
+      Value<String> categoryKey,
+      Value<String> type,
+      Value<int> amountCents,
+      Value<String> currency,
+      Value<double> rate,
+      Value<int?> amountForeignCents,
+      Value<String> payersJson,
+      Value<String> sharesJson,
+      Value<String> shareMode,
+      Value<String?> portionsJson,
+      Value<String> note,
+      Value<String?> settledRoundId,
+      Value<String?> tripId,
+      Value<String?> tripItemId,
+      Value<int> createdAt,
+      Value<int> rowid,
+    });
+
+class $$SharedExpensesTableFilterComposer
+    extends Composer<_$AppDatabase, $SharedExpensesTable> {
+  $$SharedExpensesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get dateEpochDay => $composableBuilder(
+    column: $table.dateEpochDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get categoryKey => $composableBuilder(
+    column: $table.categoryKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rate => $composableBuilder(
+    column: $table.rate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get amountForeignCents => $composableBuilder(
+    column: $table.amountForeignCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payersJson => $composableBuilder(
+    column: $table.payersJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sharesJson => $composableBuilder(
+    column: $table.sharesJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get shareMode => $composableBuilder(
+    column: $table.shareMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get portionsJson => $composableBuilder(
+    column: $table.portionsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get settledRoundId => $composableBuilder(
+    column: $table.settledRoundId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tripId => $composableBuilder(
+    column: $table.tripId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tripItemId => $composableBuilder(
+    column: $table.tripItemId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SharedExpensesTableOrderingComposer
+    extends Composer<_$AppDatabase, $SharedExpensesTable> {
+  $$SharedExpensesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get dateEpochDay => $composableBuilder(
+    column: $table.dateEpochDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get categoryKey => $composableBuilder(
+    column: $table.categoryKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get rate => $composableBuilder(
+    column: $table.rate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get amountForeignCents => $composableBuilder(
+    column: $table.amountForeignCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payersJson => $composableBuilder(
+    column: $table.payersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sharesJson => $composableBuilder(
+    column: $table.sharesJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get shareMode => $composableBuilder(
+    column: $table.shareMode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get portionsJson => $composableBuilder(
+    column: $table.portionsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get settledRoundId => $composableBuilder(
+    column: $table.settledRoundId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tripId => $composableBuilder(
+    column: $table.tripId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tripItemId => $composableBuilder(
+    column: $table.tripItemId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SharedExpensesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SharedExpensesTable> {
+  $$SharedExpensesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get groupId =>
+      $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<int> get dateEpochDay => $composableBuilder(
+    column: $table.dateEpochDay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get categoryKey => $composableBuilder(
+    column: $table.categoryKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get currency =>
+      $composableBuilder(column: $table.currency, builder: (column) => column);
+
+  GeneratedColumn<double> get rate =>
+      $composableBuilder(column: $table.rate, builder: (column) => column);
+
+  GeneratedColumn<int> get amountForeignCents => $composableBuilder(
+    column: $table.amountForeignCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payersJson => $composableBuilder(
+    column: $table.payersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sharesJson => $composableBuilder(
+    column: $table.sharesJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get shareMode =>
+      $composableBuilder(column: $table.shareMode, builder: (column) => column);
+
+  GeneratedColumn<String> get portionsJson => $composableBuilder(
+    column: $table.portionsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<String> get settledRoundId => $composableBuilder(
+    column: $table.settledRoundId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tripId =>
+      $composableBuilder(column: $table.tripId, builder: (column) => column);
+
+  GeneratedColumn<String> get tripItemId => $composableBuilder(
+    column: $table.tripItemId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$SharedExpensesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SharedExpensesTable,
+          SharedExpense,
+          $$SharedExpensesTableFilterComposer,
+          $$SharedExpensesTableOrderingComposer,
+          $$SharedExpensesTableAnnotationComposer,
+          $$SharedExpensesTableCreateCompanionBuilder,
+          $$SharedExpensesTableUpdateCompanionBuilder,
+          (
+            SharedExpense,
+            BaseReferences<_$AppDatabase, $SharedExpensesTable, SharedExpense>,
+          ),
+          SharedExpense,
+          PrefetchHooks Function()
+        > {
+  $$SharedExpensesTableTableManager(
+    _$AppDatabase db,
+    $SharedExpensesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SharedExpensesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SharedExpensesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SharedExpensesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<int> dateEpochDay = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> categoryKey = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<int> amountCents = const Value.absent(),
+                Value<String> currency = const Value.absent(),
+                Value<double> rate = const Value.absent(),
+                Value<int?> amountForeignCents = const Value.absent(),
+                Value<String> payersJson = const Value.absent(),
+                Value<String> sharesJson = const Value.absent(),
+                Value<String> shareMode = const Value.absent(),
+                Value<String?> portionsJson = const Value.absent(),
+                Value<String> note = const Value.absent(),
+                Value<String?> settledRoundId = const Value.absent(),
+                Value<String?> tripId = const Value.absent(),
+                Value<String?> tripItemId = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SharedExpensesCompanion(
+                id: id,
+                groupId: groupId,
+                dateEpochDay: dateEpochDay,
+                title: title,
+                categoryKey: categoryKey,
+                type: type,
+                amountCents: amountCents,
+                currency: currency,
+                rate: rate,
+                amountForeignCents: amountForeignCents,
+                payersJson: payersJson,
+                sharesJson: sharesJson,
+                shareMode: shareMode,
+                portionsJson: portionsJson,
+                note: note,
+                settledRoundId: settledRoundId,
+                tripId: tripId,
+                tripItemId: tripItemId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String groupId,
+                Value<int> dateEpochDay = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> categoryKey = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<int> amountCents = const Value.absent(),
+                Value<String> currency = const Value.absent(),
+                Value<double> rate = const Value.absent(),
+                Value<int?> amountForeignCents = const Value.absent(),
+                Value<String> payersJson = const Value.absent(),
+                Value<String> sharesJson = const Value.absent(),
+                Value<String> shareMode = const Value.absent(),
+                Value<String?> portionsJson = const Value.absent(),
+                Value<String> note = const Value.absent(),
+                Value<String?> settledRoundId = const Value.absent(),
+                Value<String?> tripId = const Value.absent(),
+                Value<String?> tripItemId = const Value.absent(),
+                required int createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SharedExpensesCompanion.insert(
+                id: id,
+                groupId: groupId,
+                dateEpochDay: dateEpochDay,
+                title: title,
+                categoryKey: categoryKey,
+                type: type,
+                amountCents: amountCents,
+                currency: currency,
+                rate: rate,
+                amountForeignCents: amountForeignCents,
+                payersJson: payersJson,
+                sharesJson: sharesJson,
+                shareMode: shareMode,
+                portionsJson: portionsJson,
+                note: note,
+                settledRoundId: settledRoundId,
+                tripId: tripId,
+                tripItemId: tripItemId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SharedExpensesTable, SharedExpense>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SharedExpensesTable,
+                    SharedExpense
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SharedExpensesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SharedExpensesTable,
+      SharedExpense,
+      $$SharedExpensesTableFilterComposer,
+      $$SharedExpensesTableOrderingComposer,
+      $$SharedExpensesTableAnnotationComposer,
+      $$SharedExpensesTableCreateCompanionBuilder,
+      $$SharedExpensesTableUpdateCompanionBuilder,
+      (
+        SharedExpense,
+        BaseReferences<_$AppDatabase, $SharedExpensesTable, SharedExpense>,
+      ),
+      SharedExpense,
+      PrefetchHooks Function()
+    >;
+typedef $$SharedSettlementsTableCreateCompanionBuilder =
+    SharedSettlementsCompanion Function({
+      required String id,
+      required String groupId,
+      Value<String> status,
+      Value<String> transfersJson,
+      Value<String> expenseIdsJson,
+      Value<int> roundNo,
+      required int createdAt,
+      Value<int?> completedAt,
+      Value<int> rowid,
+    });
+typedef $$SharedSettlementsTableUpdateCompanionBuilder =
+    SharedSettlementsCompanion Function({
+      Value<String> id,
+      Value<String> groupId,
+      Value<String> status,
+      Value<String> transfersJson,
+      Value<String> expenseIdsJson,
+      Value<int> roundNo,
+      Value<int> createdAt,
+      Value<int?> completedAt,
+      Value<int> rowid,
+    });
+
+class $$SharedSettlementsTableFilterComposer
+    extends Composer<_$AppDatabase, $SharedSettlementsTable> {
+  $$SharedSettlementsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get transfersJson => $composableBuilder(
+    column: $table.transfersJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get expenseIdsJson => $composableBuilder(
+    column: $table.expenseIdsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get roundNo => $composableBuilder(
+    column: $table.roundNo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SharedSettlementsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SharedSettlementsTable> {
+  $$SharedSettlementsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get transfersJson => $composableBuilder(
+    column: $table.transfersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get expenseIdsJson => $composableBuilder(
+    column: $table.expenseIdsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get roundNo => $composableBuilder(
+    column: $table.roundNo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SharedSettlementsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SharedSettlementsTable> {
+  $$SharedSettlementsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get groupId =>
+      $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get transfersJson => $composableBuilder(
+    column: $table.transfersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get expenseIdsJson => $composableBuilder(
+    column: $table.expenseIdsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get roundNo =>
+      $composableBuilder(column: $table.roundNo, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get completedAt => $composableBuilder(
+    column: $table.completedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$SharedSettlementsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SharedSettlementsTable,
+          SharedSettlement,
+          $$SharedSettlementsTableFilterComposer,
+          $$SharedSettlementsTableOrderingComposer,
+          $$SharedSettlementsTableAnnotationComposer,
+          $$SharedSettlementsTableCreateCompanionBuilder,
+          $$SharedSettlementsTableUpdateCompanionBuilder,
+          (
+            SharedSettlement,
+            BaseReferences<
+              _$AppDatabase,
+              $SharedSettlementsTable,
+              SharedSettlement
+            >,
+          ),
+          SharedSettlement,
+          PrefetchHooks Function()
+        > {
+  $$SharedSettlementsTableTableManager(
+    _$AppDatabase db,
+    $SharedSettlementsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SharedSettlementsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SharedSettlementsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SharedSettlementsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String> transfersJson = const Value.absent(),
+                Value<String> expenseIdsJson = const Value.absent(),
+                Value<int> roundNo = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int?> completedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SharedSettlementsCompanion(
+                id: id,
+                groupId: groupId,
+                status: status,
+                transfersJson: transfersJson,
+                expenseIdsJson: expenseIdsJson,
+                roundNo: roundNo,
+                createdAt: createdAt,
+                completedAt: completedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String groupId,
+                Value<String> status = const Value.absent(),
+                Value<String> transfersJson = const Value.absent(),
+                Value<String> expenseIdsJson = const Value.absent(),
+                Value<int> roundNo = const Value.absent(),
+                required int createdAt,
+                Value<int?> completedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SharedSettlementsCompanion.insert(
+                id: id,
+                groupId: groupId,
+                status: status,
+                transfersJson: transfersJson,
+                expenseIdsJson: expenseIdsJson,
+                roundNo: roundNo,
+                createdAt: createdAt,
+                completedAt: completedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SharedSettlementsTable, SharedSettlement>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SharedSettlementsTable,
+                    SharedSettlement
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SharedSettlementsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SharedSettlementsTable,
+      SharedSettlement,
+      $$SharedSettlementsTableFilterComposer,
+      $$SharedSettlementsTableOrderingComposer,
+      $$SharedSettlementsTableAnnotationComposer,
+      $$SharedSettlementsTableCreateCompanionBuilder,
+      $$SharedSettlementsTableUpdateCompanionBuilder,
+      (
+        SharedSettlement,
+        BaseReferences<
+          _$AppDatabase,
+          $SharedSettlementsTable,
+          SharedSettlement
+        >,
+      ),
+      SharedSettlement,
       PrefetchHooks Function()
     >;
 
@@ -9595,4 +14360,16 @@ class $AppDatabaseManager {
       $$SettlementsTableTableManager(_db, _db.settlements);
   $$CategoriesTableTableManager get categories =>
       $$CategoriesTableTableManager(_db, _db.categories);
+  $$SyncOutboxTableTableManager get syncOutbox =>
+      $$SyncOutboxTableTableManager(_db, _db.syncOutbox);
+  $$SyncMetaTableTableManager get syncMeta =>
+      $$SyncMetaTableTableManager(_db, _db.syncMeta);
+  $$SharedGroupsTableTableManager get sharedGroups =>
+      $$SharedGroupsTableTableManager(_db, _db.sharedGroups);
+  $$SharedMembersTableTableManager get sharedMembers =>
+      $$SharedMembersTableTableManager(_db, _db.sharedMembers);
+  $$SharedExpensesTableTableManager get sharedExpenses =>
+      $$SharedExpensesTableTableManager(_db, _db.sharedExpenses);
+  $$SharedSettlementsTableTableManager get sharedSettlements =>
+      $$SharedSettlementsTableTableManager(_db, _db.sharedSettlements);
 }

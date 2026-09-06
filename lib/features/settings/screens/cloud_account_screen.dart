@@ -1,0 +1,370 @@
+/// 云端账号页（V2.6 §3.17.1）：路由 /profile/cloud。
+/// 未登录态：登录/注册同表单；已登录态：账号 + 退出 + 清云端 + 端点配置 + AI 配置。
+library;
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/supabase_config.dart';
+import '../../../data/providers.dart';
+import '../../../theme/theme_provider.dart' show sharedPreferencesProvider;
+import '../../../data/sync/sync_account.dart';
+import '../../../data/sync/sync_control_providers.dart';
+import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/section_header.dart';
+import '../../../theme/tokens.dart';
+
+class CloudAccountScreen extends ConsumerStatefulWidget {
+  const CloudAccountScreen({super.key});
+
+  @override
+  ConsumerState<CloudAccountScreen> createState() => _CloudAccountScreenState();
+}
+
+class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
+  bool _tabSignup = false;
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  final _baseUrl = TextEditingController();
+  final _apiKey = TextEditingController();
+  final _aiModel = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAiLocal();
+  }
+
+  Future<void> _loadAiLocal() async {
+    final cfg = await ref.read(prefsRepoProvider).getAiConfig();
+    if (!mounted) return;
+    setState(() {
+      _baseUrl.text = (cfg['baseUrl'] as String?) ?? '';
+      _apiKey.text = (cfg['apiKey'] as String?) ?? '';
+      _aiModel.text = (cfg['model'] as String?) ?? '';
+    });
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    _baseUrl.dispose();
+    _apiKey.dispose();
+    _aiModel.dispose();
+    super.dispose();
+  }
+
+  bool _validEmail(String s) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(s.trim());
+
+  Future<void> _submitAuth() async {
+    final svc = ref.read(cloudAccountServiceProvider);
+    if (svc == null) {
+      setState(() => _error = copy('sync.guideBody'));
+      return;
+    }
+    final email = _email.text.trim();
+    final pass = _password.text;
+    if (!_validEmail(email)) {
+      setState(() => _error = copy('cloud.errGeneric'));
+      return;
+    }
+    if (pass.length < 6) {
+      setState(() => _error = copy('cloud.errPasswordShort'));
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (_tabSignup) {
+        await svc.signUp(email, pass);
+      } else {
+        await svc.signIn(email, pass);
+      }
+      await onSignedIn(ref);
+      await _maybeBootstrapUpload();
+      if (mounted) setState(() {});
+    } on CloudAccountException catch (e) {
+      setState(() => _error = _mapErr(e.code));
+    } catch (_) {
+      setState(() => _error = copy('cloud.errNetwork'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _mapErr(String code) => switch (code) {
+        'email_taken' => copy('cloud.errEmailTaken'),
+        'password_short' => copy('cloud.errPasswordShort'),
+        'bad_credentials' => copy('cloud.errBadCredentials'),
+        'rate_limited' => copy('cloud.errNetwork'),
+        _ => copy('cloud.errGeneric'),
+      };
+
+  /// 首次引导（§3.10）：未引导账号询问「上传本地数据？」。
+  Future<void> _maybeBootstrapUpload() async {
+    final engine = ref.read(syncEngineProvider);
+    final uid = ref.read(currentUserIdProvider);
+    if (engine == null || uid == null) return;
+    final bootstrapped = ref.read(sharedPreferencesProvider).getBool('sync_bootstrapped_$uid') ?? false;
+    if (bootstrapped) return;
+    if (!mounted) return;
+    final upload = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(copy('cloud.uploadAskTitle')),
+        content: Text(copy('cloud.uploadAskBody')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(copy('cloud.uploadNo'))),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(copy('cloud.uploadYes'))),
+        ],
+      ),
+    );
+    if (upload == true) {
+      await engine.bootstrapUploadAll();
+    } else {
+      await engine.syncNow(push: false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(copy('cloud.signOut')),
+        content: Text(copy('cloud.signOutConfirm')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(copy('cloud.signOut'))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final svc = ref.read(cloudAccountServiceProvider);
+    await svc?.signOut();
+    await onSignedOut(ref);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _purgeCloud() async {
+    final svc = ref.read(cloudAccountServiceProvider);
+    if (svc == null) return;
+    var ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(copy('cloud.purge')),
+        content: Text(copy('cloud.purgeConfirm1')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(copy('cloud.purge')),
+        content: Text(copy('cloud.purgeConfirm2')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定清除')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await svc.purgeMyData();
+      final engine = ref.read(syncEngineProvider);
+      await ref.read(syncOutboxResetProvider)(); // outbox 清空 + 游标归零
+      await engine?.syncNow(push: false);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(copy('cloud.purged'))));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(copy('cloud.errGeneric'))));
+      }
+    }
+  }
+
+  Future<void> _saveEndpoint() async {
+    final url = _endpointUrl.text.trim();
+    final key = _endpointKey.text.trim();
+    if (!url.startsWith('https://') || key.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(copy('cloud.configInvalid'))));
+      return;
+    }
+    await SupabaseCfg.saveOverride(url, key);
+    await rebuildCloudEngine(ref);
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(copy('cloud.configChanged'))));
+      setState(() {});
+    }
+  }
+
+  Future<void> _clearEndpoint() async {
+    await SupabaseCfg.clearOverride();
+    await rebuildCloudEngine(ref);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _saveAiCloud() async {
+    // 本机 AI 配置照常保存（apiKey 仅本机）；baseUrl/model 另存云端 app_settings
+    final prefs = ref.read(prefsRepoProvider);
+    await prefs.setAiConfig({
+      'baseUrl': _baseUrl.text.trim(),
+      'apiKey': _apiKey.text,
+      'model': _aiModel.text.trim(),
+    });
+    ref.invalidate(aiConfigProvider);
+    final svc = ref.read(cloudAccountServiceProvider);
+    try {
+      await svc?.saveCloudAiSetting('ai.base_url', _baseUrl.text.trim());
+      await svc?.saveCloudAiSetting('ai.model', _aiModel.text.trim());
+    } catch (_) {}
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存')));
+    }
+  }
+
+  final TextEditingController _endpointUrl = TextEditingController();
+  final TextEditingController _endpointKey = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = ref.watch(currentUserIdProvider);
+    final email = ref.watch(currentUserEmailProvider);
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: Text(copy('cloud.title'))),
+      body: ListView(
+        padding: const EdgeInsets.all(Spacing.lg),
+        children: [
+          if (uid == null) ..._buildAuthForm(scheme) else ..._buildSignedIn(scheme, email),
+          const SizedBox(height: Spacing.xl),
+          SectionHeader(title: copy('cloud.configSection')),
+          _card(TextField(
+            controller: _endpointUrl,
+            decoration: InputDecoration(hintText: copy('cloud.configUrl')),
+          )),
+          const SizedBox(height: Spacing.md),
+          _card(TextField(
+            controller: _endpointKey,
+            obscureText: true,
+            decoration: InputDecoration(hintText: copy('cloud.configKey')),
+          )),
+          const SizedBox(height: Spacing.md),
+          Row(children: [
+            FilledButton(onPressed: _saveEndpoint, child: Text(copy('cloud.configSave'))),
+            const SizedBox(width: Spacing.md),
+            TextButton(onPressed: _clearEndpoint, child: Text(copy('cloud.configClear'))),
+          ]),
+          TextButton(
+            onPressed: () => context.push('/profile/cloud/sync'),
+            child: Text(copy('sync.center')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card(Widget child) => Card(
+        margin: EdgeInsets.zero,
+        child: Padding(padding: const EdgeInsets.all(Spacing.lg), child: child),
+      );
+
+  List<Widget> _buildAuthForm(ColorScheme scheme) => [
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(Spacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SegmentedButton<bool>(
+                  segments: [
+                    ButtonSegment(value: false, label: Text(copy('cloud.tabLogin'))),
+                    ButtonSegment(value: true, label: Text(copy('cloud.tabSignup'))),
+                  ],
+                  selected: {_tabSignup},
+                  onSelectionChanged: (s) => setState(() => _tabSignup = s.first),
+                ),
+                const SizedBox(height: Spacing.lg),
+                TextField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(labelText: copy('cloud.email'))),
+                const SizedBox(height: Spacing.md),
+                TextField(
+                    controller: _password,
+                    obscureText: true,
+                    decoration: InputDecoration(labelText: copy('cloud.password'))),
+                if (_error != null) ...[
+                  const SizedBox(height: Spacing.md),
+                  Text(_error!, style: TextStyle(color: scheme.error, fontSize: AppFontSizes.caption)),
+                ],
+                const SizedBox(height: Spacing.lg),
+                FilledButton(
+                  onPressed: _busy ? null : _submitAuth,
+                  child: Text(_busy ? '…' : (_tabSignup ? copy('cloud.submitSignup') : copy('cloud.submitLogin'))),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ];
+
+  List<Widget> _buildSignedIn(ColorScheme scheme, String? email) => [
+        _card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(copy('cloud.signedInAs'),
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: AppFontSizes.caption)),
+          const SizedBox(height: Spacing.xs),
+          Text(email ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: Spacing.md),
+          Row(children: [
+            OutlinedButton(onPressed: _signOut, child: Text(copy('cloud.signOut'))),
+            const SizedBox(width: Spacing.md),
+            OutlinedButton(
+                onPressed: _purgeCloud,
+                style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
+                child: Text(copy('cloud.purge'))),
+          ]),
+        ])),
+        const SizedBox(height: Spacing.xl),
+        SectionHeader(title: copy('cloud.aiSection')),
+        _card(Column(children: [
+          TextField(controller: _baseUrl, decoration: InputDecoration(labelText: copy('cloud.aiBaseUrl'))),
+          const SizedBox(height: Spacing.md),
+          TextField(controller: _aiModel, decoration: InputDecoration(labelText: copy('cloud.aiModel'))),
+          const SizedBox(height: Spacing.md),
+          TextField(
+              controller: _apiKey,
+              obscureText: true,
+              decoration: InputDecoration(labelText: copy('cloud.aiKeyLocal'))),
+          const SizedBox(height: Spacing.md),
+          FilledButton(onPressed: _saveAiCloud, child: const Text('保存')),
+        ])),
+      ];
+}
+
+/// 挂在 providers 之外的小工具：清 outbox + 游标（purge 后调用）。
+final syncOutboxResetProvider = Provider<Future<void> Function()>((ref) {
+  return () async {
+    final engine = ref.read(syncEngineProvider);
+    // outbox/meta 服务挂在引擎上；通过一次全量 reset 语义完成
+    await engine?.resetLocalSyncState();
+  };
+});

@@ -21,6 +21,8 @@ import '../../../theme/tokens.dart';
 import '../../ledger/screens/qr_scan_screen.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/sync_status_capsule.dart';
 
 /// 行程 Tab 首屏
 class TripsHomeScreen extends ConsumerStatefulWidget {
@@ -61,6 +63,7 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
         largeTitle: kAppName,
         scrollController: _scroll,
         actions: [
+          const SyncStatusCapsule(),
           if (!kIsWeb)
             IconButton(
               tooltip: '扫码/口令同步（与电脑端互导）',
@@ -101,8 +104,8 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
           if (trips.isEmpty) {
             return EmptyState(
               emoji: '🧭',
-              title: '还没有行程',
-              message: '创建第一段旅程，从目的地和日期开始规划吧',
+              title: copy(CopyTokens.tripsEmpty),
+              message: copy(CopyTokens.tripsEmptyAction),
               actionLabel: '新建行程',
               onAction: _createTrip,
             );

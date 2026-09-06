@@ -1,415 +1,302 @@
+/// 主题页（V2.6 任务3）：12 张直选卡（浅 5 区 / 深 6 区 + 跟随系统卡）
+/// + 字体风格、圆角密度两段旋钮。换装时 320ms 渐变蒙版转场（§5.6）。
+library;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../shared/widgets/glass_app_bar.dart';
-import '../../../shared/widgets/section_header.dart';
+import '../../../shared/copy_tokens.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../theme/tokens.dart';
 
-/// 主题外观页：浅色五套配色画廊 + 深色模式（石墨夜 / 跟随系统），点击即时全局换装。
-class ThemeScreen extends ConsumerWidget {
+class ThemeScreen extends ConsumerStatefulWidget {
   const ThemeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // 跟随全局主题即时刷新
-    ref.watch(themeProvider);
-    final scheme = Theme.of(context).colorScheme;
-
-    return Scaffold(
-      appBar: const GlassAppBar(title: '主题外观'),
-      body: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.only(
-          bottom:
-              MediaQuery.paddingOf(context).bottom + Spacing.huge + Spacing.xxl,
-        ),
-        children: [
-          // 顶部说明卡
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
-            child: _StaggerIn(
-              index: 0,
-              child: Material(
-                color: scheme.surfaceContainerLow,
-                borderRadius: AppRadius.card,
-                clipBehavior: Clip.antiAlias,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Spacing.xl,
-                    vertical: Spacing.lg,
-                  ),
-                  child: Row(
-                    children: [
-                      const Text('🎨', style: TextStyle(fontSize: 28)),
-                      const SizedBox(width: Spacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('六套旅途配色',
-                                style: Theme.of(context).textTheme.titleSmall),
-                            const SizedBox(height: 2),
-                            Text('点击即刻换装，选择会自动记住',
-                                style: Theme.of(context).textTheme.bodySmall),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // 浅色五卡画廊
-          const SectionHeader(title: '主题色'),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
-            mainAxisSpacing: Spacing.sm,
-            crossAxisSpacing: Spacing.sm,
-            childAspectRatio: 0.78,
-            children: [
-              _StaggerIn(index: 1, child: _ThemePreviewCard(themeKey: ThemeKeys.green)),
-              _StaggerIn(index: 2, child: _ThemePreviewCard(themeKey: ThemeKeys.blue)),
-              _StaggerIn(index: 3, child: _ThemePreviewCard(themeKey: ThemeKeys.orange)),
-              _StaggerIn(index: 4, child: _ThemePreviewCard(themeKey: ThemeKeys.pink)),
-              _StaggerIn(index: 5, child: _ThemePreviewCard(themeKey: ThemeKeys.purple)),
-            ],
-          ),
-          // 深色模式两张选项卡
-          const SectionHeader(title: '深色模式'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
-            child: Row(
-              children: [
-                Expanded(
-                  child: AspectRatio(
-                    aspectRatio: 0.66,
-                    child: _StaggerIn(
-                      index: 6,
-                      child: _ThemePreviewCard(
-                        themeKey: ThemeKeys.dark,
-                        subtitle: '始终使用深色',
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: Spacing.sm),
-                Expanded(
-                  child: AspectRatio(
-                    aspectRatio: 0.66,
-                    child: _StaggerIn(
-                      index: 7,
-                      child: _ThemePreviewCard(
-                        themeKey: ThemeKeys.system,
-                        subtitle: '随系统亮暗自动切换',
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  ConsumerState<ThemeScreen> createState() => _ThemeScreenState();
 }
 
-/// 单张主题预览卡：迷你样机 + 名称（可选副标题），选中描边 + 右上角对勾徽标。
-class _ThemePreviewCard extends ConsumerWidget {
-  const _ThemePreviewCard({required this.themeKey, this.subtitle});
-
-  final String themeKey;
-  final String? subtitle;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(themeProvider) == themeKey;
-    final scheme = Theme.of(context).colorScheme;
-    final mockScheme = AppSchemes.schemeFor(themeKey);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: AppRadius.card,
-        border: Border.all(
-          color: selected ? scheme.primary : scheme.outlineVariant,
-          width: selected ? 2 : 1,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            ref.read(themeProvider.notifier).setTheme(themeKey);
-          },
-          child: Stack(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(Spacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _buildMockup(scheme)),
-                    const SizedBox(height: Spacing.sm),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            ThemeKeys.labels[themeKey]!,
-                            style: Theme.of(context).textTheme.titleSmall,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        style: Theme.of(context).textTheme.bodySmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (selected)
-                Positioned(
-                  top: Spacing.sm,
-                  right: Spacing.sm,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: mockScheme.primary,
-                    ),
-                    child: Icon(
-                      Icons.check_rounded,
-                      size: 14,
-                      color: mockScheme.onPrimary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 卡内样机：跟随系统用亮暗分屏，其余按 key 取对应配色方案
-  Widget _buildMockup(ColorScheme pageScheme) {
-    if (themeKey == ThemeKeys.system) {
-      return _SystemSplitMockup(pageScheme: pageScheme);
-    }
-    return _MiniMockup(mockScheme: AppSchemes.schemeFor(themeKey));
-  }
-}
-
-/// 迷你界面样机：全部颜色取自传入配色方案的语义角色
-class _MiniMockup extends StatelessWidget {
-  const _MiniMockup({
-    required this.mockScheme,
-    this.borderRadius = AppRadius.input,
-  });
-
-  final ColorScheme mockScheme;
-  final BorderRadius borderRadius;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        color: mockScheme.surfaceContainerLowest,
-        borderRadius: borderRadius,
-      ),
-      padding: const EdgeInsets.all(Spacing.sm),
-      child: Column(
-        children: [
-          // 顶栏
-          Container(
-            height: 14,
-            decoration: BoxDecoration(
-              color: mockScheme.primary,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              // 头像圆点
-              Container(
-                width: 16,
-                height: 16,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: mockScheme.primaryContainer,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Container(
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: mockScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          FractionallySizedBox(
-            widthFactor: .8,
-            alignment: Alignment.centerLeft,
-            child: Container(
-              height: 8,
-              decoration: BoxDecoration(
-                color: mockScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          FractionallySizedBox(
-            widthFactor: .6,
-            alignment: Alignment.centerLeft,
-            child: Container(
-              height: 8,
-              decoration: BoxDecoration(
-                color: mockScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-          ),
-          const Spacer(),
-          Center(
-            child: FractionallySizedBox(
-              widthFactor: .55,
-              child: Container(
-                height: 18,
-                decoration: BoxDecoration(
-                  color: mockScheme.primary,
-                  borderRadius: AppRadius.capsule,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 「跟随系统」专用样机：左半薄荷绿浅色 / 右半石墨夜深色，中央叠加亮暗切换徽标。
-class _SystemSplitMockup extends StatelessWidget {
-  const _SystemSplitMockup({required this.pageScheme});
-
-  final ColorScheme pageScheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: AppRadius.input,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _MiniMockup(
-                  mockScheme: AppSchemes.schemeFor(ThemeKeys.green),
-                  borderRadius: BorderRadius.zero,
-                ),
-              ),
-              Expanded(
-                child: _MiniMockup(
-                  mockScheme: AppSchemes.schemeFor(ThemeKeys.dark),
-                  borderRadius: BorderRadius.zero,
-                ),
-              ),
-            ],
-          ),
-          Center(
-            child: Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: pageScheme.surfaceContainerLowest,
-              ),
-              child: Icon(
-                Icons.brightness_6,
-                size: 14,
-                color: pageScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 列表 stagger 入场：淡入 + 轻微上移，按 index 错峰（本地轻量实现）
-class _StaggerIn extends StatefulWidget {
-  const _StaggerIn({required this.index, required this.child});
-
-  final int index;
-  final Widget child;
-
-  @override
-  State<_StaggerIn> createState() => _StaggerInState();
-}
-
-class _StaggerInState extends State<_StaggerIn>
+class _ThemeScreenState extends ConsumerState<ThemeScreen>
     with SingleTickerProviderStateMixin {
-  static const double _stepPerIndex = 0.06;
-
-  late final AnimationController _controller =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 560))
-        ..forward();
-
-  late final Animation<double> _animation = CurvedAnimation(
-    parent: _controller,
-    curve: Interval(
-      (widget.index * _stepPerIndex).clamp(0.0, 0.6),
-      1.0,
-      curve: Curves.easeOutCubic,
-    ),
+  late final AnimationController _mask = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
   );
+
+  Future<void> _select(ThemeFamily family, ThemeBrightnessMode brightness) async {
+    if (_mask.isAnimating) return;
+    final curFamily = ref.read(themeFamilyProvider);
+    final curBright = ref.read(themeBrightnessProvider);
+    final switchingDepth =
+        (curFamily != family) && (curBright != brightness);
+    _mask.value = 0;
+    if (switchingDepth) {
+      // 浅↔深：蒙版淡入 → 换装 → 蒙版淡出（§5.6）
+      await _mask.forward();
+      await ref.read(themeFamilyProvider.notifier).set(family);
+      await ref.read(themeBrightnessProvider.notifier).set(brightness);
+      await _mask.reverse();
+    } else {
+      // 同亮度档：先换装再轻蒙版一闪
+      await ref.read(themeFamilyProvider.notifier).set(family);
+      await ref.read(themeBrightnessProvider.notifier).set(brightness);
+      await _mask.forward();
+      await _mask.reverse();
+    }
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _mask.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.16),
-          end: Offset.zero,
-        ).animate(_animation),
-        child: widget.child,
+    final family = ref.watch(themeFamilyProvider);
+    final brightness = ref.watch(themeBrightnessProvider);
+    final fontMode = ref.watch(fontStyleProvider);
+    final radius = ref.watch(radiusDensityProvider);
+    final scheme = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('主题外观')),
+      body: Stack(children: [
+        ListView(
+          padding: const EdgeInsets.all(Spacing.lg),
+          children: [
+            _sectionLabel(context, '浅色', Icons.wb_sunny_rounded),
+            _cardGrid(ThemeStyles.lightStyles
+                .map((s) => (
+                      style: s,
+                      selected: _isSelected(family, brightness, s),
+                    ))
+                .toList()),
+            const SizedBox(height: Spacing.lg),
+            _sectionLabel(context, '深色', Icons.dark_mode_rounded),
+            _cardGrid([
+              ...ThemeStyles.darkStyles.map((s) => (
+                    style: s,
+                    selected: _isSelected(family, brightness, s),
+                  )),
+              (
+                style: null,
+                selected: brightness == ThemeBrightnessMode.system,
+              ),
+            ]),
+            const SizedBox(height: Spacing.lg),
+            Text(copy(CopyTokens.themeSubtitle),
+                style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: AppFontSizes.caption)),
+            const SizedBox(height: Spacing.xl),
+            Text('标题字体', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: Spacing.md),
+            SegmentedButton<FontMode>(
+              segments: const [
+                ButtonSegment(value: FontMode.serif, label: Text('衬线书卷')),
+                ButtonSegment(value: FontMode.modern, label: Text('现代无衬线')),
+              ],
+              selected: {fontMode},
+              onSelectionChanged: (s) =>
+                  ref.read(fontStyleProvider.notifier).set(s.first),
+            ),
+            const SizedBox(height: Spacing.xl),
+            Text('圆角密度', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: Spacing.md),
+            SegmentedButton<RadiusDensity>(
+              segments: const [
+                ButtonSegment(value: RadiusDensity.soft, label: Text('柔和')),
+                ButtonSegment(value: RadiusDensity.standard, label: Text('标准')),
+                ButtonSegment(value: RadiusDensity.clean, label: Text('利落')),
+              ],
+              selected: {radius},
+              onSelectionChanged: (s) =>
+                  ref.read(radiusDensityProvider.notifier).set(s.first),
+            ),
+            const SizedBox(height: Spacing.huge),
+          ],
+        ),
+        // 换装转场蒙版（§5.6）：320ms 渐变；深浅切换用亮度蒙版
+        FadeTransition(
+          opacity: _mask,
+          child: IgnorePointer(
+            child: Container(
+              color: (brightness == ThemeBrightnessMode.dark ||
+                      family == ThemeFamily.night)
+                  ? Colors.black.withValues(alpha: 0.72)
+                  : scheme.primary.withValues(alpha: 0.35),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  bool _isSelected(
+      ThemeFamily family, ThemeBrightnessMode brightness, ThemeStyle style) {
+    if (style.brightness == Brightness.light) {
+      return family.name == style.family &&
+          brightness != ThemeBrightnessMode.dark &&
+          family != ThemeFamily.night &&
+          brightness != ThemeBrightnessMode.system;
+    }
+    // 深色卡：night 族常驻深色；其他族仅当 brightness=dark
+    return family.name == style.family &&
+        (brightness == ThemeBrightnessMode.dark || family == ThemeFamily.night);
+  }
+
+  Widget _sectionLabel(BuildContext context, String label, IconData icon) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: Spacing.md),
+        child: Row(children: [
+          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: Spacing.sm),
+          Text(label, style: Theme.of(context).textTheme.titleMedium),
+        ]),
+      );
+
+  Widget _cardGrid(List<({ThemeStyle? style, bool selected})> cards) {
+    return LayoutBuilder(builder: (context, c) {
+      final cols = c.maxWidth >= 560 ? 3 : 2;
+      return GridView.count(
+        crossAxisCount: cols,
+        mainAxisSpacing: Spacing.md,
+        crossAxisSpacing: Spacing.md,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        childAspectRatio: 1.55,
+        children: [
+          for (final card in cards)
+            if (card.style != null)
+              _ThemeCard(
+                style: card.style!,
+                selected: card.selected,
+                onTap: () => _select(
+                    ThemeFamily.values
+                        .firstWhere((f) => f.name == card.style!.family),
+                    card.style!.brightness == Brightness.dark
+                        ? ThemeBrightnessMode.dark
+                        : ThemeBrightnessMode.light),
+              )
+            else
+              _SystemCard(
+                selected: card.selected,
+                onTap: () => _select(
+                    ref.read(themeFamilyProvider), ThemeBrightnessMode.system),
+              ),
+        ],
+      );
+    });
+  }
+}
+
+class _ThemeCard extends StatelessWidget {
+  const _ThemeCard({
+    required this.style,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ThemeStyle style;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Spacing.lg),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: style.signatureGradient,
+            ),
+            borderRadius: BorderRadius.circular(Spacing.lg),
+            border: selected
+                ? Border.all(color: scheme.primary, width: 3)
+                : Border.all(color: scheme.outlineVariant, width: 1),
+            boxShadow: style.cardKind == CardKind.softShadow
+                ? [BoxShadow(color: scheme.shadow.withValues(alpha: 0.2), blurRadius: 8)]
+                : null,
+          ),
+          padding: const EdgeInsets.all(Spacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Expanded(
+                  child: Text(style.displayName,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: AppFontSizes.bodyLarge)),
+                ),
+                if (selected)
+                  const Icon(Icons.check_circle_rounded,
+                      color: Colors.white, size: 20),
+              ]),
+              const Spacer(),
+              Row(children: [
+                if (style.serifHeadline)
+                  const Padding(
+                    padding: EdgeInsets.only(right: Spacing.sm),
+                    child: Icon(Icons.menu_book_rounded,
+                        color: Colors.white70, size: 16),
+                  ),
+                Text('节律 ${style.motionTempo.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11)),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SystemCard extends StatelessWidget {
+  const _SystemCard({required this.selected, required this.onTap});
+
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerLow,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Spacing.lg),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Spacing.lg),
+            border: selected
+                ? Border.all(color: scheme.primary, width: 3)
+                : Border.all(color: scheme.outlineVariant, width: 1),
+          ),
+          padding: const EdgeInsets.all(Spacing.md),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.brightness_auto_rounded,
+                  color: selected ? scheme.primary : scheme.onSurfaceVariant,
+                  size: 28),
+              const SizedBox(height: Spacing.sm),
+              Text('跟随系统',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: AppFontSizes.body,
+                      color: scheme.onSurface)),
+            ],
+          ),
+        ),
       ),
     );
   }

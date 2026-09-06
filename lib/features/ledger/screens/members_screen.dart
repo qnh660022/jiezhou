@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/models.dart';
+import '../../../data/sync/sync_control_providers.dart';
+import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
@@ -11,6 +13,7 @@ import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/member_avatar.dart';
+import 'invite_companion_sheet.dart';
 import '../widgets/stagger_in.dart';
 
 /// 👤 成员管理：八色轮换头像、新增改名、被引用拦截。
@@ -56,11 +59,14 @@ class MembersScreen extends ConsumerWidget {
                         const EmptyState(emoji: '😵', title: '成员加载失败'),
                     data: (list) {
                       if (list.isEmpty) {
-                        return EmptyState(
-                          emoji: '👥',
-                          title: '还没有成员',
-                          message: 'AA 记账至少要有两位同行人哦',
-                        );
+                        return ListView(children: [
+                          _InviteTile(groupId: groupId),
+                          const EmptyState(
+                            emoji: '👥',
+                            title: '还没有成员',
+                            message: 'AA 记账至少要有两位同行人哦',
+                          ),
+                        ]);
                       }
                       return ListView(
                         padding: EdgeInsets.fromLTRB(
@@ -73,6 +79,7 @@ class MembersScreen extends ConsumerWidget {
                           ),
                         ),
                         children: [
+                          _InviteTile(groupId: groupId),
                           StaggerIn(index: 0, child: PalettePreview()),
                           const SizedBox(height: Spacing.lg),
                           for (var i = 0; i < list.length; i++)
@@ -315,6 +322,37 @@ class MemberRow extends ConsumerWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+/// 「邀请旅伴」入口（云功能；未登录/未配置时点击走登录引导 sheet）。
+class _InviteTile extends ConsumerWidget {
+  const _InviteTile({required this.groupId});
+
+  final String? groupId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final uid = ref.watch(currentUserIdProvider);
+    if (groupId == null || uid == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.md),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          leading: const Icon(Icons.group_add_rounded),
+          title: Text(copy('share.invite')),
+          subtitle: Text(copy('share.inviteCode'),
+              style: const TextStyle(fontSize: AppFontSizes.caption)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => showModalBottomSheet(
+            context: context,
+            builder: (_) => InviteCompanionSheet(groupId: groupId!),
+          ),
         ),
       ),
     );

@@ -17,12 +17,17 @@ import 'features/ledger/screens/expense_edit_screen.dart';
 import 'features/ledger/screens/expenses_screen.dart';
 import 'features/ledger/screens/group_edit_screen.dart';
 import 'features/ledger/screens/group_list_screen.dart';
+import 'features/ledger/screens/invite_screen.dart';
 import 'features/ledger/screens/lan_sync_screen.dart';
+import 'features/ledger/screens/share_view_screen.dart';
 import 'features/ledger/screens/ledger_home_screen.dart';
+
 import 'features/ledger/screens/members_screen.dart';
 import 'features/ledger/screens/settle_screen.dart';
 import 'features/ledger/screens/stats_screen.dart';
 import 'features/settings/screens/about_screen.dart';
+import 'features/settings/screens/cloud_account_screen.dart';
+import 'features/settings/screens/sync_center_screen.dart';
 import 'features/settings/screens/privacy_screen.dart';
 import 'features/settings/screens/profile_screen.dart';
 import 'features/settings/screens/splash_screen.dart';
@@ -32,6 +37,7 @@ import 'features/trips/screens/trip_album_screen.dart';
 import 'features/trips/screens/trip_detail_screen.dart';
 import 'features/trips/screens/trip_edit_screen.dart';
 import 'features/trips/screens/trip_export_screen.dart';
+import 'features/trips/screens/trip_guide_screen.dart';
 import 'features/trips/screens/trip_map_screen.dart';
 import 'features/trips/screens/trip_share_screen.dart';
 import 'features/trips/screens/trip_templates_screen.dart';
@@ -140,6 +146,16 @@ List<RouteBase> buildAppRoutes() => [
                 name: 'trip-templates',
                 builder: (context, state) => const TripTemplatesScreen(),
               ),
+              // 目的地攻略（任务5）：仅 Android 注册；Web 端隐藏入口不注册路由（§7.8）
+              if (!kIsWeb)
+                GoRoute(
+                  path: 'guide',
+                  name: 'trip-guide',
+                  builder: (context, state) {
+                    final tripId = state.extra as String? ?? '';
+                    return TripGuideScreenBuilder(tripId: tripId);
+                  },
+                ),
             ],
           ),
         ]),
@@ -199,10 +215,36 @@ List<RouteBase> buildAppRoutes() => [
                 name: 'privacy',
                 builder: (context, state) => const PrivacyScreen(),
               ),
+              GoRoute(
+                path: 'cloud',
+                name: 'cloud-account',
+                builder: (context, state) => const CloudAccountScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'sync',
+                    name: 'sync-center',
+                    builder: (context, state) => const SyncCenterScreen(),
+                  ),
+                ],
+              ),
             ],
           ),
         ]),
       ],
+    ),
+    // ============ 邀请加入（Web 深链，需登录后跳转） ============
+    GoRoute(
+      path: '/invite',
+      name: 'invite',
+      builder: (context, state) =>
+          InviteScreen(code: state.uri.queryParameters['c']),
+    ),
+    // ============ 只读分享页（Web 顶层，匿名可访问，无桌面宽度要求） ============
+    GoRoute(
+      path: '/s/:token',
+      name: 'share-view',
+      builder: (context, state) =>
+          ShareViewScreen(token: state.pathParameters['token'] ?? ''),
     ),
     // ============ 消费账单流（顶层全屏，从账本页打开） ============
     GoRoute(

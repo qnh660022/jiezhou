@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../theme/theme_provider.dart';
+import '../../../shared/copy_tokens.dart';
 import '../../../theme/tokens.dart';
 
 /// 开屏页：渐变圆 Logo 分层入场，短暂停留后自动进入行程 Tab。
@@ -179,7 +180,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             FadeTransition(
               opacity: _subtitleAnimation,
               child: Text(
-                '以芥为舟，行万水千山',
+                copy(CopyTokens.splashSubtitle),
                 style: Theme.of(context).textTheme.labelSmall,
               ),
             ),

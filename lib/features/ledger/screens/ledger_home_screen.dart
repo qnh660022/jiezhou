@@ -22,6 +22,9 @@ import '../widgets/category_icon_box.dart';
 import '../widgets/count_up_text.dart';
 import '../widgets/member_avatar.dart';
 import '../widgets/stagger_in.dart';
+import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/sync_status_capsule.dart';
+import 'shared_ledger_screen.dart' show SharedLedgerSection;
 
 /// 💰 记账 Tab 主页：当前团总览 + 余额榜 + 预算 + 最近账单流。
 class LedgerHomeScreen extends ConsumerWidget {
@@ -68,6 +71,11 @@ class LedgerHomeScreen extends ConsumerWidget {
             ),
           ],
         ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: Spacing.xl),
+          child: Align(alignment: Alignment.centerRight, child: SyncStatusCapsule()),
+        ),
+        const SharedLedgerSection(),
         Expanded(
           child: groupAsync.when(
             loading: () => const _HomeSkeleton(),
@@ -76,8 +84,8 @@ class LedgerHomeScreen extends ConsumerWidget {
               if (group == null) {
                 return EmptyState(
                   emoji: '💰',
-                  title: '还没有旅行团',
-                  message: '建一个团，拉上同行伙伴，AA 记账从此不糊涂',
+                  title: copy(CopyTokens.ledgerEmpty),
+                  message: copy(CopyTokens.ledgerEmptyAction),
                   actionLabel: '新建旅行团',
                   onAction: () => context.pushNamed('group-edit'),
                 );

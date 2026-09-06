@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/theme_provider.dart';
 import '../ledger/ledger_providers.dart';
+import '../../data/sync/sync_control_providers.dart' show syncEngineProvider;
 
 class LocalNotificationService {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
@@ -40,6 +41,57 @@ class LocalNotificationService {
       ),
     );
     await _plugin.show(id: id, title: title, body: body, notificationDetails: details);
+  }
+
+  /// 通用通知（同步失败/恢复等；channel 分级：sync=默认重要性）。
+  Future<void> showSyncNotice({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    await ensureInitialized();
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'sync_notices',
+        '云端同步',
+        channelDescription: '同步失败与恢复提醒',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+      ),
+    );
+    await _plugin.show(id: id, title: title, body: body, notificationDetails: details);
+  }
+}
+
+/// 同步失败/恢复 → 系统通知桥（V2.6 §3.18；默认开启）。
+class SyncNotifierBridge {
+  SyncNotifierBridge(this._ref);
+  final WidgetRef _ref;
+
+  void Function() attach() {
+    final engine = _ref.read(syncEngineProvider);
+    if (engine == null) return () {};
+    engine.onSyncFailed = (msg) {
+      Future(() async {
+        try {
+          await _ref
+              .read(localNotificationServiceProvider)
+              .showSyncNotice(id: 2001, title: msg, body: '');
+        } catch (_) {}
+      });
+    };
+    engine.onSyncRecovered = () {
+      Future(() async {
+        try {
+          await _ref.read(localNotificationServiceProvider).showSyncNotice(
+              id: 2001, title: '云端已同步', body: '跨设备账目已一致');
+        } catch (_) {}
+      });
+    };
+    return () {
+      engine.onSyncFailed = null;
+      engine.onSyncRecovered = null;
+    };
   }
 }
 

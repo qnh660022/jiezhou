@@ -13,6 +13,7 @@ import "../../domain/group_backup.dart";
 import "../../domain/full_backup.dart";
 import "../../export/backup_format.dart";
 import "prefs_repo.dart";
+import "../sync/sync_outbox_service.dart";
 
 class LedgerRepository {
   LedgerRepository(this.db, this.prefs);
@@ -37,11 +38,11 @@ class LedgerRepository {
   // === 团 ===
   Stream<List<Group>> watchGroups() => (db.select(db.groups)..orderBy([(g)=>OrderingTerm.desc(g.createdAt)])).watch();
   Future<Group?> getGroup(String id) async { final l=await (db.select(db.groups)..where((g)=>g.id.equals(id))).get(); return l.firstOrNull; }
-  Future<Group> addGroup(String name, String icon) async { final id=newId("group"); final now=DateTime.now().millisecondsSinceEpoch; await db.into(db.groups).insert(GroupsCompanion(id:Value(id),name:Value(name),icon:Value(icon),createdAt:Value(now),updatedAt:Value(now))); return (await getGroup(id))!; }
-  Future<void> updateGroup(String id, String name, String icon) async { await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(name:Value(name),icon:Value(icon),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); }
+  Future<Group> addGroup(String name, String icon) async { final id=newId("group"); final now=DateTime.now().millisecondsSinceEpoch; await db.into(db.groups).insert(GroupsCompanion(id:Value(id),name:Value(name),icon:Value(icon),createdAt:Value(now),updatedAt:Value(now))); SyncOutboxService.notifyWrite("groups", id); return (await getGroup(id))!; }
+  Future<void> updateGroup(String id, String name, String icon) async { await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(name:Value(name),icon:Value(icon),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("groups", id); }
 
   /// 结束团（软归档）：只打标记，数据全部保留可改，可随时恢复。
-  Future<void> archiveGroup(String id, bool archived) async { await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(archived:Value(archived),archivedAtMs:Value(archived ? DateTime.now().millisecondsSinceEpoch : null),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); }
+  Future<void> archiveGroup(String id, bool archived) async { await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(archived:Value(archived),archivedAtMs:Value(archived ? DateTime.now().millisecondsSinceEpoch : null),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("groups", id); }
   /// 删团级联：事务内依次清理 账单→结算→成员→团，并把关联行程的 groupId 置 null。
   ///
   /// 若删除的正是当前激活团：自动切换到剩余团中 createdAt 最新的一个（走 setActiveGroup
@@ -57,6 +58,7 @@ class LedgerRepository {
       await (db.update(db.trips)..where((t)=>t.groupId.equals(id))).write(TripsCompanion(groupId:Value(null)));
       await (db.delete(db.groups)..where((g)=>g.id.equals(id))).go();
     });
+    SyncOutboxService.notifyWrite("groups", id, op: "delete");
     final current = await _ensureLoadedActiveGroup();
     if (current != id) return;
     final remaining = await (db.select(db.groups)
@@ -86,9 +88,9 @@ class LedgerRepository {
   // === 成员 ===
   Stream<List<Member>> watchMembers(String gid) => (db.select(db.members)..where((m)=>m.groupId.equals(gid))..orderBy([(m)=>OrderingTerm.asc(m.createdAt)])).watch();
   Future<List<Member>> getMembers(String gid) => (db.select(db.members)..where((m)=>m.groupId.equals(gid))).get();
-  Future<String> addMember(String gid, String name) async { final id=newId("member"); final count=await (db.selectOnly(db.members)..where(db.members.groupId.equals(gid))..addColumns([db.members.id.count()])).getSingle(); final idx=(count.read(db.members.id.count())??0)%8; await db.into(db.members).insert(MembersCompanion(id:Value(id),groupId:Value(gid),name:Value(name),colorIndex:Value(idx),createdAt:Value(DateTime.now().millisecondsSinceEpoch))); return id; }
+  Future<String> addMember(String gid, String name) async { final id=newId("member"); final count=await (db.selectOnly(db.members)..where(db.members.groupId.equals(gid))..addColumns([db.members.id.count()])).getSingle(); final idx=(count.read(db.members.id.count())??0)%8; await db.into(db.members).insert(MembersCompanion(id:Value(id),groupId:Value(gid),name:Value(name),colorIndex:Value(idx),createdAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("members", id); return id; }
   Future<void> renameMember(String mid, String name) async { await (db.update(db.members)..where((m)=>m.id.equals(mid))).write(MembersCompanion(name:Value(name))); }
-  Future<void> deleteMember(String mid) async { await (db.delete(db.members)..where((m)=>m.id.equals(mid))).go(); }
+  Future<void> deleteMember(String mid) async { await (db.delete(db.members)..where((m)=>m.id.equals(mid))).go(); SyncOutboxService.notifyWrite("members", mid, op: "delete"); }
   Future<bool> isMemberReferenced(String mid) async { final exps=await (db.select(db.expenses)..where((e)=>e.payersJson.like("%$mid%")|e.sharesJson.like("%$mid%"))).get(); return exps.isNotEmpty; }
 
   // === 账单 ===
@@ -99,7 +101,7 @@ class LedgerRepository {
   Stream<List<Expense>> watchByTripItem(String itemId) => (db.select(db.expenses)..where((e)=>e.tripItemId.equals(itemId))..orderBy([(e)=>OrderingTerm.desc(e.createdAt)])).watch();
   /// 安排关联账单一次性查询（仲裁/同步用）：按 createdAt 降序，首条即最新关联账单
   Future<List<Expense>> getLinkedBills(String itemId) => (db.select(db.expenses)..where((e)=>e.tripItemId.equals(itemId))..orderBy([(e)=>OrderingTerm.desc(e.createdAt)])).get();
-  Future<void> addExpense(ExpensesCompanion e) => db.into(db.expenses).insert(e);
+  Future<void> addExpense(ExpensesCompanion e) async { await db.into(db.expenses).insert(e); SyncOutboxService.notifyWrite("expenses", e.id.value); }
 
   /// 一键入账：由安排预填生成账单并双向关联（tripId+tripItemId 落库）。
   ///
@@ -138,6 +140,7 @@ class LedgerRepository {
       tripItemId: Value(item.id),
       createdAt: Value(DateTime.now().millisecondsSinceEpoch),
     ));
+    SyncOutboxService.notifyWrite("expenses", id);
     return id;
   }
 
@@ -152,9 +155,9 @@ class LedgerRepository {
     }
   }
 
-  Future<void> updateExpense(String id, ExpensesCompanion e) => (db.update(db.expenses)..where((x)=>x.id.equals(id))).write(e);
-  Future<void> deleteExpense(String id) async { await (db.delete(db.expenses)..where((e)=>e.id.equals(id))).go(); }
-  Future<void> setExpenseSettled(String eid, bool settled) async { if(settled) { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value("manual"))); } else { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value(null))); } }
+  Future<void> updateExpense(String id, ExpensesCompanion e) async { await (db.update(db.expenses)..where((x)=>x.id.equals(id))).write(e); SyncOutboxService.notifyWrite("expenses", id); }
+  Future<void> deleteExpense(String id) async { await (db.delete(db.expenses)..where((e)=>e.id.equals(id))).go(); SyncOutboxService.notifyWrite("expenses", id, op: "delete"); }
+  Future<void> setExpenseSettled(String eid, bool settled) async { if(settled) { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value("manual"))); } else { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value(null))); } SyncOutboxService.notifyWrite("expenses", eid); }
 
   // === 结算 ===
   Stream<List<Settlement>> watchSettlements(String gid) {
@@ -201,6 +204,7 @@ class LedgerRepository {
         .get();
     for (final old in existing) {
       await (db.delete(db.settlements)..where((x) => x.id.equals(old.id))).go();
+      SyncOutboxService.notifyWrite("settlements", old.id, op: "delete");
     }
 
     final outstanding = await (db.select(db.expenses)
@@ -237,6 +241,7 @@ class LedgerRepository {
       roundNo: Value(nextRoundNo),
       createdAt: Value(now),
     ));
+    SyncOutboxService.notifyWrite("settlements", id);
     final created = Settlement(
       id: id,
       groupId: gid,
@@ -267,9 +272,10 @@ class LedgerRepository {
     await (db.update(db.settlements)..where((x) => x.id.equals(sid))).write(
       SettlementsCompanion(transfersJson: Value(jsonEncode(list))),
     );
+    SyncOutboxService.notifyWrite("settlements", sid);
   }
-  Future<void> completeSettlement(String sid) async { final s=await (db.select(db.settlements)..where((x)=>x.id.equals(sid))).getSingleOrNull(); if(s==null) return; final eids=jsonDecode(s.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(sid))); } await (db.update(db.settlements)..where((x)=>x.id.equals(sid))).write(SettlementsCompanion(status:Value("completed"),completedAt:Value(DateTime.now().millisecondsSinceEpoch))); }
-  Future<void> undoLastSettlement(String gid) async { final s=await (db.select(db.settlements)..where((x)=>x.groupId.equals(gid)&x.status.equals("completed"))..orderBy([(x)=>OrderingTerm.desc(x.createdAt)])).get(); if(s.isEmpty) return; final last=s.first; final eids=jsonDecode(last.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(null))); } await (db.delete(db.settlements)..where((x)=>x.id.equals(last.id))).go(); }
+  Future<void> completeSettlement(String sid) async { final s=await (db.select(db.settlements)..where((x)=>x.id.equals(sid))).getSingleOrNull(); if(s==null) return; final eids=jsonDecode(s.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(sid))); } await (db.update(db.settlements)..where((x)=>x.id.equals(sid))).write(SettlementsCompanion(status:Value("completed"),completedAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("settlements", sid); }
+  Future<void> undoLastSettlement(String gid) async { final s=await (db.select(db.settlements)..where((x)=>x.groupId.equals(gid)&x.status.equals("completed"))..orderBy([(x)=>OrderingTerm.desc(x.createdAt)])).get(); if(s.isEmpty) return; final last=s.first; final eids=jsonDecode(last.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(null))); } await (db.delete(db.settlements)..where((x)=>x.id.equals(last.id))).go(); SyncOutboxService.notifyWrite("settlements", last.id, op: "delete"); }
 
   // === 分类 ===
   Stream<List<Category>> watchCategories() => db.select(db.categories).watch();

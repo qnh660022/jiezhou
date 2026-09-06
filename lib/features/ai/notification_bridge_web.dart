@@ -11,6 +11,22 @@ class LocalNotificationService {
   }) async {
     // Web 不支持系统通知，忽略。
   }
+
+  Future<void> showSyncNotice({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    // Web 不支持系统通知，忽略。
+  }
+}
+
+/// 同步通知桥（Web 空实现）。
+class SyncNotifierBridge {
+  SyncNotifierBridge(this._ref);
+  final WidgetRef _ref;
+
+  void Function() attach() => () {};
 }
 
 class BudgetAlertNotifierBridge {

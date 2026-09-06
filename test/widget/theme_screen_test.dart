@@ -1,12 +1,12 @@
-// 主题外观页 widget 测试：
-// - 七选一画廊渲染完整性与默认选中态；
-// - 点击卡片即时切换 provider 状态并持久化到 SharedPreferences；
-// - 冷启动恢复上次持久化选择；
-// - 应用层 ThemeMode 三态解析（dark / system / light）与石墨夜暗色基准。
+// 主题外观页 widget 测试（V2.6 12 卡直选模型）：
+// - 浅 5 区 + 深 6 区 + 跟随系统卡渲染完整性与默认选中态（薄荷·山水）；
+// - 点击卡片切换 (family,brightness) 并持久化到 app.theme.family/.brightness；
+// - 旧键 app.theme.key 迁移：映射正确、旧键删除（§5.2）；
+// - 应用层 ThemeMode 三态解析（dark / system+暗色 / light）。
 //
 // 写法对齐 test/widget_test.dart：SharedPreferences.setMockInitialValues +
 // sharedPreferencesProvider.overrideWithValue 包 ProviderScope。
-// 页面用例统一采用超高视口，避免 ListView/GridView 懒构建导致离屏卡片查找不到。
+// 页面用例统一采用超高视口，避免 GridView 懒构建导致离屏卡片查找不到。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,10 +18,10 @@ import 'package:travel_assistant/theme/theme_provider.dart';
 import 'package:travel_assistant/theme/tokens.dart';
 
 void main() {
-  /// 主题持久化键（theme_provider 内为私有常量，这里按存储契约复述）
-  const kThemeStorageKey = 'app.theme.key';
+  const kFamilyKey = 'app.theme.family';
+  const kBrightnessKey = 'app.theme.brightness';
+  const kLegacyKey = 'app.theme.key';
 
-  /// 构建注入 mock prefs 的独立容器（调用方负责 addTearDown(container.dispose)）
   Future<ProviderContainer> makeContainer(
     Map<String, Object> initialValues,
   ) async {
@@ -32,12 +32,11 @@ void main() {
     );
   }
 
-  /// 直接拉起主题页（不经路由）：超高视口让七张卡一次性进入懒加载可视区。
   Future<void> pumpThemeScreen(
     WidgetTester tester,
     ProviderContainer container,
   ) async {
-    tester.view.physicalSize = const Size(800, 3000);
+    tester.view.physicalSize = const Size(800, 4000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -51,7 +50,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// 拉起完整应用（首屏 splash 会自动跳转，需 pumpAndSettle 到稳态）
   Future<void> pumpApp(
     WidgetTester tester,
     Map<String, Object> initialValues,
@@ -67,50 +65,59 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('主题页渲染：七个主题标签齐全，默认选中薄荷绿', (tester) async {
+  testWidgets('主题页渲染：12 张直选卡齐全，默认选中薄荷·山水（浅色）', (tester) async {
     final container = await makeContainer({});
     addTearDown(container.dispose);
     await pumpThemeScreen(tester, container);
 
-    // 七个标签逐一可见且各出现一次
-    for (final label in ThemeKeys.labels.values) {
-      expect(find.text(label), findsOneWidget, reason: '缺少主题标签：$label');
+    // 浅 5 + 深 6 展示名逐一可见
+    final names = [
+      ...ThemeStyles.lightStyles.map((s) => s.displayName),
+      ...ThemeStyles.darkStyles.map((s) => s.displayName),
+    ];
+    expect(names.length, 11);
+    for (final label in names) {
+      expect(find.text(label), findsOneWidget, reason: '缺少主题卡：$label');
     }
-    // 默认选中薄荷绿：provider 状态正确，且全场只有一枚「已选」对勾徽标
-    expect(container.read(themeProvider), ThemeKeys.green);
-    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    expect(find.text('跟随系统'), findsOneWidget);
+    // 默认 mint + light
+    expect(container.read(themeFamilyProvider), ThemeFamily.mint);
+    expect(container.read(themeBrightnessProvider), ThemeBrightnessMode.light);
   });
 
-  testWidgets('点击切换即时生效并落盘：天空蓝 → 跟随系统', (tester) async {
+  testWidgets('点击切换即时生效并落盘：晴空·天蓝 → 夜航·石墨', (tester) async {
     final container = await makeContainer({});
     addTearDown(container.dispose);
     final prefs = container.read(sharedPreferencesProvider);
     await pumpThemeScreen(tester, container);
 
-    // 点天空蓝：状态切换 + 持久化 + 徽标仍唯一
-    await tester.tap(find.text('天空蓝'));
+    await tester.tap(find.text('晴空·天蓝'));
     await tester.pumpAndSettle();
-    expect(container.read(themeProvider), ThemeKeys.blue);
-    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
-    await prefs.reload(); // 从存储侧复核，确认真落盘而非内存缓存
-    expect(prefs.getString(kThemeStorageKey), ThemeKeys.blue);
-
-    // 再点跟随系统：同样状态 + 落盘
-    await tester.tap(find.text('跟随系统'));
-    await tester.pumpAndSettle();
-    expect(container.read(themeProvider), ThemeKeys.system);
-    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    expect(container.read(themeFamilyProvider), ThemeFamily.sky);
+    expect(container.read(themeBrightnessProvider), ThemeBrightnessMode.light);
     await prefs.reload();
-    expect(prefs.getString(kThemeStorageKey), ThemeKeys.system);
+    expect(prefs.getString(kFamilyKey), 'sky');
+    expect(prefs.getString(kBrightnessKey), 'light');
+
+    await tester.tap(find.text('夜航·石墨'));
+    await tester.pumpAndSettle();
+    expect(container.read(themeFamilyProvider), ThemeFamily.night);
+    expect(container.read(themeBrightnessProvider), ThemeBrightnessMode.dark);
+    await prefs.reload();
+    expect(prefs.getString(kFamilyKey), 'night');
+    expect(prefs.getString(kBrightnessKey), 'dark');
   });
 
-  testWidgets('冷启动恢复：预置星空紫时选中态正确', (tester) async {
-    final container = await makeContainer({kThemeStorageKey: ThemeKeys.purple});
+  testWidgets('旧键迁移：app.theme.key=purple → (nebula, light)，旧键删除', (tester) async {
+    final container = await makeContainer({kLegacyKey: ThemeKeys.purple});
     addTearDown(container.dispose);
+    final prefs = container.read(sharedPreferencesProvider);
     await pumpThemeScreen(tester, container);
 
-    expect(container.read(themeProvider), ThemeKeys.purple);
-    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    expect(container.read(themeFamilyProvider), ThemeFamily.nebula);
+    expect(container.read(themeBrightnessProvider), ThemeBrightnessMode.light);
+    expect(prefs.getString(kFamilyKey), 'nebula');
+    expect(prefs.getString(kLegacyKey), isNull); // 旧键删除（§5.2）
   });
 
   testWidgets('应用层亮暗解析：dark / system(+暗色) / 默认 light 三态',
@@ -118,15 +125,15 @@ void main() {
     ThemeMode currentMode() =>
         tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode!;
 
-    // 1) 预置石墨夜：强制深色
-    await pumpApp(tester, {kThemeStorageKey: ThemeKeys.dark});
+    // 1) 预置夜航：强制深色
+    await pumpApp(tester, {kFamilyKey: 'night'});
     expect(currentMode(), ThemeMode.dark);
 
-    // 2) 预置跟随系统且系统处于暗色：themeMode=system，暗色基准为石墨夜配色
+    // 2) 预置跟随系统且系统处于暗色：themeMode=system，暗色基准 surface
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     addTearDown(() => tester.platformDispatcher.platformBrightnessTestValue =
         Brightness.light);
-    await pumpApp(tester, {kThemeStorageKey: ThemeKeys.system});
+    await pumpApp(tester, {kBrightnessKey: 'system'});
     expect(currentMode(), ThemeMode.system);
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.darkTheme?.colorScheme.surface, const Color(0xFF14161C));

@@ -8,3 +8,11 @@ Future<Uint8List> readFileBytes(String path) async =>
 Future<void> clearTempDir() async {}
 
 Future<void> persistErrorLog(String detail) async {}
+
+Future<String?> writableDir() async => null;
+
+Future<void> writeFileString(String path, String content) async {}
+
+Future<String?> readFileString(String path) async => null;
+
+Future<void> deleteFile(String path) async {}

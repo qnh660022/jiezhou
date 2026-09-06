@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'main.dart' show attachStartupServices;
+import 'data/sync/sync_control_providers.dart' show bootstrapCloud, syncEngineProvider;
 import 'platform/detect_env.dart' show isTestEnv;
 import 'features/desktop/mobile_not_supported_screen.dart';
 import 'router.dart';
@@ -23,9 +24,23 @@ class TravelAssistantApp extends ConsumerStatefulWidget {
   ConsumerState<TravelAssistantApp> createState() => _TravelAssistantAppState();
 }
 
-class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp> {
+class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp>
+    with WidgetsBindingObserver {
   bool _startupAttached = false;
+  bool _cloudBootstrapped = false;
   void Function()? _closeStartupBridge;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 前后台切换 → 引擎暂停/恢复周期任务（后台挂起、回前台补一轮 pull）
+    ref.read(syncEngineProvider)?.setForeground(state == AppLifecycleState.resumed);
+  }
 
   @override
   void didChangeDependencies() {
@@ -34,6 +49,15 @@ class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp> {
     // FLUTTER_TEST 环境跳过（通知插件无平台通道，测试也不该有网络副作用）。
     if (!_startupAttached) {
       _startupAttached = true;
+      // 云同步引擎冷启动（全端；配置无效时静默 = 云功能按未配置处理；
+      // FLUTTER_TEST 跳过避免测试网络副作用）
+      if (!isTestEnv && !_cloudBootstrapped) {
+        _cloudBootstrapped = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          bootstrapCloud(ref).catchError((_) {});
+        });
+      }
       // Web 端不挂系统通知桥（Web 实现本就是空）且无 FLUTTER_TEST 环境；仅在
       // 非测试的非 Web 原生环境真正挂载预警通知 + 汇率静默刷新。
       if (!kIsWeb && !isTestEnv) {
@@ -66,31 +90,42 @@ class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _closeStartupBridge?.call();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final themeKey = ref.watch(themeProvider);
-    final isDark = themeKey == ThemeKeys.dark;
-    final isSystem = themeKey == ThemeKeys.system;
+    final family = ref.watch(themeFamilyProvider);
+    final brightness = ref.watch(themeBrightnessProvider);
+    final isSystem = brightness == ThemeBrightnessMode.system;
+    final isDark =
+        brightness == ThemeBrightnessMode.dark || family == ThemeFamily.night;
     return MaterialApp.router(
       title: kAppName,
       debugShowCheckedModeBanner: false,
       routerConfig: widget.router ?? appRouter,
       // Web 版仅支持桌面（宽屏）；手机浏览器直接显示拦截页。
+      // 例外：只读分享页 /s/<token> 与邀请页 /invite 用移动布局直接渲染。
       builder: (context, child) {
         if (kIsWeb && MediaQuery.sizeOf(context).width < 1024) {
-          return const MobileNotSupportedScreen();
+          final path = GoRouter.of(context).routerDelegate.currentConfiguration.uri.toString();
+          final isPublicRoute = path.startsWith('/s/') || path.startsWith('/invite');
+          if (!isPublicRoute) return const MobileNotSupportedScreen();
         }
         return child ?? const SizedBox.shrink();
       },
-      // theme: 浅色基准——选中石墨夜或跟随系统时给默认薄荷绿浅色方案
-      theme: buildAppTheme(isDark || isSystem ? ThemeKeys.green : themeKey),
-      darkTheme: buildAppTheme(ThemeKeys.dark),
-      themeMode:
-          isDark ? ThemeMode.dark : (isSystem ? ThemeMode.system : ThemeMode.light),
+      // V2.6：family×brightness 直选；跟随系统时亮→当前族浅板、暗→当前族深板
+      theme: buildAppThemeFor(
+          family,
+          (isSystem || !isDark)
+              ? ThemeBrightnessMode.light
+              : ThemeBrightnessMode.dark),
+      darkTheme: buildAppThemeFor(family, ThemeBrightnessMode.dark),
+      themeMode: isDark
+          ? ThemeMode.dark
+          : (isSystem ? ThemeMode.system : ThemeMode.light),
       locale: const Locale('zh'),
       supportedLocales: const [Locale('zh')],
       localizationsDelegates: const [

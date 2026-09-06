@@ -75,3 +75,6 @@ nul
 .zcode/
 # 验收报告（可能含个人项目背景，公开前先审阅）
 /docs/*.md
+
+# WorkBuddy 本地代理数据（非源码，不入库）
+.workbuddy/

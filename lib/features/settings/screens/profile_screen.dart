@@ -14,6 +14,7 @@ import '../../../shared/travel_quotes.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/ledger_providers.dart';
+import '../../../shared/copy_tokens.dart';
 
 /// 「我的」Tab 根页：大标题 + 用户卡 + 设置分组入口。
 class ProfileScreen extends ConsumerWidget {
@@ -52,6 +53,14 @@ class ProfileScreen extends ConsumerWidget {
         _StaggerIn(index: 0, child: const _UserCard()),
         // 偏好设置分组
         const SectionHeader(title: '偏好设置'),
+        _StaggerIn(
+          index: 1,
+          child: _ProfileTile(
+            icon: Icons.cloud_sync_outlined,
+            title: '云端与同步',
+            onTap: () => context.push('/profile/cloud'),
+          ),
+        ),
         _StaggerIn(
           index: 1,
           child: _ProfileTile(
@@ -608,6 +617,15 @@ class _TravelQuoteFooterState extends State<_TravelQuoteFooter> {
                       .textTheme
                       .labelSmall
                       ?.copyWith(color: scheme.outline),
+                ),
+                const SizedBox(height: Spacing.xs),
+                Text(
+                  copy(CopyTokens.profileQuotesNote),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: scheme.outline, fontStyle: FontStyle.italic),
                 ),
               ],
             ),

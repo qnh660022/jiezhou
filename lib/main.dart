@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/error_recovery.dart';
+import 'core/supabase_config.dart';
+import 'data/sync/sync_control_providers.dart' show bootstrapCloud;
 import 'data/providers.dart';
 import 'features/ai/notification_bridge.dart';
 import 'features/ledger/ledger_providers.dart' show currencyRatesProvider;
@@ -34,6 +37,10 @@ Future<void> main() async {
   // 平台通道竞态）也会挂起，这里一旦超时立即切换到内存实现，保证 runApp
   // 最迟 4 秒内必然执行 —— 白屏的第二个根因也被封死。
   final prefs = await _loadPrefs();
+
+  // 云后端接入（V2.6 §3.2.3）：resolve 有效则初始化 Supabase；整个步骤 4s 超时，
+  // 超时/异常都继续启动（云功能按未配置处理），绝不让网络 await 挡首帧。
+  await _initSupabaseQuiet(prefs);
 
   // 全局错误兜底：release 灰屏 → 自动记录堆栈 + 启动窗口期自愈重启 +
   // 可读错误屏（重启/复制按钮）。必须在 runApp 之前装好。
@@ -98,13 +105,42 @@ Future<SharedPreferences> _loadPrefs() async {
   }
 }
 
+/// 云后端静默初始化：resolve → Supabase.initialize；4s 超时或异常都静默跳过，
+/// 会话恢复由 supabase_flutter 内部处理（不额外 await）。
+Future<void> _initSupabaseQuiet(SharedPreferences prefs) async {
+  try {
+    final cfg = SupabaseCfg.resolveSync(prefs);
+    if (cfg == null) return;
+    await Supabase.initialize(
+      url: cfg.url,
+      anonKey: cfg.anonKey,
+      debug: false,
+    ).timeout(const Duration(seconds: 4));
+  } catch (_) {
+    // 初始化失败：云功能按未配置处理，不影响本地功能。
+  }
+}
+
 /// App 启动后的后台任务挂载点：由 app.dart 首帧后调用一次。
-/// 返回关闭句柄（关闭预警→通知桥的订阅）。
+/// 返回关闭句柄（关闭预警/同步通知桥的订阅）。
 ///
 /// * 预算预警→系统通知桥（只在预警升级时提醒，同级不重复）；
+/// * 同步失败/恢复→系统通知桥（§3.18）；
 /// * 汇率静默刷新（12h 节流，失败无感）。
 void Function() attachStartupServices(WidgetRef ref) {
+  // 云引擎先就绪（幂等；app.dart 首帧也会调一次，重复调用直接复用），
+  // 同步失败/恢复通知桥要等引擎建好后才能挂接，故放异步段。
+  Future(() async {
+    try {
+      await bootstrapCloud(ref);
+    } catch (_) {}
+    try {
+      final closeSync = SyncNotifierBridge(ref).attach();
+      _startupClosers.add(closeSync);
+    } catch (_) {}
+  });
   final closeBridge = BudgetAlertNotifierBridge(ref).attach();
+  _startupClosers.add(closeBridge);
   Future(() async {
     try {
       final updated = await ref.read(exchangeRateServiceProvider).refreshIfStale();
@@ -113,5 +149,12 @@ void Function() attachStartupServices(WidgetRef ref) {
       // 汇率刷新失败无感（12h 后会再试），不产生未捕获异步错误。
     }
   });
-  return closeBridge;
+  return () {
+    for (final c in _startupClosers) {
+      c();
+    }
+    _startupClosers.clear();
+  };
 }
+
+final List<void Function()> _startupClosers = [];

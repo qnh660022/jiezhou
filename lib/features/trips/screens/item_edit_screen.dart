@@ -23,10 +23,13 @@ import '../trip_widgets.dart';
 
 /// 安排编辑页（路由 extra 传 {tripId, item?}）
 class ItemEditScreen extends ConsumerStatefulWidget {
-  const ItemEditScreen({super.key, this.tripId, this.item});
+  const ItemEditScreen({super.key, this.tripId, this.item, this.prefillNew = false});
 
   final String? tripId;
   final TripItem? item;
+
+  /// 预填模式：[item] 只作表单初值（如攻略「加入安排」），保存时按新建处理。
+  final bool prefillNew;
 
   @override
   ConsumerState<ItemEditScreen> createState() => _ItemEditScreenState();
@@ -59,7 +62,7 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.item != null) {
+    if (widget.item != null && !widget.prefillNew) {
       final it = widget.item!;
       _editId = it.id;
       _type = it.type;

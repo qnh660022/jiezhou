@@ -20,6 +20,7 @@ import '../widgets/trip_chip_selector.dart';
 import '../widgets/smart_template_sheet.dart';
 import '../widgets/confetti_burst.dart';
 import '../widgets/stagger_in.dart';
+import '../../../shared/copy_tokens.dart';
 
 class ChecklistScreen extends ConsumerStatefulWidget {
   const ChecklistScreen({super.key});
@@ -106,7 +107,7 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) return const ChecklistSkeleton();
         if (snapshot.hasError) return EmptyState(emoji: '😵', title: '加载失败', message: snapshot.error.toString());
         final trips = snapshot.data ?? [];
-        if (trips.isEmpty) return EmptyState(emoji: '🧳', title: '还没有行程', message: '创建行程后就可以整理行李啦', actionLabel: '去创建行程', onAction: () => context.push('/trips/edit'));
+        if (trips.isEmpty) return EmptyState(emoji: '🧳', title: copy(CopyTokens.checklistEmpty), message: '创建行程后就可以整理行李啦', actionLabel: '去创建行程', onAction: () => context.push('/trips/edit'));
         // 不在 build 中直接改 state（会触发失活元素重建断言）：
         // 用局部变量计算有效选中；失效 id 延迟到 post-frame 安全重置。
         var selectedTripId = _selectedTripId;

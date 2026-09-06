@@ -18,6 +18,7 @@ import '../../../shared/widgets/secondary_button.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../../../shared/copy_tokens.dart';
 
 /// 分享行程海报页
 class TripShareScreen extends ConsumerStatefulWidget {
@@ -239,7 +240,7 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
     final bytes = byteData.buffer.asUint8List();
     final msg = await saveImageBytes(
         bytes, 'poster_${DateTime.now().millisecondsSinceEpoch}.png');
-    _toast(msg);
+    _toast('${copy(CopyTokens.exportDone)} $msg');
   }
 
   Future<void> _share() async {
@@ -252,6 +253,7 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
     final trip = await ref.read(tripsRepoProvider).getById(_tripId!);
     await shareFile(bytes, 'poster_share.png', 'image/png',
         text: '来看看我的行程「${trip?.name ?? ''}」');
+    _toast(copy(CopyTokens.shareDone));
   }
 }
 

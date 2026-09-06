@@ -12,3 +12,16 @@ Future<void> clearTempDir() => impl.clearTempDir();
 
 /// 把错误日志追写入本地存储。Web 端当前为无操作（错误仍会走错误屏提示）。
 Future<void> persistErrorLog(String detail) => impl.persistErrorLog(detail);
+
+/// 可写目录（原生 = Documents；Web = null，攻略缓存等文件级能力在 Web 禁用）。
+Future<String?> writableDir() => impl.writableDir();
+
+/// 原子写文本文件（临时文件 + rename，防半文件）。
+Future<void> writeFileString(String path, String content) =>
+    impl.writeFileString(path, content);
+
+/// 读文本文件；不存在/失败返回 null。
+Future<String?> readFileString(String path) => impl.readFileString(path);
+
+/// 删除文件（不存在则静默）。
+Future<void> deleteFile(String path) => impl.deleteFile(path);

@@ -1,5 +1,6 @@
 // 🗺️ 行程详情：渐变延伸头 + 玻璃吸顶 + 按天时间轴 + 天气条 + 头部快捷操作卡
 // 数据访问集中区 —— 按 t2 命名假设编写：
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:drift/drift.dart' show Value;
@@ -13,6 +14,7 @@ import '../../../data/services/weather_service.dart';
 import '../../../domain/trip_bill_linker.dart';
 import '../../ledger/ledger_providers.dart';
 import '../trip_template_store.dart';
+import 'trip_guide_screen.dart';
 
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
@@ -1956,6 +1958,18 @@ void _openMoreSheet(BuildContext context, String tripId) {
           Text('更多操作',
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: AppFontSizes.bodyLarge)),
           const SizedBox(height: Spacing.md),
+          // 目的地攻略：仅 Android（§7.8 Web 隐藏入口）
+          if (!kIsWeb)
+            ListTile(
+              leading: const Icon(Icons.menu_book_rounded),
+              title: const Text('目的地攻略'),
+              subtitle: const Text('行前准备 · 景点 · 美食 · 避坑'),
+              contentPadding: EdgeInsets.zero,
+              onTap: () {
+                Navigator.of(ctx).pop();
+                context.push('/trips/guide', extra: tripId);
+              },
+            ),
           ListTile(
             leading: const Icon(Icons.inventory_2_outlined),
             title: const Text('存为行程模板'),
