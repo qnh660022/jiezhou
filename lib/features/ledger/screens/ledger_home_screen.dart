@@ -69,11 +69,12 @@ class LedgerHomeScreen extends ConsumerWidget {
                 );
               },
             ),
+            // 云同步状态小点：与头部按钮同行对齐（点按进同步中心）
+            const Padding(
+              padding: EdgeInsets.only(left: Spacing.sm),
+              child: SyncStatusCapsule(),
+            ),
           ],
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: Spacing.xl),
-          child: Align(alignment: Alignment.centerRight, child: SyncStatusCapsule()),
         ),
         const SharedLedgerSection(),
         Expanded(
