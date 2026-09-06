@@ -446,10 +446,9 @@ class _SectionCardState extends State<_SectionCard> {
       item['line'] as String? ?? '',
     ].where((s) => s.isNotEmpty).toList();
     if (parts.isEmpty) return null;
+    // 离线种子 2.0：内容精品化后不截断，完整展示 detail 便于长文阅读。
     return Text(parts.join(' · '),
-        style: const TextStyle(fontSize: AppFontSizes.caption),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis);
+        style: const TextStyle(fontSize: AppFontSizes.caption, height: 1.35));
   }
 
   Widget? _addButton(Map<String, dynamic> item) {

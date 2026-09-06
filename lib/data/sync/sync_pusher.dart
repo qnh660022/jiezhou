@@ -58,7 +58,13 @@ class SyncPusher {
   Future<List<SyncEnvelope>> assemble(List<OutboxEntry> batch) async {
     final out = <SyncEnvelope>[];
     for (final e in batch) {
-      final entity = SyncEntity.values.firstWhere((s) => s.name == e.entity);
+      // 防御：未知 entity 字符串（迁移残留 / 脏数据）→ 当场清理 outbox，
+      // 避免反复抛 `Bad state: No element`（firstWhere 无 orElse 时的典型错误）。
+      final entity = _resolveEntity(e.entity);
+      if (entity == null) {
+        await outbox.delete([e]);
+        continue;
+      }
       final row = await accessor.readBusinessRow(e.entity, e.rowId);
       out.add(SyncEnvelope(
         entity: entity,
@@ -69,6 +75,14 @@ class SyncPusher {
       ));
     }
     return out;
+  }
+
+  /// 在 7 个合法 [SyncEntity] 中按字符串名匹配；找不到返回 null（→ 走清理分支）。
+  SyncEntity? _resolveEntity(String name) {
+    for (final s in SyncEntity.values) {
+      if (s.name == name) return s;
+    }
+    return null;
   }
 
   Future<PushResult> drain() async {

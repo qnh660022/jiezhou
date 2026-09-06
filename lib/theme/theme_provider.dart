@@ -133,12 +133,12 @@ class ThemeLegacyNotifier extends Notifier<String> {
 final themeProvider =
     NotifierProvider<ThemeLegacyNotifier, String>(ThemeLegacyNotifier.new);
 
-/// 字体风格档（标题衬线开关；persist app.font.style）。
+/// 字体风格档（标题衬线开关；persist app.font.style；默认无衬线 modern）。
 class FontModeNotifier extends Notifier<FontMode> {
   @override
   FontMode build() {
     final saved = ref.watch(sharedPreferencesProvider).getString('app.font.style');
-    return saved == 'modern' ? FontMode.modern : FontMode.serif;
+    return saved == 'serif' ? FontMode.serif : FontMode.modern;
   }
 
   Future<void> set(FontMode m) async {

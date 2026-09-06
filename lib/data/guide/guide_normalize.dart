@@ -58,6 +58,20 @@ const Map<String, String> kGuideCityAliases = {
   '北戴河': 'qinhuangdao',
   '山海关': 'qinhuangdao',
   '草原天路': 'zhangye',
+  // 离线种子 2.0 新增城市别名（泉城→jinan、瓷都→jingdezhen 原已存在，
+  // 此前因种子缺城而失效，2.0 补齐内容后自然生效）
+  '星城': 'changsha',
+  '榕城': 'fuzhou',
+  '百载商埠': 'shantou',
+  '禅城': 'foshan',
+  '北国春城': 'changchun',
+  '佛国': 'wutaishan',
+  '冷极': 'mohe',
+  '圣城': 'lasa',
+  '汴梁': 'kaifeng',
+  '汴京': 'kaifeng',
+  '极边第一城': 'tengchong',
+  '长安': 'xian',
 };
 
 class GuideLocation {
@@ -166,13 +180,17 @@ const Set<String> _knownKeys = {
   'kunming', 'guiyang', 'lanzhou', 'urumqi', 'lasa', 'xining', 'yinchuan',
   'huihe', 'taiyuan', 'zhengzhou', 'hefei', 'nanchang', 'fuzhou', 'nanning',
   'zhuhai', 'tianjin', 'zhangjiajie', 'wuzhen', 'huangshan', 'weihai',
-  'beihai', 'pingyao', 'dunhuang', 'zhangjiajie_fenghuang',
+  'beihai', 'pingyao', 'dunhuang', 'luoyang', 'zhangjiajie_fenghuang',
   // v2 扩充（71 城）
   'hongkong', 'macau', 'taibei', 'chengde', 'datong', 'qinhuangdao',
   'yanji', 'shenyang', 'daocheng', 'jiuzhaigou', 'leshan', 'emeishan',
   'zhangye', 'turpan', 'tianshui', 'taian', 'wuxi', 'yangzhou', 'shaoxing',
   'ningbo', 'quanzhou', 'wuyuan', 'yichang', 'enshi', 'chaozhou', 'haikou',
   'anshun', 'xishuangbanna', 'shangrila',
+  // 离线种子 2.0 扩充（85 城）：xian/wuhan/changsha 已在首段列出，此处不重复
+  'jinan', 'jingdezhen', 'shantou', 'foshan',
+  'changchun', 'changbaishan', 'wutaishan', 'hulunbuir', 'mohe', 'yanan',
+  'kaifeng', 'tengchong',
 };
 
 const Map<String, String> _knownCnNames = {
@@ -187,6 +205,7 @@ const Map<String, String> _knownCnNames = {
   'fuzhou': '福州', 'nanning': '南宁', 'zhuhai': '珠海', 'tianjin': '天津',
   'zhangjiajie': '张家界', 'wuzhen': '乌镇', 'huangshan': '黄山',
   'weihai': '威海', 'beihai': '北海', 'pingyao': '平遥', 'dunhuang': '敦煌',
+  'luoyang': '洛阳',
   'zhangjiajie_fenghuang': '凤凰',
   // v2 扩充（71 城）
   'hongkong': '香港', 'macau': '澳门', 'taibei': '台北', 'chengde': '承德',
@@ -198,4 +217,10 @@ const Map<String, String> _knownCnNames = {
   'quanzhou': '泉州', 'wuyuan': '婺源', 'yichang': '宜昌', 'enshi': '恩施',
   'chaozhou': '潮州', 'haikou': '海口', 'anshun': '安顺',
   'xishuangbanna': '西双版纳', 'shangrila': '香格里拉',
+  // 离线种子 2.0 扩充（85 城）：xian/wuhan/changsha 已在首段列出，此处不重复
+  'jinan': '济南',
+  'jingdezhen': '景德镇', 'shantou': '汕头', 'foshan': '佛山',
+  'changchun': '长春', 'changbaishan': '长白山', 'wutaishan': '五台山',
+  'hulunbuir': '呼伦贝尔', 'mohe': '漠河', 'yanan': '延安',
+  'kaifeng': '开封', 'tengchong': '腾冲',
 };

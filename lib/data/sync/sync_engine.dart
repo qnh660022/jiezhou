@@ -448,12 +448,19 @@ class SyncEngine {
       }
     }
     final pending = uid == null ? 0 : await outbox.pendingCount();
+    // 切到 idle 且确无新错误时，清掉陈旧 lastError——
+    // 避免「状态卡显示绿/已同步」与「最近错误红字」同时出现造成语义矛盾。
+    final clearStaleError = k == SyncStatusKind.idle &&
+        error == null &&
+        !_lastPushFailed &&
+        _consecutivePullFailures < 3;
     _status = SyncStatus(
       kind: k,
       lastSyncedAt: lastSynced ?? _status.lastSyncedAt,
       pendingCount: pending,
-      lastError: error ?? _status.lastError,
-      lastErrorAt: error != null ? DateTime.now() : _status.lastErrorAt,
+      lastError: clearStaleError ? null : (error ?? _status.lastError),
+      lastErrorAt:
+          clearStaleError ? null : (error != null ? DateTime.now() : _status.lastErrorAt),
     );
     onStatusChanged?.call(_status);
     _statusCtl.add(_status);

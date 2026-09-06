@@ -45,7 +45,8 @@ void main() {
       seed = (jsonDecode(raw) as Map).cast<String, dynamic>();
     });
 
-    test('L1-P0 城市数 ≥55 且 key 唯一、结构合法、单城 ≤20KB', () {
+    // 离线种子 2.0：内容精品化后红线放宽（仅防呆兜底，正常单城 15~60KB、每栏 3~12 条）。
+    test('L1-P0 城市数 ≥55 且 key 唯一、结构合法、单城 ≤256KB', () {
       final cities = (seed['cities'] as List).cast<Map>();
       expect(cities.length, greaterThanOrEqualTo(55));
       final keys = <String>{};
@@ -54,12 +55,12 @@ void main() {
         expect(GuideCity.validate(m), isNull, reason: '${m['key']} 结构非法');
         expect(keys.add(m['key'] as String), isTrue, reason: '${m['key']} key 重复');
         final size = jsonEncode(m).length;
-        expect(size, lessThanOrEqualTo(20 * 1024),
-            reason: '${m['key']} 单城超 20KB: $size');
+        expect(size, lessThanOrEqualTo(256 * 1024),
+            reason: '${m['key']} 单城超 256KB: $size');
       }
     });
 
-    test('L1-P0 六栏齐全、每栏 3~8 条', () {
+    test('L1-P0 六栏齐全、每栏 3~24 条', () {
       for (final c in (seed['cities'] as List).cast<Map>()) {
         final sections =
             (c['sections'] as Map).cast<String, dynamic>();
@@ -67,8 +68,8 @@ void main() {
           final list = (sections[k] as List?) ?? [];
           expect(list.length, greaterThanOrEqualTo(3),
               reason: '${c['key']}.$k 少于 3 条');
-          expect(list.length, lessThanOrEqualTo(8),
-              reason: '${c['key']}.$k 超过 8 条');
+          expect(list.length, lessThanOrEqualTo(24),
+              reason: '${c['key']}.$k 超过 24 条');
         }
       }
     });

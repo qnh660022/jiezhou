@@ -16,6 +16,13 @@ class GuideSeedSource {
   static const seedAsset = 'assets/data/guide_seed_v1.json';
 
   /// 官网增量包地址（§7.18：URL 与版本号放常量，本轮官网不部署，404 静默降级）。
+  ///
+  /// 【后端更新接口·预留】后端服务暂不开发，此处仅约定契约：
+  /// - 内置种子 version 为 `v2`，与 [updateUrl] 包名 `guide_seed_v2.json` 对齐；
+  /// - 后端将来只需在官网部署同构 JSON（`version` 非空 + `cities` 数组，
+  ///   每城过 GuideCity.validate）即完成「发版」；
+  /// - 客户端 tryUpdateFromOfficial 自动拉取 → 整包校验 → 落盘覆盖内置种子，
+  ///   任一城校验失败整包丢弃，24h 冷却，任何失败静默降级用内置——均无需改客户端。
   static const updateUrl =
       'https://jiezhou.22006.dpdns.org/guide/guide_seed_v2.json';
 
