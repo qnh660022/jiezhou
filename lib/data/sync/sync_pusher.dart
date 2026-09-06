@@ -32,8 +32,8 @@ class SyncPusher {
   /// 入参 (entity, rowId, 行数据)；返回 false = 跳过并丢弃该 outbox 行。
   bool Function(String entity, String rowId, Map<String, dynamic> row)? isEntityEnabled;
 
-  /// 连续失败回调（引擎统计触发节流/通知）。
-  final void Function(Object error)? onFailure;
+  /// 连续失败回调（引擎统计触发节流/通知；错误可为 null——空网络错误等）。
+  final void Function(Object? error)? onFailure;
 
   /// 从失败态首次成功回调（恢复通知）。
   final void Function()? onSuccess;
@@ -66,6 +66,17 @@ class SyncPusher {
         continue;
       }
       final row = await accessor.readBusinessRow(e.entity, e.rowId);
+      if (row == null) {
+        // 本地已删（op=delete 墓碑）。云端 NOT NULL 列（created_ms/group_id 等）
+        // 无法在墓碑插入时补齐——从未上过云的行，其他端本就不可见，
+        // 直接丢弃 outbox 行即可；云端确有该行才上行墓碑（软删广播）。
+        final remote = await transport.select(entity.cloudTable,
+            filters: {entity.idColumn: e.rowId}, limit: 1);
+        if (remote.isEmpty) {
+          await outbox.delete([e]);
+          continue;
+        }
+      }
       out.add(SyncEnvelope(
         entity: entity,
         rowId: e.rowId,
@@ -113,26 +124,45 @@ class SyncPusher {
       }
       if (kept.isEmpty) continue; // 本批全被关闸，继续下一轮取件
       work = kept;
-      // 按实体聚合多调（批内单实体 ≤50）
+      // 按实体聚合多调（批内单实体 ≤50）；单实体失败只标记该实体行，
+      // 不再拖垮同批其他实体（历史 bug：一行坏数据连坐整批 8 次后全部变死信）。
       final byEntity = <SyncEntity, List<SyncEnvelope>>{};
       for (final e in keptEnvelopes) {
         byEntity.putIfAbsent(e.entity, () => []).add(e);
       }
-      try {
-        for (final entry in byEntity.entries) {
-          if (entry.value.isEmpty) continue;
+      final okRows = <OutboxEntry>[];
+      final failedRows = <OutboxEntry>[];
+      Object? firstErr;
+      for (final entry in byEntity.entries) {
+        if (entry.value.isEmpty) continue;
+        try {
           await transport.upsert(
             entry.key.cloudTable,
             entry.value.map((e) => e.toCloudJson()).toList(),
           );
+          okRows.addAll([
+            for (final e in entry.value)
+              work.firstWhere((w) => w.rowId == e.rowId),
+          ]);
+        } catch (err) {
+          firstErr ??= err;
+          failedRows.addAll([
+            for (final e in entry.value)
+              work.firstWhere((w) => w.rowId == e.rowId),
+          ]);
         }
-        await outbox.delete(work);
-        pushed += work.length;
+      }
+      if (okRows.isNotEmpty) {
+        await outbox.delete(okRows);
+        pushed += okRows.length;
+      }
+      if (failedRows.isEmpty) {
         onSuccess?.call();
-      } catch (err) {
-        await outbox.markAttempt(work);
-        onFailure?.call(err);
-        return PushResult(pushed: pushed, failed: work.length, error: err);
+      } else {
+        await outbox.markAttempt(failedRows);
+        onFailure?.call(firstErr);
+        return PushResult(
+            pushed: pushed, failed: failedRows.length, error: firstErr);
       }
     }
     return PushResult(pushed: pushed, failed: 0);

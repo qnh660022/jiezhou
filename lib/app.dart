@@ -99,6 +99,10 @@ class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp>
   Widget build(BuildContext context) {
     final family = ref.watch(themeFamilyProvider);
     final brightness = ref.watch(themeBrightnessProvider);
+    // 字体风格与圆角密度必须接入 ThemeData 构建，否则设置页开关不生效
+    // （buildAppThemeFor 缺省 fontMode=serif，历史 bug：默认成了衬线标题）。
+    final fontMode = ref.watch(fontStyleProvider);
+    final radiusDensity = ref.watch(radiusDensityProvider);
     final isSystem = brightness == ThemeBrightnessMode.system;
     final isDark =
         brightness == ThemeBrightnessMode.dark || family == ThemeFamily.night;
@@ -121,8 +125,11 @@ class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp>
           family,
           (isSystem || !isDark)
               ? ThemeBrightnessMode.light
-              : ThemeBrightnessMode.dark),
-      darkTheme: buildAppThemeFor(family, ThemeBrightnessMode.dark),
+              : ThemeBrightnessMode.dark,
+          fontMode: fontMode,
+          radiusDensity: radiusDensity),
+      darkTheme: buildAppThemeFor(family, ThemeBrightnessMode.dark,
+          fontMode: fontMode, radiusDensity: radiusDensity),
       themeMode: isDark
           ? ThemeMode.dark
           : (isSystem ? ThemeMode.system : ThemeMode.light),

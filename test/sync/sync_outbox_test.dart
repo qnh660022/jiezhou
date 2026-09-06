@@ -127,7 +127,9 @@ void main() {
   });
 
   group('assemble 与引导闸', () {
-    test('L1-P0 本地行已删 → assemble 产出 delete 信封', () async {
+    test('L1-P0 本地行已删且云端已有 → assemble 产出 delete 信封', () async {
+      // 墓碑只在云端确有该行时上行（冲突更新置 deleted=true，不触发 INSERT 缺列）
+      transport.seedRow('trips_sync', {'id': 'gone', 'created_ms': 1});
       await outbox.enqueue('trips', 'gone', 'delete', 5000);
       final pusher = SyncPusher(outbox, transport, accessor);
       final envelopes = await pusher.assemble(await outbox.selectBatch());
@@ -135,6 +137,16 @@ void main() {
       envelopes.single.toCloudJson().forEach((k, v) {
         if (k == 'deleted') expect(v, isTrue);
       });
+    });
+
+    test('L1-P0 本地行已删且从未上云 → assemble 丢弃（不发墓碑）', () async {
+      // 从未上过云的行对其他端不可见；发墓碑会因云端 NOT NULL 列
+      // （created_ms/group_id）无法 INSERT 而整批失败——直接丢弃 outbox 行。
+      await outbox.enqueue('trips', 'never_pushed', 'delete', 5000);
+      final pusher = SyncPusher(outbox, transport, accessor);
+      final envelopes = await pusher.assemble(await outbox.selectBatch());
+      expect(envelopes, isEmpty);
+      expect(await outbox.pendingCount(), 0); // 已清理
     });
 
     test('L1-P0 引导闸未置 true → drain 前拦截（bootstrapUploadAll 之外不出网）',

@@ -424,7 +424,9 @@ class _SectionCardState extends State<_SectionCard> {
               ListTile(
                 dense: true,
                 title: Text(
-                    (item['title'] ?? item['name'] ?? '').toString(),
+                    // 六栏条目主键不一：prep=title、spots/food=name、transport=mode、budget=item
+                    (item['title'] ?? item['name'] ?? item['mode'] ?? item['item'] ?? '')
+                        .toString(),
                     style: const TextStyle(fontSize: AppFontSizes.body)),
                 subtitle: _subtitle(item),
                 trailing: (widget.sectionKey == 'spots' ||

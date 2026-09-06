@@ -19,6 +19,7 @@ import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/share_link_sheet.dart';
 
 /// 分享行程海报页
 class TripShareScreen extends ConsumerStatefulWidget {
@@ -218,6 +219,24 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
                 ),
               ),
             ],
+          ),
+          // 只读链接分享（云端）：无需登录即可在浏览器查看行程时间线
+          const SizedBox(height: Spacing.xl),
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              leading: const Icon(Icons.link_rounded),
+              title: const Text('只读链接分享'),
+              subtitle: Text(
+                '生成一个网页链接，任何人不登录也能查看此行程（只读）；可设 4 位口令，随时撤销。',
+                style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: AppFontSizes.caption),
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => showShareLinkSheet(context,
+                  entityType: 'trip', entityId: trip.id),
+            ),
           ),
           const SizedBox(height: Spacing.huge),
         ],

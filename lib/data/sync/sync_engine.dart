@@ -82,7 +82,7 @@ class SyncEngine {
       engine.outbox,
       transport,
       SyncDbAccessor(db),
-      onFailure: (_) => engine._onPushFailure(),
+      onFailure: (err) => engine._onPushFailure(err),
       onSuccess: () => engine._onPushSuccess(),
     );
     engine.puller = SyncPuller(db, transport, engine.metaService, engine.merger);
@@ -300,9 +300,14 @@ class SyncEngine {
         if (_throttled && push) {
           // 节流期：手动按钮仍可用（被动周期已停）
         }
+        var pushFailed = false;
         if (push && _bootstrapGateOpen()) {
           final r = await pusher.drain();
-          if (r.ok) _onPushSuccess();
+          if (r.ok) {
+            _onPushSuccess();
+          } else {
+            pushFailed = true;
+          }
         }
         final pr = await puller.pullAll();
         if (!pr.ok) {
@@ -310,9 +315,33 @@ class SyncEngine {
           _onPullFailure(pr.error);
         } else {
           _consecutivePullFailures = 0;
+          // 拉取恢复：解除节流并恢复周期任务（历史 bug：拉取成功后
+          // 节流标志残留，周期同步停满 10 分钟才自愈）。
+          if (_throttled && !pushFailed) {
+            _throttled = false;
+            _throttleUntil = null;
+            _startPeriodic();
+          }
         }
-        _updateStatus(kind: SyncStatusKind.idle, lastSynced: DateTime.now());
+        // 「刚刚同步」只在拉取确实成功时刷新——失败也刷时间会掩盖故障。
+        _updateStatus(
+            kind: pushFailed
+                ? SyncStatusKind.offline
+                : SyncStatusKind.idle,
+            lastSynced: pr.ok ? DateTime.now() : null);
       });
+
+  /// 手动「立即同步」加强版：重置死信与节流后全量重试（同步中心按钮用）。
+  Future<void> retryFailedNow() async {
+    await outbox.resetDeadLetters();
+    _throttled = false;
+    _throttleUntil = null;
+    _consecutivePushFailures = 0;
+    _consecutivePullFailures = 0;
+    _lastPushFailed = false;
+    _startPeriodic();
+    await syncNow();
+  }
 
   // ===== 并发互斥（drain 与 pull 互斥；锁内操作 30s 超时强制释放） =====
 
@@ -321,7 +350,7 @@ class SyncEngine {
     final completer = Completer<void>();
     _lock = completer.future;
     try {
-      await body().timeout(const Duration(seconds: 30));
+      await body().timeout(const Duration(seconds: 60));
     } on TimeoutException {
       // 锁内整体操作超时：视为异常强制释放（登记状态）
       _setStatusError('同步超时（30s），已自动恢复');
@@ -336,7 +365,7 @@ class SyncEngine {
 
   // ===== 失败/恢复/节流（§3.12） =====
 
-  void _onPushFailure() {
+  void _onPushFailure(Object? error) {
     _consecutivePushFailures++;
     if (_consecutivePushFailures >= 3 && !_lastPushFailed) {
       _throttle();
@@ -347,7 +376,8 @@ class SyncEngine {
       onSyncFailed?.call('云端失联：改动已妥善留在本机，网络恢复后自动续传');
     }
     _lastPushFailed = true;
-    _updateStatus(kind: SyncStatusKind.offline);
+    // 失败原因进状态（历史 bug：离线态不落 error，UI 只显示「离线」无原因）。
+    _updateStatus(kind: SyncStatusKind.offline, error: _sanitizeError(error));
   }
 
   void _onPushSuccess() {

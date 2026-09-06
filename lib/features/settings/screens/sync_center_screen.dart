@@ -3,6 +3,7 @@
 /// 同步频率 / 云端占用估算 / 释放云端空间。
 library;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,6 +15,7 @@ import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../data/sync/sync_engine.dart';
 import '../../../data/sync/sync_models.dart';
+import '../../../shared/app_meta.dart' show shareLinkUrl;
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/sync_status_capsule.dart'
@@ -120,7 +122,9 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
             FilledButton(
               onPressed: () async {
                 final engine = ref.read(syncEngineProvider);
-                await engine?.syncNow();
+                // 手动同步 = 重置死信与节流后全量重试（否则多次失败的行
+                // 永远被跳过，「待同步 N 行」只增不减）。
+                await engine?.retryFailedNow();
                 if (mounted) setState(() {});
               },
               child: Text(copy('sync.now')),
@@ -136,6 +140,22 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
             const SizedBox(height: Spacing.xs),
             Text('${copy('sync.pending')} ${status.pendingCount} ${copy('sync.rows')}',
                 style: TextStyle(color: scheme.onSurfaceVariant, fontSize: AppFontSizes.caption)),
+            // 死信提示：多次失败的行此前会被自动重试跳过，手动同步已改为先重置再重试
+            FutureBuilder<int>(
+              future: ref.read(syncEngineProvider)?.outbox.deadLetterCount() ??
+                  Future.value(0),
+              builder: (_, snap) {
+                final n = snap.data ?? 0;
+                if (n <= 0) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: Spacing.xs),
+                  child: Text(
+                      '其中 $n 行多次失败已暂停自动重试，点「立即同步」强制重试',
+                      style: TextStyle(
+                          color: scheme.error, fontSize: AppFontSizes.caption)),
+                );
+              },
+            ),
           ],
           if (status.lastError != null) ...[
             const SizedBox(height: Spacing.xs),
@@ -287,32 +307,88 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
           : links.isEmpty
               ? Padding(
                   padding: const EdgeInsets.all(Spacing.lg),
-                  child: Text(copy('sync.linksEmpty'),
+                  child: Text(
+                      '${copy('sync.linksEmpty')}（在 行程分享页 / 共享团详情页 可生成）',
                       style: const TextStyle(fontSize: AppFontSizes.caption)))
               : Column(children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.md,
+                        Spacing.lg, Spacing.sm),
+                    child: Text(
+                        '只读链接：任何人不登录即可在浏览器查看，不能修改；口令在创建时设置。',
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: AppFontSizes.caption)),
+                  ),
                   for (final l in links)
-                    ListTile(
-                      leading: Icon(
-                        l['entity_type'] == 'trip'
-                            ? Icons.flight_takeoff_rounded
-                            : Icons.account_balance_wallet_rounded,
-                        size: 20,
-                      ),
-                      title: Text((l['entity_id'] as String?) ?? '',
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text((l['token'] as String?)?.substring(0, 8) ?? '',
-                          style: const TextStyle(fontSize: AppFontSizes.caption)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                        onPressed: () async {
-                          final svc = ref.read(shareServiceProvider);
-                          await svc?.deleteShareLink(l['token'] as String);
-                          _reloadLists();
-                        },
-                      ),
-                    ),
+                    _shareLinkTile(l),
                 ]),
     );
+  }
+
+  /// 单条分享链接：本地反查实体名（同步表行 id 对人无意义），完整 URL 可复制。
+  Widget _shareLinkTile(Map<String, dynamic> l) {
+    final isTrip = l['entity_type'] == 'trip';
+    final entityId = (l['entity_id'] as String?) ?? '';
+    final token = (l['token'] as String?) ?? '';
+    final db = ref.watch(dbProvider);
+    return FutureBuilder<String>(
+      future: _entityName(db, isTrip, entityId),
+      builder: (_, snap) {
+        final name = snap.data ?? entityId;
+        return ListTile(
+          leading: Icon(
+            isTrip
+                ? Icons.flight_takeoff_rounded
+                : Icons.account_balance_wallet_rounded,
+            size: 20,
+          ),
+          title: Text(name,
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text('只读 · /s/${token.substring(0, token.length.clamp(0, 8))}…',
+              style: const TextStyle(fontSize: AppFontSizes.caption)),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(
+              icon: const Icon(Icons.copy_rounded, size: 20),
+              tooltip: '复制链接',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: shareLinkUrl(token)));
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(const SnackBar(content: Text('链接已复制')));
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, size: 20),
+              tooltip: '撤销（拿到链接的人立即无法访问）',
+              onPressed: () async {
+                final svc = ref.read(shareServiceProvider);
+                await svc?.deleteShareLink(token);
+                _reloadLists();
+              },
+            ),
+          ]),
+        );
+      },
+    );
+  }
+
+  Future<String> _entityName(AppDatabase db, bool isTrip, String id) async {
+    if (isTrip) {
+      final rows = await (db.select(db.trips)..where((t) => t.id.equals(id))).get();
+      if (rows.isNotEmpty) return rows.first.name;
+      final shared = await (db.select(db.sharedGroups)
+            ..where((g) => g.id.equals(id)))
+          .get();
+      if (shared.isNotEmpty) return shared.first.name;
+      return '行程 $id';
+    }
+    final groups = await (db.select(db.groups)..where((g) => g.id.equals(id))).get();
+    if (groups.isNotEmpty) return groups.first.name;
+    final shared = await (db.select(db.sharedGroups)
+          ..where((g) => g.id.equals(id)))
+        .get();
+    if (shared.isNotEmpty) return shared.first.name;
+    return '账本 $id';
   }
 
   // ===== 5 邀请码管理 =====

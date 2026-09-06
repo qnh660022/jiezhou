@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:travel_assistant/app.dart';
 import 'package:travel_assistant/router.dart';
 import 'package:travel_assistant/theme/theme_provider.dart';
+import 'package:travel_assistant/shared/app_meta.dart' show kAppVersionLabel;
 
 void main() {
   Future<SharedPreferences> pumpApp(WidgetTester tester) async {
@@ -70,7 +71,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('芥舟'), findsWidgets);
-    expect(find.text('v2.1.1'), findsWidgets);
+    expect(find.text(kAppVersionLabel), findsWidgets);
     expect(find.text('功能亮点'), findsOneWidget);
     expect(find.text('数据与隐私'), findsOneWidget);
     expect(find.text('开源致谢'), findsOneWidget);
