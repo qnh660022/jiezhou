@@ -1,4 +1,4 @@
-# build_web.ps1 - 本地构建 Web 并启动本地静态预览。
+﻿# build_web.ps1 - 本地构建 Web 并启动本地静态预览。
 # 用法：
 #   powershell -File scripts\build_web.ps1 [-Port 8080]
 # 说明：Flutter 框架预设 / Docker 部署时此脚本同构产物（build/web）。

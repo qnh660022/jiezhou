@@ -1,8 +1,7 @@
 /// 同步层 Riverpod 控制：云引擎单例、账号态、状态流、共享数据源。
 ///
 /// 客户端策略：main 阶段已 `Supabase.initialize` 则复用其单例客户端；
-/// 运行期改端点（rebuildCloudEngine）时创建独立 [SupabaseClient]
-/// （插件 2.17 不支持 re-initialize，独立客户端即"重置运行时实例"等效实现）。
+/// 配置仅来自构建时 --dart-define（V2.6.1 起无运行期改端点入口）。
 library;
 import 'dart:async';
 
@@ -33,12 +32,9 @@ final syncEngineProvider = StateProvider<SyncEngine?>((_) => null);
 final currentUserIdProvider = StateProvider<String?>((_) => null);
 final currentUserEmailProvider = StateProvider<String?>((_) => null);
 
-Future<SupabaseClient?> _resolveClient({required bool reset}) async {
+Future<SupabaseClient?> _resolveClient() async {
   final cfg = await SupabaseCfg.resolve();
   if (cfg == null) return null;
-  if (reset) {
-    return SupabaseClient(cfg.url, cfg.anonKey);
-  }
   try {
     await Supabase.initialize(url: cfg.url, anonKey: cfg.anonKey, debug: false);
     return Supabase.instance.client;
@@ -71,26 +67,7 @@ void _refreshIdentity(WidgetRef ref, SupabaseClient? client) {
 /// 配置无效时静默保持未配置态。
 Future<void> bootstrapCloud(WidgetRef ref) async {
   if (ref.read(syncEngineProvider) != null) return; // 幂等：重复调用直接复用
-  final client = await _resolveClient(reset: false);
-  ref.read(cloudClientProvider.notifier).state = client;
-  ref.read(cloudReadyProvider.notifier).state = client != null;
-  _refreshIdentity(ref, client);
-  if (client != null) {
-    final engine = _spawnEngine(ref, client);
-    await engine?.start();
-  }
-}
-
-/// 设置页改端点后调用：重建运行时实例（独立新客户端，旧会话被清、新会话空）。
-Future<void> rebuildCloudEngine(WidgetRef ref) async {
-  final old = ref.read(syncEngineProvider);
-  old?.dispose();
-  SyncEngine.detach();
-  ref.read(syncEngineProvider.notifier).state = null;
-  _refreshIdentity(ref, null);
-  ref.read(cloudClientProvider.notifier).state = null;
-
-  final client = await _resolveClient(reset: true);
+  final client = await _resolveClient();
   ref.read(cloudClientProvider.notifier).state = client;
   ref.read(cloudReadyProvider.notifier).state = client != null;
   _refreshIdentity(ref, client);

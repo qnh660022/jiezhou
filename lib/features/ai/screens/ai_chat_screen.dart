@@ -82,6 +82,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
         onAction: () => context.push('/ai/settings'),
       );
     } else {
+      // 流式期间每次状态变化（节流后 ~60ms）自动滚到底部
+      ref.listen(aiChatProvider, (_, __) => _scrollToEnd());
       body = Column(
         children: [
           Expanded(
@@ -97,8 +99,12 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                     _SuggestionChip(text: s, onTap: () => _send(s)),
                 ],
                 for (var i = 0; i < chat.turns.length; i++)
-                  _TurnBubble(turn: chat.turns[i]),
-                if (chat.busy) const _ThinkingBubble(),
+                  _TurnBubble(turn: chat.turns[i], isStreaming: chat.busy && i == chat.turns.length - 1),
+                // 思考气泡只在还没吐出任何内容（最后一条是用户消息）时显示，
+                // 流式文字开始出现后由文字气泡接管视觉焦点
+                if (chat.busy &&
+                    (chat.turns.isEmpty || chat.turns.last.isUser))
+                  const _ThinkingBubble(),
               ],
             ),
           ),
@@ -148,27 +154,61 @@ class _WelcomeCard extends StatelessWidget {
           : scheme.surfaceContainerLowest,
       borderRadius: AppRadius.card,
       clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.xl),
-        child: Row(
-          children: [
-            Text('🤖', style: const TextStyle(fontSize: 34)),
-            const SizedBox(width: Spacing.lg),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('我是你的旅途管家',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: AppFontSizes.bodyLarge)),
-                  SizedBox(height: Spacing.xs),
-                  Text(
-                    '可以让我记账、查余额、排行程、管清单、改设置。我只能操作本应用内的数据。',
-                    style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
+      elevation: 0,
+      shadowColor: scheme.shadow.withValues(alpha: 0.06),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: AppRadius.card,
+          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+          boxShadow: [
+            BoxShadow(
+              color: scheme.shadow.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(Spacing.xl),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      scheme.primary.withValues(alpha: 0.18),
+                      scheme.primary.withValues(alpha: 0.06),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Text('🤖', style: const TextStyle(fontSize: 30)),
+              ),
+              const SizedBox(width: Spacing.lg),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('我是你的旅途管家',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: AppFontSizes.bodyLarge)),
+                    SizedBox(height: Spacing.xs),
+                    Text(
+                      '可以让我记账、查余额、排行程、管清单、改设置。我只能操作本应用内的数据。',
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -188,16 +228,29 @@ class _SuggestionChip extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: Spacing.sm),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: InkWell(
+        child: Material(
+          color: scheme.surfaceContainerLowest,
           borderRadius: AppRadius.capsule,
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: Spacing.sm),
-            decoration: BoxDecoration(
-              border: Border.all(color: scheme.outlineVariant),
-              borderRadius: AppRadius.capsule,
+          child: InkWell(
+            borderRadius: AppRadius.capsule,
+            onTap: onTap,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: Spacing.sm),
+              decoration: BoxDecoration(
+                borderRadius: AppRadius.capsule,
+                border: Border.all(color: scheme.primary.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome_rounded,
+                      size: 14, color: scheme.primary.withValues(alpha: 0.8)),
+                  const SizedBox(width: 6),
+                  Text(text, style: TextStyle(fontSize: AppFontSizes.caption)),
+                ],
+              ),
             ),
-            child: Text(text, style: TextStyle(fontSize: AppFontSizes.caption)),
           ),
         ),
       ),
@@ -210,9 +263,12 @@ class _SuggestionChip extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _TurnBubble extends StatelessWidget {
-  const _TurnBubble({required this.turn});
+  const _TurnBubble({required this.turn, this.isStreaming = false});
 
   final AiTurn turn;
+
+  /// AI 文字气泡正在流式生成时，尾部显示呼吸光标
+  final bool isStreaming;
 
   @override
   Widget build(BuildContext context) {
@@ -250,12 +306,21 @@ class _TurnBubble extends StatelessWidget {
             alignment: turn.isUser ? Alignment.centerRight : Alignment.centerLeft,
             child: turn.cardType != null && turn.cardData != null
                 ? AiCardView(type: turn.cardType!, data: turn.cardData!)
-                : Container(
+                : (isStreaming && turn.text.isNotEmpty
+                    ? _StreamingBubble(text: turn.text, isError: turn.isError)
+                    : Container(
               constraints: BoxConstraints(maxWidth: MediaQuery.widthOf(context) * 0.78),
               padding: const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: Spacing.md),
               decoration: BoxDecoration(
+                gradient: turn.isUser
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [scheme.primary, scheme.primary.withValues(alpha: 0.82)],
+                      )
+                    : null,
                 color: turn.isUser
-                    ? scheme.primary
+                    ? null
                     : turn.isError
                         ? scheme.errorContainer
                         : scheme.surfaceContainerLow,
@@ -265,6 +330,17 @@ class _TurnBubble extends StatelessWidget {
                   bottomLeft: Radius.circular(turn.isUser ? 18 : 4),
                   bottomRight: Radius.circular(turn.isUser ? 4 : 18),
                 ),
+                border: turn.isUser
+                    ? null
+                    : Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: scheme.shadow.withValues(
+                        alpha: turn.isUser ? 0.14 : 0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: SelectableText(
                 turn.text,
@@ -278,9 +354,85 @@ class _TurnBubble extends StatelessWidget {
                           : scheme.onSurface,
                 ),
               ),
-            ),
+            )),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 流式生成中的 AI 气泡：同样式容器 + 尾部呼吸光标
+class _StreamingBubble extends StatefulWidget {
+  const _StreamingBubble({required this.text, this.isError = false});
+
+  final String text;
+  final bool isError;
+
+  @override
+  State<_StreamingBubble> createState() => _StreamingBubbleState();
+}
+
+class _StreamingBubbleState extends State<_StreamingBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 700))
+        ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      constraints: BoxConstraints(maxWidth: MediaQuery.widthOf(context) * 0.78),
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: Spacing.md),
+      decoration: BoxDecoration(
+        color: widget.isError ? scheme.errorContainer : scheme.surfaceContainerLow,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(18),
+          topRight: Radius.circular(18),
+          bottomRight: Radius.circular(18),
+          bottomLeft: Radius.circular(4),
+        ),
+      ),
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, _) => SelectableText.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: widget.text,
+                style: TextStyle(
+                  fontSize: AppFontSizes.body,
+                  height: 1.5,
+                  color: widget.isError ? scheme.onErrorContainer : scheme.onSurface,
+                ),
+              ),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 3),
+                  child: Opacity(
+                    opacity: 0.25 + 0.75 * _ctrl.value,
+                    child: Container(
+                      width: 8,
+                      height: 15,
+                      decoration: BoxDecoration(
+                        color: scheme.primary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

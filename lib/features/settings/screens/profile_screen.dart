@@ -5,11 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../data/providers.dart';
+import '../../../data/sync/sync_control_providers.dart'
+    show currentUserEmailProvider, currentUserIdProvider, syncStatusProvider;
+import '../../../data/sync/sync_models.dart' show SyncStatus, SyncStatusKind;
 import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
 import '../../../platform/open_external.dart';
 import '../../../shared/app_meta.dart';
 import '../../../shared/check_update_dialog.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../../shared/widgets/sync_status_capsule.dart'
+    show syncStatusColor, syncStatusLabelText;
 import '../../../shared/travel_quotes.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../theme/tokens.dart';
@@ -49,18 +54,10 @@ class ProfileScreen extends ConsumerWidget {
           ),
           child: Text('我的', style: AppTextStyles.display(scheme)),
         ),
-        // 用户卡
+        // 用户卡（账号 + 云同步状态 + 云设置入口）
         _StaggerIn(index: 0, child: const _UserCard()),
         // 偏好设置分组
         const SectionHeader(title: '偏好设置'),
-        _StaggerIn(
-          index: 1,
-          child: _ProfileTile(
-            icon: Icons.cloud_sync_outlined,
-            title: '云端与同步',
-            onTap: () => context.push('/profile/cloud'),
-          ),
-        ),
         _StaggerIn(
           index: 1,
           child: _ProfileTile(
@@ -358,52 +355,98 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-/// 用户卡：圆形头像（主色浅底 emoji）+ 名称 + slogan
-class _UserCard extends StatelessWidget {
+/// 用户卡：账号（邮箱/未登录）+ 同步状态 + 云设置入口。
+/// 整卡可点 → 云端账号页（登录/账号管理/云设置）。
+class _UserCard extends ConsumerWidget {
   const _UserCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+    final uid = ref.watch(currentUserIdProvider);
+    final email = ref.watch(currentUserEmailProvider);
+    final status = ref.watch(syncStatusProvider).value ??
+        const SyncStatus(kind: SyncStatusKind.unconfigured);
+
+    final signedIn = uid != null;
+    final accountText = signedIn ? (email ?? '已登录') : '未登录';
+    final (subtitle, subtitleColor) = _subtitle(status, scheme, signedIn);
+    final dotColor = syncStatusColor(scheme, status.kind);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.xs, Spacing.xl, 0),
       child: Material(
         color: scheme.surfaceContainerLow,
         borderRadius: AppRadius.card,
         clipBehavior: Clip.antiAlias,
-        child: Padding(
-          padding: const EdgeInsets.all(Spacing.xl),
-          child: Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: scheme.primaryContainer,
+        child: InkWell(
+          onTap: () => context.push('/profile/cloud'),
+          child: Padding(
+            padding: const EdgeInsets.all(Spacing.xl),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: scheme.primaryContainer,
+                  ),
+                  child: const Text('👤', style: TextStyle(fontSize: 26)),
                 ),
-                child: const Text('👤', style: TextStyle(fontSize: 30)),
-              ),
-              const SizedBox(width: Spacing.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('旅行者', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 2),
-                    Text(
-                      '记录每一段旅途',
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                  ],
+                const SizedBox(width: Spacing.lg),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(accountText,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(
+                                  color: signedIn
+                                      ? null
+                                      : scheme.onSurfaceVariant)),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: subtitleColor, height: 1.3),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: Spacing.sm),
+                // 同步状态小点 + 进入云设置
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration:
+                      BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 2),
+                Icon(Icons.chevron_right_rounded,
+                    size: 20, color: scheme.onSurfaceVariant),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  (String, Color) _subtitle(
+      SyncStatus status, ColorScheme scheme, bool signedIn) {
+    if (!signedIn) return ('轻触登录，开启云端同步', scheme.onSurfaceVariant);
+    return switch (status.kind) {
+      SyncStatusKind.syncing => ('正在同步…', SemanticColors.warning),
+      SyncStatusKind.offline => ('同步失败，轻触处理', SemanticColors.expense),
+      SyncStatusKind.idle => status.lastSyncedAt == null
+          ? ('云同步已就绪', SemanticColors.income)
+          : (syncStatusLabelText(status), SemanticColors.income),
+      _ => ('云端设置', scheme.onSurfaceVariant),
+    };
   }
 }
 

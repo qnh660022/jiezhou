@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # apply_android_overrides.ps1 - Idempotent post-flutter-create patcher.
 #   1) applicationId -> com.travel.assistant.v2  (build.gradle / .kts)
 #   2) android:label    -> Chinese app name (built from unicode points,

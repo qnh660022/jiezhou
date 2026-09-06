@@ -27,7 +27,7 @@ const Map<String, String> kGuideCityAliases = {
   'xiamen': 'xiamen',
   '冰城': 'harbin',
   'harbin': 'harbin',
-  '椰城': 'sanya',
+  '椰城': 'haikou',
   '泉城': 'jinan',
   '瓷都': 'jingdezhen',
   '莫高窟': 'dunhuang',
@@ -39,6 +39,25 @@ const Map<String, String> kGuideCityAliases = {
   'sanya': 'sanya',
   'tsingtao': 'qingdao',
   'amoy': 'xiamen',
+  // 港澳台与新城市别名
+  'hongkong': 'hongkong',
+  'hong kong': 'hongkong',
+  'macau': 'macau',
+  'macao': 'macau',
+  'taipei': 'taibei',
+  'taiwan': 'taibei',
+  '稻城亚丁': 'daocheng',
+  '亚丁': 'daocheng',
+  '香格里拉': 'shangrila',
+  '版纳': 'xishuangbanna',
+  '潮汕': 'chaozhou',
+  '九寨': 'jiuzhaigou',
+  '峨嵋': 'emeishan',
+  '泰山': 'taian',
+  '麦积山': 'tianshui',
+  '北戴河': 'qinhuangdao',
+  '山海关': 'qinhuangdao',
+  '草原天路': 'zhangye',
 };
 
 class GuideLocation {
@@ -50,8 +69,29 @@ class GuideLocation {
 /// 城市展示名（种子内的 name 反查；未收录城市经 matchCity 兜底时用原始串）。
 GuideLocation? normalizeGuideDestination(String destination,
     {Map<String, String>? seedNames}) {
-  final cleaned = _clean(destination);
-  if (cleaned.isEmpty) return null;
+  return normalizeGuideDestinations(destination, seedNames: seedNames,
+      maxCities: 1).firstOrNull;
+}
+
+/// 多目的地归一化：按常见分隔符分段后逐段走归一化链，去重保序。
+/// 「成都-稻城」→ [chengdu, daocheng]；全不识别 → 空列表。
+List<GuideLocation> normalizeGuideDestinations(String destination,
+    {Map<String, String>? seedNames, int maxCities = 5}) {
+  final out = <GuideLocation>[];
+  final seen = <String>{};
+  for (final seg in destination.split(RegExp(r'[-—→~、，,/]|到'))) {
+    final cleaned = _clean(seg);
+    if (cleaned.isEmpty) continue;
+    final loc = _matchSingle(cleaned, seedNames);
+    if (loc == null || !seen.add(loc.key)) continue;
+    out.add(loc);
+    if (out.length >= maxCities) break;
+  }
+  return out;
+}
+
+/// 单段归一化链：①key 全等 → ②别名表 → ③前缀/包含 → ④matchCity 兜底。
+GuideLocation? _matchSingle(String cleaned, Map<String, String>? seedNames) {
   final candidates = <String>[cleaned];
   final main = _splitRange(cleaned);
   if (main != null && main != cleaned) candidates.add(main);
@@ -127,6 +167,12 @@ const Set<String> _knownKeys = {
   'huihe', 'taiyuan', 'zhengzhou', 'hefei', 'nanchang', 'fuzhou', 'nanning',
   'zhuhai', 'tianjin', 'zhangjiajie', 'wuzhen', 'huangshan', 'weihai',
   'beihai', 'pingyao', 'dunhuang', 'zhangjiajie_fenghuang',
+  // v2 扩充（71 城）
+  'hongkong', 'macau', 'taibei', 'chengde', 'datong', 'qinhuangdao',
+  'yanji', 'shenyang', 'daocheng', 'jiuzhaigou', 'leshan', 'emeishan',
+  'zhangye', 'turpan', 'tianshui', 'taian', 'wuxi', 'yangzhou', 'shaoxing',
+  'ningbo', 'quanzhou', 'wuyuan', 'yichang', 'enshi', 'chaozhou', 'haikou',
+  'anshun', 'xishuangbanna', 'shangrila',
 };
 
 const Map<String, String> _knownCnNames = {
@@ -141,4 +187,15 @@ const Map<String, String> _knownCnNames = {
   'fuzhou': '福州', 'nanning': '南宁', 'zhuhai': '珠海', 'tianjin': '天津',
   'zhangjiajie': '张家界', 'wuzhen': '乌镇', 'huangshan': '黄山',
   'weihai': '威海', 'beihai': '北海', 'pingyao': '平遥', 'dunhuang': '敦煌',
+  'zhangjiajie_fenghuang': '凤凰',
+  // v2 扩充（71 城）
+  'hongkong': '香港', 'macau': '澳门', 'taibei': '台北', 'chengde': '承德',
+  'datong': '大同', 'qinhuangdao': '秦皇岛', 'yanji': '延吉',
+  'shenyang': '沈阳', 'daocheng': '稻城', 'jiuzhaigou': '九寨沟',
+  'leshan': '乐山', 'emeishan': '峨眉山', 'zhangye': '张掖',
+  'turpan': '吐鲁番', 'tianshui': '天水', 'taian': '泰安', 'wuxi': '无锡',
+  'yangzhou': '扬州', 'shaoxing': '绍兴', 'ningbo': '宁波',
+  'quanzhou': '泉州', 'wuyuan': '婺源', 'yichang': '宜昌', 'enshi': '恩施',
+  'chaozhou': '潮州', 'haikou': '海口', 'anshun': '安顺',
+  'xishuangbanna': '西双版纳', 'shangrila': '香格里拉',
 };

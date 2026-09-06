@@ -18,6 +18,9 @@ class GuideSourceRule {
 }
 
 /// 结构化正文爬取白名单（§7.6 最终清单，验收报告同步）。
+/// 2026-09-06 大陆直连实测：搜狐旅游文章页服务端渲染可直抓、robots 放行 /a/*；
+/// 马蜂窝/穷游为反爬验证壳、知乎专栏 403——保留规则仅作 URL 识别，正文抓取会按
+/// 失败分级自动冷处理，实际内容以搜狐为主。
 final List<GuideSourceRule> kGuideCrawlerRules = [
   GuideSourceRule(
     name: '马蜂窝',
@@ -36,6 +39,12 @@ final List<GuideSourceRule> kGuideCrawlerRules = [
     host: 'zhuanlan.zhihu.com',
     pathPattern: RegExp(r'^/p/\d+'), // 专栏文章
     trust: 0.8,
+  ),
+  GuideSourceRule(
+    name: '搜狐旅游',
+    host: 'www.sohu.com',
+    pathPattern: RegExp(r'^/a/\d+'), // 文章页
+    trust: 0.7,
   ),
 ];
 
@@ -56,6 +65,11 @@ final List<GuideSourceRule> kGuideArticleRules = [
       host: 'zhuanlan.zhihu.com',
       pathPattern: RegExp(r'^/p/'),
       trust: 0.8),
+  GuideSourceRule(
+      name: '搜狐旅游',
+      host: 'www.sohu.com',
+      pathPattern: RegExp(r'^/a/\d+_'),
+      trust: 0.7),
 ];
 
 /// URL 是否命中白名单。

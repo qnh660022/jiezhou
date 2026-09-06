@@ -1,5 +1,7 @@
-/// 目的地攻略页（V2.6 任务5，§7.10）：仅 Android（Web 不注册路由）。
-/// 六栏折叠分节卡 + 精选文章流 + 底部声明 + 一键加入安排（§7.9）。
+/// 目的地攻略页（V2.6 任务5，§7.10）：仅非 Web（Web 不注册路由）。
+/// 两段式加载（用户变更 2026-09-06）：先离线首屏（种子/缓存，零网络），
+/// 再在线优先补全（open/crawl/aggregate）——离线六栏与在线精选同屏可读。
+/// 多目的地（「成都-稻城」）按城 TabBar 分页，每城独立内容。
 library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,12 +29,18 @@ class TripGuideScreen extends ConsumerStatefulWidget {
 }
 
 class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
-  late Future<GuideResult> _future;
+  /// 离线首屏结果（零网络，立即渲染）。
+  List<GuideResult>? _offline;
+
+  /// 完整结果（在线层完成后替换展示；在线内容置顶）。
+  List<GuideResult>? _display;
+
+  bool _refreshing = false;
 
   @override
   void initState() {
     super.initState();
-    _future = ref.read(guideServiceProvider).getGuide(widget.destination);
+    _load();
   }
 
   @override
@@ -40,105 +48,275 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
     super.didUpdateWidget(oldWidget);
     // Builder 端 trip 异步加载：destination 从空串变为真实值后需重新拉取。
     if (widget.destination != oldWidget.destination) {
-      _future = ref.read(guideServiceProvider).getGuide(widget.destination);
+      _display = null;
+      _offline = null;
+      _load();
     }
   }
 
-  void _reload() {
+  Future<void> _load({bool force = false}) async {
+    final svc = ref.read(guideServiceProvider);
+    if (!force) {
+      final off = await svc.getGuideMultiOffline(widget.destination);
+      if (!mounted) return;
+      setState(() => _offline = off);
+    }
+    final full =
+        await svc.getGuideMulti(widget.destination, forceRefresh: force);
+    if (!mounted) return;
     setState(() {
-      _future = ref
-          .read(guideServiceProvider)
-          .getGuide(widget.destination, forceRefresh: true);
+      _display = full;
+      _refreshing = false;
     });
+  }
+
+  Future<void> _reload() async {
+    setState(() => _refreshing = true);
+    await _load(force: true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final results = _display ?? _offline;
     return Scaffold(
-      appBar: AppBar(title: Text(copy('guide.title'))),
-      body: FutureBuilder<GuideResult>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return ListView(
-              padding: const EdgeInsets.all(Spacing.lg),
-              children: [
-                for (var i = 0; i < 3; i++)
-                  Container(
-                    height: 72,
-                    margin: const EdgeInsets.only(bottom: Spacing.md),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(Spacing.lg),
-                    ),
-                  ),
-              ],
-            );
-          }
-          final result = snap.data;
-          if (result == null || result.failed != null) {
-            return _empty(context, result?.failed ?? copy('guide.empty'));
-          }
-          final loc = result.location!;
-          final offline = result.cached ||
-              result.layersUsed.contains('seed') &&
-                  !result.layersUsed.contains('aggregate');
-          return ListView(
-            padding: const EdgeInsets.all(Spacing.lg),
-            children: [
-              Row(children: [
-                Expanded(
-                  child: Text(loc.name,
-                      style: Theme.of(context).textTheme.headlineSmall),
-                ),
-                _badge(context,
-                    offline ? copy('guide.badgeOffline') : copy('guide.badgeNetwork')),
-              ]),
-              if (result.sectionMiss('prep') != null) ..._missRows(result),
-              for (final key in GuideCity.sectionKeys) ...[
-                const SizedBox(height: Spacing.lg),
-                _SectionCard(
-                  sectionKey: key,
-                  items: result.sections[key] ?? const [],
-                  tripId: widget.tripId,
-                  guideKey: loc.key,
-                ),
-              ],
-              if (result.articles.isNotEmpty) ...[
-                const SizedBox(height: Spacing.lg),
-                Text(copy('guide.article'),
-                    style: Theme.of(context).textTheme.titleMedium),
-                for (final a in result.articles)
-                  Card(
-                    margin: const EdgeInsets.only(top: Spacing.md),
-                    child: ListTile(
-                      title: Text(a['title'] as String? ?? ''),
-                      subtitle: Text(
-                          '${a['source'] ?? ''} ${a['summary'] ?? ''}'.trim(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: AppFontSizes.caption)),
-                      trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-                      onTap: () => _openArticle(a),
-                    ),
-                  ),
-              ],
-              const SizedBox(height: Spacing.xl),
-              Text(copy('guide.source'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: AppFontSizes.caption)),
-              const SizedBox(height: Spacing.huge),
-            ],
-          );
-        },
+      appBar: AppBar(
+        title: Text(copy('guide.title')),
+        actions: [
+          IconButton(
+            onPressed: _refreshing ? null : _reload,
+            icon: _refreshing
+                ? const SizedBox(
+                    width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh_rounded),
+            tooltip: '刷新在线内容',
+          ),
+        ],
       ),
+      body: _buildBody(context, results),
     );
   }
 
-  List<Widget> _missRows(GuideResult result) {
+  Widget _buildBody(BuildContext context, List<GuideResult>? results) {
+    if (results == null) return _loadingList();
+    if (results.isEmpty) {
+      return _empty(context, copy('guide.badDestination'));
+    }
+    if (results.length == 1) {
+      return RefreshIndicator(
+          onRefresh: _reload, child: _CityGuideView(result: results.first, tripId: widget.tripId, onlineDone: _display != null));
+    }
+    // 多目的地：按城 TabBar 分页
+    return DefaultTabController(
+      length: results.length,
+      child: Column(children: [
+        TabBar(
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [for (final r in results) Tab(text: r.location?.name ?? '')],
+        ),
+        Expanded(
+          child: TabBarView(children: [
+            for (final r in results)
+              RefreshIndicator(
+                  onRefresh: _reload,
+                  child: _CityGuideView(result: r, tripId: widget.tripId, onlineDone: _display != null)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _loadingList() => ListView(
+        padding: const EdgeInsets.all(Spacing.lg),
+        children: [
+          for (var i = 0; i < 3; i++)
+            Container(
+              height: 72,
+              margin: const EdgeInsets.only(bottom: Spacing.md),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(Spacing.lg),
+              ),
+            ),
+        ],
+      );
+
+  Widget _empty(BuildContext context, String message) => Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.explore_off_rounded,
+              size: 48, color: Theme.of(context).colorScheme.outline),
+          const SizedBox(height: Spacing.md),
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: Spacing.lg),
+          FilledButton(onPressed: _reload, child: Text(copy('guide.retry'))),
+        ]),
+      );
+}
+
+/// 单城内容：徽标三态 + 在线区块置顶（精选文章 + 网络补充）+ 离线六栏。
+class _CityGuideView extends StatelessWidget {
+  const _CityGuideView({
+    required this.result,
+    required this.tripId,
+    required this.onlineDone,
+  });
+
+  final GuideResult result;
+  final String tripId;
+
+  /// 完整阶段是否已完成（未完成且无种子时展示「正在获取网络攻略」）。
+  final bool onlineDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final loc = result.location;
+    if (loc == null || result.failed != null) {
+      return ListView(children: [
+        const SizedBox(height: 120),
+        Text(result.failed ?? copy('guide.empty'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: scheme.onSurfaceVariant)),
+      ]);
+    }
+    final online = result.hasOnline;
+    final badgeText = online
+        ? (result.layersUsed.contains('seed') ? '种子+网络' : '在线')
+        : '离线种子';
+    final allEmpty = GuideCity.sectionKeys
+        .every((k) => (result.sections[k] ?? const []).isEmpty);
+    return ListView(
+      padding: const EdgeInsets.all(Spacing.lg),
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        Row(children: [
+          Expanded(
+            child: Text(loc.name,
+                style: Theme.of(context).textTheme.headlineSmall),
+          ),
+          _badge(context, badgeText,
+              highlight: online),
+        ]),
+        // 在线全败提示（明确告知离线兜底生效）
+        if (result.onlineAttempted && !online) ...[
+          const SizedBox(height: Spacing.sm),
+          Row(children: [
+            Icon(Icons.wifi_off_rounded,
+                size: 14, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text('在线内容暂时不可用，已展示离线攻略',
+                  style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: AppFontSizes.caption)),
+            ),
+          ]),
+        ],
+        if (allEmpty && !onlineDone) ...[
+          const SizedBox(height: Spacing.xl),
+          const Center(child: CircularProgressIndicator()),
+          const SizedBox(height: Spacing.sm),
+          Text('正在获取网络攻略…',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: scheme.onSurfaceVariant,
+                  fontSize: AppFontSizes.caption)),
+        ],
+        // ===== 在线区块（置顶） =====
+        if (result.articles.isNotEmpty) ...[
+          const SizedBox(height: Spacing.lg),
+          Text('在线精选', style: Theme.of(context).textTheme.titleMedium),
+          for (final a in result.articles)
+            Card(
+              margin: const EdgeInsets.only(top: Spacing.md),
+              child: ListTile(
+                title: Text(a['title'] as String? ?? ''),
+                subtitle: Text(
+                    '${a['source'] ?? ''} ${a['summary'] ?? ''}'.trim(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: AppFontSizes.caption)),
+                trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                onTap: () => _openArticle(a),
+              ),
+            ),
+        ],
+        if (result.onlineSections.isNotEmpty) ...[
+          const SizedBox(height: Spacing.lg),
+          Text('网络补充', style: Theme.of(context).textTheme.titleMedium),
+          for (final entry in result.onlineSections.entries)
+            if (entry.value.isNotEmpty)
+              Card(
+                margin: const EdgeInsets.only(top: Spacing.md),
+                child: Column(children: [
+                  for (final item in entry.value)
+                    ListTile(
+                      dense: true,
+                      leading: Icon(_iconOf(entry.key),
+                          size: 18, color: scheme.primary),
+                      title: Text(
+                          (item['title'] ?? item['name'] ?? '').toString(),
+                          style: const TextStyle(fontSize: AppFontSizes.body)),
+                      subtitle: (item['detail'] ??
+                                  item['note'] ??
+                                  item['addr'] ??
+                                  '')
+                              .toString()
+                              .isEmpty
+                          ? null
+                          : Text(
+                              (item['detail'] ?? item['note'] ?? item['addr'] ?? '')
+                                  .toString(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: AppFontSizes.caption)),
+                      trailing: (item['sourceUrl'] as String?)?.isNotEmpty ?? false
+                          ? const Icon(Icons.link_rounded, size: 16)
+                          : null,
+                      onTap: () {
+                        final url = item['sourceUrl'] as String?;
+                        if (url != null && url.isNotEmpty) openExternal(url);
+                      },
+                    ),
+                ]),
+              ),
+        ],
+        // ===== 离线六栏（种子打底；在线条目已在上方展示不重复） =====
+        if (result.sectionMiss('prep') != null) ..._missRows(context, result),
+        for (final key in GuideCity.sectionKeys) ...[
+          const SizedBox(height: Spacing.lg),
+          _SectionCard(
+            sectionKey: key,
+            items: (result.sections[key] ?? const [])
+                .where((item) => item['source'] == null)
+                .toList(),
+            tripId: tripId,
+            guideKey: loc.key,
+          ),
+        ],
+        const SizedBox(height: Spacing.xl),
+        Text(copy('guide.source'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                fontSize: AppFontSizes.caption)),
+        const SizedBox(height: Spacing.huge),
+      ],
+    );
+  }
+
+  IconData _iconOf(String sectionKey) => switch (sectionKey) {
+        'prep' => Icons.wb_sunny_rounded,
+        'spots' => Icons.photo_camera_rounded,
+        'food' => Icons.restaurant_rounded,
+        'transport' => Icons.directions_transit_rounded,
+        'tips' => Icons.lightbulb_rounded,
+        _ => Icons.payments_rounded,
+      };
+
+  List<Widget> _missRows(BuildContext context, GuideResult result) {
     final missing = GuideCity.sectionKeys
         .where((k) => (result.sections[k] ?? const []).isEmpty)
         .toList();
@@ -163,24 +341,16 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
     ];
   }
 
-  Widget _badge(BuildContext context, String text) => Container(
+  Widget _badge(BuildContext context, String text, {bool highlight = false}) =>
+      Container(
         padding: const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: 4),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          color: highlight
+              ? Theme.of(context).colorScheme.primaryContainer
+              : Theme.of(context).colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(text, style: const TextStyle(fontSize: AppFontSizes.caption)),
-      );
-
-  Widget _empty(BuildContext context, String message) => Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.explore_off_rounded,
-              size: 48, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(height: Spacing.md),
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: Spacing.lg),
-          FilledButton(onPressed: _reload, child: Text(copy('guide.retry'))),
-        ]),
       );
 
   void _openArticle(Map<String, dynamic> a) {

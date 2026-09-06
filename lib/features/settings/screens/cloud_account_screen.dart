@@ -1,11 +1,11 @@
 /// 云端账号页（V2.6 §3.17.1）：路由 /profile/cloud。
-/// 未登录态：登录/注册同表单；已登录态：账号 + 退出 + 清云端 + 端点配置 + AI 配置。
+/// 未登录态：登录/注册同表单；已登录态：账号 + 退出 + 清云端 + AI 配置。
+/// 端点配置入口已移除（V2.6.1）：后端密钥仅由构建时 --dart-define 默认注入。
 library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/supabase_config.dart';
 import '../../../data/providers.dart';
 import '../../../theme/theme_provider.dart' show sharedPreferencesProvider;
 import '../../../data/sync/sync_account.dart';
@@ -62,7 +62,7 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
   Future<void> _submitAuth() async {
     final svc = ref.read(cloudAccountServiceProvider);
     if (svc == null) {
-      setState(() => _error = copy('sync.guideBody'));
+      setState(() => _error = copy('cloud.notConfigured'));
       return;
     }
     final email = _email.text.trim();
@@ -198,29 +198,6 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
     }
   }
 
-  Future<void> _saveEndpoint() async {
-    final url = _endpointUrl.text.trim();
-    final key = _endpointKey.text.trim();
-    if (!url.startsWith('https://') || key.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(copy('cloud.configInvalid'))));
-      return;
-    }
-    await SupabaseCfg.saveOverride(url, key);
-    await rebuildCloudEngine(ref);
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(copy('cloud.configChanged'))));
-      setState(() {});
-    }
-  }
-
-  Future<void> _clearEndpoint() async {
-    await SupabaseCfg.clearOverride();
-    await rebuildCloudEngine(ref);
-    if (mounted) setState(() {});
-  }
-
   Future<void> _saveAiCloud() async {
     // 本机 AI 配置照常保存（apiKey 仅本机）；baseUrl/model 另存云端 app_settings
     final prefs = ref.read(prefsRepoProvider);
@@ -240,9 +217,6 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
     }
   }
 
-  final TextEditingController _endpointUrl = TextEditingController();
-  final TextEditingController _endpointKey = TextEditingController();
-
   @override
   Widget build(BuildContext context) {
     final uid = ref.watch(currentUserIdProvider);
@@ -255,23 +229,6 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
         children: [
           if (uid == null) ..._buildAuthForm(scheme) else ..._buildSignedIn(scheme, email),
           const SizedBox(height: Spacing.xl),
-          SectionHeader(title: copy('cloud.configSection')),
-          _card(TextField(
-            controller: _endpointUrl,
-            decoration: InputDecoration(hintText: copy('cloud.configUrl')),
-          )),
-          const SizedBox(height: Spacing.md),
-          _card(TextField(
-            controller: _endpointKey,
-            obscureText: true,
-            decoration: InputDecoration(hintText: copy('cloud.configKey')),
-          )),
-          const SizedBox(height: Spacing.md),
-          Row(children: [
-            FilledButton(onPressed: _saveEndpoint, child: Text(copy('cloud.configSave'))),
-            const SizedBox(width: Spacing.md),
-            TextButton(onPressed: _clearEndpoint, child: Text(copy('cloud.configClear'))),
-          ]),
           TextButton(
             onPressed: () => context.push('/profile/cloud/sync'),
             child: Text(copy('sync.center')),

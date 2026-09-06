@@ -58,6 +58,14 @@ class GuideCache {
     }
   }
 
+  /// 读单城缓存条目落盘时间（无条目返回 null）——在线刷新节流用。
+  Future<int?> savedAtMs(String key) async {
+    final manifest = await _loadManifest();
+    final e = manifest['entries']?[key] as Map?;
+    final at = (e?['savedAtMs'] as num?)?.toInt() ?? 0;
+    return at > 0 ? at : null;
+  }
+
   /// 写单城缓存（原子落盘 + 超额逐出）。
   Future<void> writeCity(String key, Map<String, dynamic> data) async {
     final dir = await _ensureDir();

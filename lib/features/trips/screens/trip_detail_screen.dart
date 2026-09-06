@@ -14,7 +14,6 @@ import '../../../data/services/weather_service.dart';
 import '../../../domain/trip_bill_linker.dart';
 import '../../ledger/ledger_providers.dart';
 import '../trip_template_store.dart';
-import 'trip_guide_screen.dart';
 
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
@@ -1930,6 +1929,10 @@ class _QuickActionsCard extends StatelessWidget {
                     () => context.push('/trips/map', extra: tripId)),
                 action(Icons.photo_library_rounded, '相册',
                     () => context.push('/trips/album', extra: tripId)),
+                // 目的地攻略：与地图/相册同排（用户变更 2026-09-06；Web 仍不注册路由）
+                if (!kIsWeb)
+                  action(Icons.menu_book_rounded, '攻略',
+                      () => context.push('/trips/guide', extra: tripId)),
                 action(Icons.account_balance_wallet_rounded, '账本', onTapLedger),
                 action(Icons.more_horiz_rounded, '更多',
                     () => _openMoreSheet(context, tripId)),
@@ -1958,18 +1961,6 @@ void _openMoreSheet(BuildContext context, String tripId) {
           Text('更多操作',
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: AppFontSizes.bodyLarge)),
           const SizedBox(height: Spacing.md),
-          // 目的地攻略：仅 Android（§7.8 Web 隐藏入口）
-          if (!kIsWeb)
-            ListTile(
-              leading: const Icon(Icons.menu_book_rounded),
-              title: const Text('目的地攻略'),
-              subtitle: const Text('行前准备 · 景点 · 美食 · 避坑'),
-              contentPadding: EdgeInsets.zero,
-              onTap: () {
-                Navigator.of(ctx).pop();
-                context.push('/trips/guide', extra: tripId);
-              },
-            ),
           ListTile(
             leading: const Icon(Icons.inventory_2_outlined),
             title: const Text('存为行程模板'),

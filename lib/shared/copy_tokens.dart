@@ -62,9 +62,6 @@ const Map<String, CopyToken> _tokens = {
   'sync.links': CopyToken('sync.links', '分享链接'),
   'sync.linksEmpty': CopyToken('sync.linksEmpty', '暂无分享链接'),
   'sync.invites': CopyToken('sync.invites', '邀请码管理'),
-  'sync.guideTitle': CopyToken('sync.guideTitle', '端点配置指引'),
-  'sync.guideBody': CopyToken('sync.guideBody',
-      '需要先配置 Supabase 端点：填入 Project URL 与 anon key（参见 docs/Supabase配置清单.txt），或构建时以 --dart-define 注入。'),
 
   // ===== 云端账号页 =====
   'cloud.title': CopyToken('cloud.title', '云端账号'),
@@ -81,13 +78,8 @@ const Map<String, CopyToken> _tokens = {
   'cloud.purgeConfirm1': CopyToken('cloud.purgeConfirm1', '将删除该账号云端全部数据（本地数据保留），确定？'),
   'cloud.purgeConfirm2': CopyToken('cloud.purgeConfirm2', '再次确认：此操作不可恢复，确定清除？'),
   'cloud.purged': CopyToken('cloud.purged', '云端数据已清除'),
-  'cloud.configSection': CopyToken('cloud.configSection', '端点配置'),
-  'cloud.configUrl': CopyToken('cloud.configUrl', 'Project URL（https://…）'),
-  'cloud.configKey': CopyToken('cloud.configKey', 'anon public key'),
-  'cloud.configSave': CopyToken('cloud.configSave', '保存并重连'),
-  'cloud.configClear': CopyToken('cloud.configClear', '清除本机配置'),
-  'cloud.configChanged': CopyToken('cloud.configChanged', '配置已变更，请重新登录'),
-  'cloud.configInvalid': CopyToken('cloud.configInvalid', '配置无效：URL 需以 https:// 开头，key 不能为空'),
+  'cloud.notConfigured':
+      CopyToken('cloud.notConfigured', '云端服务未启用：后端密钥由构建时默认注入，请使用官方发布版本安装'),
   'cloud.aiSection': CopyToken('cloud.aiSection', 'AI 配置（云端仅存 baseUrl/model）'),
   'cloud.aiBaseUrl': CopyToken('cloud.aiBaseUrl', '接口地址 baseUrl'),
   'cloud.aiModel': CopyToken('cloud.aiModel', '模型 model'),

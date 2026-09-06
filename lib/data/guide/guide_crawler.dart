@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, Tar
 
 import 'guide_crawler_rules.dart';
 import 'guide_http.dart';
-import 'guide_models.dart';
 import 'guide_raw_html.dart';
 
 class GuideCrawlLayer {
@@ -72,26 +71,64 @@ class GuideCrawlLayer {
     return null;
   }
 
-  /// 文章列表页抓取（源无 RSS 时；同限速纪律）。返回候选文章链接。
+  /// 文章列表页抓取——多链路保障（用户变更 2026-09-06）：
+  /// 链路A：必应检索（大陆直连实测稳定返回自然结果，含可直抓的搜狐/知乎链接）；
+  /// 链路B：白名单站内搜索页（实测多为反爬壳，作为必应失败后的兜底）。
+  /// 链路串行降级，任一命中即用；全程走 GuideHttp 的 robots 前置 + 2s 节奏。
   Future<List<String>> discoverArticleLinks(String cityCn) async {
     if (!_supported) return const [];
+    final chains = <Future<List<String>> Function()>[
+      () => _discoverViaSearchEngine(cityCn),
+      () => _discoverViaSiteSearch(cityCn),
+    ];
+    final out = <String>[];
+    for (final chain in chains) {
+      try {
+        out.addAll(await chain());
+      } catch (_) {
+        // 该链路失败只影响该链路（§7.2 每层抛错仍返回低层结果）
+      }
+      if (out.isNotEmpty) break; // 任一链路命中即用
+    }
+    return out.toSet().take(12).toList();
+  }
+
+  /// 链路A：必应自然结果 → 白名单过滤。两轮查询词降级。
+  Future<List<String>> _discoverViaSearchEngine(String cityCn) async {
+    final out = <String>[];
+    for (final q in ['$cityCn旅游攻略', '$cityCn自由行攻略 必去']) {
+      final url = 'https://cn.bing.com/search?q=${Uri.encodeComponent(q)}'
+          '&mkt=zh-CN&count=20';
+      final res = await _http.fetchText(url);
+      if (res.cls != GuideFetchClass.ok) continue;
+      for (final m in RegExp(r'href="(https?://[^"]+)"').allMatches(res.body)) {
+        final link = m.group(1)!;
+        if (matchGuideRule(link, articles: true) != null && !out.contains(link)) {
+          out.add(link);
+        }
+        if (out.length >= 12) return out;
+      }
+      if (out.isNotEmpty) return out;
+    }
+    return out;
+  }
+
+  /// 链路B：站内搜索页（马蜂窝/穷游；知乎旧发现 URL 无效已移除）。
+  Future<List<String>> _discoverViaSiteSearch(String cityCn) async {
     final out = <String>[];
     for (final rule in kGuideArticleRules) {
       if (_http.isSourceCool(rule.host)) continue;
-      // 只抓白名单配置里显式列出的搜索/列表形态页
       final url = switch (rule.host) {
         'www.mafengwo.cn' => 'https://www.mafengwo.cn/search/q.php?q=$cityCn',
         'bbs.qyer.com' => 'https://bbs.qyer.com/search.php?keyword=$cityCn',
-        _ => 'https://zhuanlan.zhihu.com/$cityCn',
+        _ => null, // 搜狐无站内搜索页，仅由搜索引擎发现
       };
+      if (url == null) continue;
       final res = await _http.fetchText(url);
       if (res.cls != GuideFetchClass.ok) continue;
-      // 从列表页 HTML 抽取命中 pathPattern 的链接
-      for (final m in RegExp(r'href="(https?://[^"]+)"')
-          .allMatches(res.body)) {
+      for (final m in RegExp(r'href="(https?://[^"]+)"').allMatches(res.body)) {
         final link = m.group(1)!;
-        if (matchGuideRule(link, articles: true) != null &&
-            !out.contains(link)) {
+        if (matchGuideRule(link, articles: true) != null && !out.contains(link)) {
           out.add(link);
         }
         if (out.length >= 12) break;

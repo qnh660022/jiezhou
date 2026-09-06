@@ -64,7 +64,7 @@ class AiChatController extends Notifier<AiChatState> {
   static const _maxToolRounds = 8;
 
   /// 历史上限（条）；超出后从最早的用户消息边界裁剪
-  static const _maxHistoryMessages = 30;
+  static const _maxHistoryMessages = 20;
 
   Future<void> send(String raw) async {
     final text = raw.trim();
@@ -101,7 +101,61 @@ class AiChatController extends Notifier<AiChatState> {
 
   Future<void> clear() async {
     _history.clear();
+    _streamIdx = null;
+    _streamBuf = '';
     state = const AiChatState();
+  }
+
+  // ---- 流式输出状态 ----
+
+  /// 当前流式气泡在 turns 中的下标（null = 本轮尚未吐出增量）
+  int? _streamIdx;
+  String _streamBuf = '';
+  DateTime _lastStreamFlush = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// 流式增量：首次出现时插入占位气泡，之后按 ~60ms 节流刷新
+  void _onStreamDelta(String delta, List<String> actions) {
+    _streamBuf += delta;
+    final now = DateTime.now();
+    if (_streamIdx == null) {
+      _streamIdx = state.turns.length;
+      state = state.copyWith(
+        turns: [
+          ...state.turns,
+          AiTurn(isUser: false, text: _streamBuf, actions: List.of(actions)),
+        ],
+      );
+      _lastStreamFlush = now;
+      return;
+    }
+    if (now.difference(_lastStreamFlush).inMilliseconds < 60) return;
+    _lastStreamFlush = now;
+    _flushStreamTurn(actions);
+  }
+
+  void _flushStreamTurn(List<String> actions) {
+    final idx = _streamIdx;
+    if (idx == null || idx >= state.turns.length) return;
+    final turns = [...state.turns];
+    turns[idx] = AiTurn(isUser: false, text: _streamBuf, actions: List.of(actions));
+    state = state.copyWith(turns: turns);
+  }
+
+  /// 结束流式：已有占位气泡则用最终全文定格（防尾部增量丢失），否则补一条完整气泡
+  void _finalizeStreamTurn(String text, List<String> actions) {
+    final idx = _streamIdx;
+    if (idx == null) {
+      if (text.isNotEmpty) {
+        state = state.copyWith(
+          turns: [...state.turns, AiTurn(isUser: false, text: text, actions: List.of(actions))],
+        );
+      }
+    } else {
+      _streamBuf = text;
+      _flushStreamTurn(actions);
+    }
+    _streamIdx = null;
+    _streamBuf = '';
   }
 
   Future<void> _runLoop(Map<String, dynamic> config) async {
@@ -123,7 +177,8 @@ class AiChatController extends Notifier<AiChatState> {
           ..._trimmedHistory(),
         ],
         tools: kAiTools,
-        maxTokens: 1024,
+        maxTokens: 4096,
+        onContentDelta: (d) => _onStreamDelta(d, actions),
       );
 
       // 兜底：个别模型不返回原生 tool_calls，而是把工具调用打成
@@ -134,19 +189,15 @@ class AiChatController extends Notifier<AiChatState> {
       }
 
       if (toolCalls.isEmpty) {
-        state = state.copyWith(
-          turns: [
-            ...state.turns,
-            AiTurn(
-                isUser: false,
-                text: result.content?.trim().isEmpty == true
-                    ? '（AI 没有返回内容）'
-                    : result.content!.trim(),
-                actions: List.of(actions)),
-          ],
-        );
+        final text = result.content?.trim().isEmpty == true
+            ? '（AI 没有返回内容）'
+            : result.content!.trim();
+        _finalizeStreamTurn(text, actions);
         return;
       }
+
+      // 流式气泡已把模型前言显示出来了；释放引用，后续轮次另起气泡
+      _finalizeStreamTurn(result.content ?? '', actions);
 
       // 记录 assistant 的工具调用请求，并逐个本地执行回填结果
       _history.add(
@@ -190,6 +241,8 @@ class AiChatController extends Notifier<AiChatState> {
 
   /// 裁剪历史：保留最近 N 条，且首条必须是 user（不能把 assistant 的
   /// 工具调用和它的 tool 结果拆开，否则请求会被服务商拒绝）。
+  /// 旧轮次的 tool 结果再瘦身：超过 120 字符的替换为一句话省略标记
+  /// （保留 assistant↔tool 配对结构），只留最近一轮工具结果全文。
   List<AiMessage> _trimmedHistory() {
     var list = _history;
     if (list.length > _maxHistoryMessages) {
@@ -198,6 +251,23 @@ class AiChatController extends Notifier<AiChatState> {
           (list.first.role == 'tool' ||
               (list.first.role == 'assistant' && list.first.toolCalls != null))) {
         list = list.sublist(1);
+      }
+    }
+    var sawUser = false;
+    for (var i = list.length - 1; i >= 0; i--) {
+      if (list[i].role == 'user') {
+        sawUser = true;
+        continue;
+      }
+      if (sawUser &&
+          list[i].role == 'tool' &&
+          (list[i].content?.length ?? 0) > 120) {
+        list[i] = AiMessage(
+          role: 'tool',
+          content: '{"omitted":true,"note":"早期工具结果已省略，如需请重新查询"}',
+          toolCallId: list[i].toolCallId,
+          toolName: list[i].toolName,
+        );
       }
     }
     return list;
@@ -217,11 +287,15 @@ class AiChatController extends Notifier<AiChatState> {
       case 'create_trip':
         return '已创建行程：${args?['name'] ?? ''}';
       case 'update_trip_dates':
-        return '已调整行程日期';
+        return '待确认：调整行程日期';
       case 'add_trip_item':
         return '已添加安排：${args?['name'] ?? ''}';
+      case 'delete_trip_item':
+        return '待确认：删除安排';
       case 'add_member':
         return '已添加成员：${args?['name'] ?? ''}';
+      case 'remove_member':
+        return '待确认：移除成员 ${args?['memberName'] ?? ''}';
       case 'create_group':
         return '已创建旅行团：${args?['name'] ?? ''}';
       case 'add_checklist_item':
@@ -229,11 +303,23 @@ class AiChatController extends Notifier<AiChatState> {
       case 'toggle_checklist_item':
         return '已更新清单：${args?['text'] ?? ''}';
       case 'set_group_budget':
-        return '已设置预算';
+        return '待确认：设置预算';
       case 'set_app_theme':
         return '已切换主题';
       case 'set_budget_alerts_enabled':
         return '已更新预警开关';
+      case 'update_expense':
+        return '待确认：修改账单';
+      case 'delete_expense':
+        return '待确认：删除账单';
+      case 'get_expense_stats':
+        return '统计了账单';
+      case 'list_groups':
+        return '查看了旅行团';
+      case 'switch_group':
+        return '已切换旅行团';
+      case 'rename_group':
+        return '已重命名旅行团';
       case 'query_expenses':
         return '查询了账单';
       case 'get_balances':
@@ -252,6 +338,10 @@ class AiChatController extends Notifier<AiChatState> {
         return '查看了分类';
       case 'list_trips':
         return '查看了行程';
+      case 'create_trip_plan':
+        return '待确认：生成完整行程';
+      case 'apply_trip_template':
+        return '待确认：应用行程模板';
       default:
         return '已执行 ${call.name}';
     }

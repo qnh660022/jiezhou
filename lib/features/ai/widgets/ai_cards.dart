@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/seed/item_types.dart';
 import '../../../theme/tokens.dart';
 import '../ai_tools.dart' show commitExpenseDraft, commitTravelPack;
+import 'ai_confirm_card.dart' show ActionConfirmCard, ExpenseStatsCard;
 
 /// 卡片入口：按 type 分发到具体卡片。
 class AiCardView extends StatelessWidget {
@@ -37,6 +38,10 @@ class AiCardView extends StatelessWidget {
       case 'travel_pack':
         return TravelPackCard(
             plan: (data['plan'] as Map?)?.cast<String, dynamic>() ?? const {});
+      case 'action_confirm':
+        return ActionConfirmCard(data: data);
+      case 'expense_stats':
+        return ExpenseStatsCard(data: data);
       default:
         return _CardShell(
           child: Text('（不支持的数据卡片）', style: TextStyle(fontSize: AppFontSizes.caption)),
@@ -73,6 +78,13 @@ class _CardShell extends StatelessWidget {
             bottomLeft: Radius.circular(4),
           ),
           border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: scheme.shadow.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

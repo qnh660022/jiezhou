@@ -110,12 +110,16 @@ abstract class AiChatService {
   /// [config] 为 {baseUrl, apiKey, model}；网络失败或非 2xx 抛
   /// [AiChatException]，由调用层转成气泡里的错误提示。
   /// [maxTokens] 限制单次回复长度（省 token、防跑飞），null 表示不限制。
+  /// [onContentDelta] 非空时走 SSE 流式请求并逐段回调文本增量
+  /// （工具调用参数不回调）；流式失败且尚未吐出任何增量时自动降级
+  /// 非流式重试一次。返回值仍为完整结果。
   Future<AiChatResult> chat({
     required Map<String, dynamic> config,
     required List<AiMessage> messages,
     List<AiToolDefinition> tools = const [],
     double temperature = 0.4,
     int? maxTokens,
+    void Function(String delta)? onContentDelta,
   });
 }
 

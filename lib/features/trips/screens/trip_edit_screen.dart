@@ -9,9 +9,9 @@ import '../../../core/uid.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
 import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
+import 'destination_picker_sheet.dart';
 
 import '../../../shared/widgets/glass_app_bar.dart';
-import '../../../shared/widgets/money_text.dart' show MoneyFormat;
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
@@ -54,6 +54,14 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
     _destCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
+  }
+
+  /// 目的地选择弹层：全国城市多选 + 海外手动填；确定后以「-」回填。
+  Future<void> _pickDestination() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final picked = await showDestinationPicker(context, _destCtrl.text);
+    if (picked == null || !mounted) return;
+    setState(() => _destCtrl.text = picked);
   }
 
   void _toast(String message) {
@@ -234,9 +242,16 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
             child: TextField(
               controller: _destCtrl,
               textInputAction: TextInputAction.done,
-              maxLength: 30,
-              decoration:
-                  const InputDecoration(hintText: '例如：日本 · 东京', counterText: ''),
+              maxLength: 60,
+              decoration: InputDecoration(
+                hintText: '例如：成都-稻城，或点图标选择城市',
+                counterText: '',
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.location_on_outlined),
+                  tooltip: '选择目的地',
+                  onPressed: _pickDestination,
+                ),
+              ),
             ),
           ),
         ],

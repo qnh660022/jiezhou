@@ -16,6 +16,8 @@ import '../../../data/sync/sync_engine.dart';
 import '../../../data/sync/sync_models.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/section_header.dart';
+import '../../../shared/widgets/sync_status_capsule.dart'
+    show syncStatusColor;
 import '../../../theme/tokens.dart';
 
 class SyncCenterScreen extends ConsumerStatefulWidget {
@@ -96,12 +98,13 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
   // ===== 1 状态卡 =====
 
   Widget _statusCard(SyncStatus status, ColorScheme scheme) {
-    final (color, label) = switch (status.kind) {
-      SyncStatusKind.unconfigured => (scheme.outline, copy('sync.status.unconfigured')),
-      SyncStatusKind.signedOut => (scheme.outline, copy('sync.status.signedOut')),
-      SyncStatusKind.syncing => (const Color(0xFF2F80ED), copy('sync.status.syncing')),
-      SyncStatusKind.idle => (const Color(0xFF1E9E6A), copy('sync.status.idle')),
-      SyncStatusKind.offline => (SemanticColors.warning, copy('sync.status.offline')),
+    final color = syncStatusColor(scheme, status.kind);
+    final label = switch (status.kind) {
+      SyncStatusKind.unconfigured => copy('sync.status.unconfigured'),
+      SyncStatusKind.signedOut => copy('sync.status.signedOut'),
+      SyncStatusKind.syncing => copy('sync.status.syncing'),
+      SyncStatusKind.idle => copy('sync.status.idle'),
+      SyncStatusKind.offline => copy('sync.status.offline'),
     };
     final last = status.lastSyncedAt;
     return Card(
@@ -144,7 +147,7 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
     );
   }
 
-  // ===== 2 端点引导 =====
+  // ===== 2 未启用提示（端点已改为构建时默认注入，无手填入口） =====
 
   Widget _guideCard(ColorScheme scheme) => Card(
         margin: EdgeInsets.zero,
@@ -152,15 +155,8 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
         child: Padding(
           padding: const EdgeInsets.all(Spacing.lg),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(copy('sync.guideTitle'), style: const TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: Spacing.sm),
-            Text(copy('sync.guideBody'),
+            Text(copy('cloud.notConfigured'),
                 style: TextStyle(color: scheme.onSurfaceVariant, fontSize: AppFontSizes.caption)),
-            const SizedBox(height: Spacing.md),
-            FilledButton(
-              onPressed: () => context.push('/profile/cloud'),
-              child: Text(copy('cloud.configSection')),
-            ),
           ]),
         ),
       );
