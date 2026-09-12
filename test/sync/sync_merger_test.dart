@@ -165,7 +165,7 @@ void main() {
 
   group('共享镜像分流', () {
     test('L1-P0 协作团的云端行 → 落 shared_* 表，不进本地业务表', () async {
-      merger.refreshContext(userId: 'u1', collabGroups: {'g1'});
+      merger.refreshContext(userId: 'u1', collabGroups: {'g1'}, known: true);
       transport.seedRow('groups_sync', {
         'id': 'g1',
         'owner_user_id': 'ownerX',

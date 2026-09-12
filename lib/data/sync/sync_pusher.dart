@@ -7,7 +7,6 @@ library;
 import 'dart:async';
 
 import 'db_access.dart';
-import 'sync_codec.dart';
 import 'sync_models.dart';
 import 'sync_outbox_service.dart';
 import 'sync_transport.dart';
@@ -40,7 +39,9 @@ class SyncPusher {
 
   static const int maxRounds = 10;
   static const int batchSize = 50;
-  static const int deadLetterThreshold = 8;
+
+  /// 死信阈值与 outbox 服务同源（单一事实来源）。
+  static const int deadLetterThreshold = SyncOutboxService.deadLetterThreshold;
 
   Duration _backoffFor(int attempts) {
     var seconds = 1;
@@ -54,9 +55,18 @@ class SyncPusher {
     return Duration(seconds: seconds);
   }
 
-  /// 装配一批：读本地最新值 → SyncEnvelope；本地行已删 → op=delete。
-  Future<List<SyncEnvelope>> assemble(List<OutboxEntry> batch) async {
-    final out = <SyncEnvelope>[];
+  /// 退避时长（供引擎调度重试；此前 `_backoffFor` 是死代码，失败后不退避
+  /// 导致硬重试加速变死信）。
+  Duration backoffFor(int attempts) => _backoffFor(attempts);
+
+  /// 装配一批：读本地最新值 → (outbox 行, SyncEnvelope) **成对**返回。
+  ///
+  /// 成对返回是关键：assemble 可能丢弃行（本地已删且从未上云），若调用方按
+  /// 索引取信封会越界 / 错配（历史 bug：批次含被丢弃行时 drain 抛 RangeError，
+  /// 整轮 push 中止）。
+  Future<List<(OutboxEntry, SyncEnvelope)>> assembleEntries(
+      List<OutboxEntry> batch) async {
+    final out = <(OutboxEntry, SyncEnvelope)>[];
     for (final e in batch) {
       // 防御：未知 entity 字符串（迁移残留 / 脏数据）→ 当场清理 outbox，
       // 避免反复抛 `Bad state: No element`（firstWhere 无 orElse 时的典型错误）。
@@ -77,58 +87,69 @@ class SyncPusher {
           continue;
         }
       }
-      out.add(SyncEnvelope(
-        entity: entity,
-        rowId: e.rowId,
-        op: row == null ? SyncOutboxOp.delete : SyncOutboxOp.upsert,
-        updatedMs: e.updatedMs, // 事件时点，不重读时钟
-        row: row ?? const {},
+      out.add((
+        e,
+        SyncEnvelope(
+          entity: entity,
+          rowId: e.rowId,
+          op: row == null ? SyncOutboxOp.delete : SyncOutboxOp.upsert,
+          updatedMs: e.updatedMs, // 事件时点，不重读时钟
+          row: row ?? const {},
+        ),
       ));
     }
     return out;
   }
 
-  /// 在 7 个合法 [SyncEntity] 中按字符串名匹配；找不到返回 null（→ 走清理分支）。
-  SyncEntity? _resolveEntity(String name) {
-    for (final s in SyncEntity.values) {
-      if (s.name == name) return s;
-    }
-    return null;
+  /// 兼容层：只要信封（现有测试与外部调用沿用）。
+  Future<List<SyncEnvelope>> assemble(List<OutboxEntry> batch) async =>
+      [for (final p in await assembleEntries(batch)) p.$2];
+
+  /// 按实体键匹配（snake_case，含 `trip_items`）；找不到返回 null（→ 走清理分支）。
+  ///
+  /// 历史 bug H10：此处曾用 `s.name` 匹配，而 `SyncEntity.tripItems.name` 是
+  /// `tripItems`，与仓库层写入的 `trip_items` 不符 → 行程安排行被静默当脏数据
+  /// 删除，永不上云。现统一走 [SyncEntity.byLocalKey]（内部兼容旧 `name` 键）。
+  SyncEntity? _resolveEntity(String name) => SyncEntity.byLocalKey(name);
+
+  /// 是否是「远端该行已被物理清理」的墓碑上行失败：PostgREST 23502
+  /// （upsert 走了 INSERT 分支，缺 NOT NULL 列）。此时该 outbox 行已无意义。
+  bool _isTombstoneGone(Object err) {
+    final s = err.toString();
+    return s.contains('23502') || s.contains('not-null constraint');
   }
 
   Future<PushResult> drain() async {
     var pushed = 0;
     for (var round = 0; round < maxRounds; round++) {
       final batch = await outbox.selectBatch(limit: batchSize * 4);
-      final retryable = batch.where((e) => e.attemptCount < deadLetterThreshold).toList();
+      final retryable =
+          batch.where((e) => e.attemptCount < deadLetterThreshold).toList();
       if (retryable.isEmpty) {
         return PushResult(pushed: pushed, failed: 0);
       }
       // 事件时点升序、批上限 50
       retryable.sort((a, b) => a.updatedMs.compareTo(b.updatedMs));
-      var work = retryable.take(batchSize).toList();
+      final take = retryable.take(batchSize).toList();
 
-      final envelopes = await assemble(work);
+      final pairs = await assembleEntries(take);
       // 开关关闸：被关实体行移出 outbox（重开时 toggle 路径全量重传），不入网
-      final kept = <OutboxEntry>[];
-      final keptEnvelopes = <SyncEnvelope>[];
-      for (var i = 0; i < work.length; i++) {
-        final env = envelopes[i];
-        final enabled = isEntityEnabled?.call(work[i].entity, work[i].rowId, env.row) ?? true;
+      final work = <(OutboxEntry, SyncEnvelope)>[];
+      for (final p in pairs) {
+        final enabled =
+            isEntityEnabled?.call(p.$1.entity, p.$1.rowId, p.$2.row) ?? true;
         if (enabled) {
-          kept.add(work[i]);
-          keptEnvelopes.add(env);
+          work.add(p);
         } else {
-          await outbox.delete([work[i]]);
+          await outbox.delete([p.$1]);
         }
       }
-      if (kept.isEmpty) continue; // 本批全被关闸，继续下一轮取件
-      work = kept;
+      if (work.isEmpty) continue; // 本批全被关闸/丢弃，继续下一轮取件
       // 按实体聚合多调（批内单实体 ≤50）；单实体失败只标记该实体行，
       // 不再拖垮同批其他实体（历史 bug：一行坏数据连坐整批 8 次后全部变死信）。
-      final byEntity = <SyncEntity, List<SyncEnvelope>>{};
-      for (final e in keptEnvelopes) {
-        byEntity.putIfAbsent(e.entity, () => []).add(e);
+      final byEntity = <SyncEntity, List<(OutboxEntry, SyncEnvelope)>>{};
+      for (final p in work) {
+        byEntity.putIfAbsent(p.$2.entity, () => []).add(p);
       }
       final okRows = <OutboxEntry>[];
       final failedRows = <OutboxEntry>[];
@@ -138,18 +159,20 @@ class SyncPusher {
         try {
           await transport.upsert(
             entry.key.cloudTable,
-            entry.value.map((e) => e.toCloudJson()).toList(),
+            [for (final p in entry.value) p.$2.toCloudJson()],
           );
-          okRows.addAll([
-            for (final e in entry.value)
-              work.firstWhere((w) => w.rowId == e.rowId),
-          ]);
+          okRows.addAll([for (final p in entry.value) p.$1]);
         } catch (err) {
+          // 整批都是墓碑（级联删）且报 23502 → 远端行已被物理清理，
+          // 墓碑无处可落，视作成功丢弃，避免无谓退化成死信。
+          final allTombstones = entry.value
+              .every((p) => p.$2.op == SyncOutboxOp.delete);
+          if (allTombstones && _isTombstoneGone(err)) {
+            okRows.addAll([for (final p in entry.value) p.$1]);
+            continue;
+          }
           firstErr ??= err;
-          failedRows.addAll([
-            for (final e in entry.value)
-              work.firstWhere((w) => w.rowId == e.rowId),
-          ]);
+          failedRows.addAll([for (final p in entry.value) p.$1]);
         }
       }
       if (okRows.isNotEmpty) {

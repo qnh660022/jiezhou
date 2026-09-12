@@ -9,12 +9,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
-import '../../../data/repo/ledger_repo.dart' hide Settlement;
-import '../../../data/repo/trips_repo.dart';
 import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../data/sync/sync_engine.dart';
 import '../../../data/sync/sync_models.dart';
+import '../../../platform/network_probe.dart' show NetKind;
 import '../../../shared/app_meta.dart' show shareLinkUrl;
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/section_header.dart';
@@ -65,6 +64,8 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
         padding: const EdgeInsets.all(Spacing.lg),
         children: [
           _statusCard(status, scheme),
+          const SizedBox(height: Spacing.md),
+          _autoSyncCard(),
           if (status.kind == SyncStatusKind.unconfigured) ...[
             const SizedBox(height: Spacing.lg),
             _guideCard(scheme),
@@ -77,6 +78,8 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
           _groupToggles(),
           const SizedBox(height: Spacing.md),
           _categoriesRow(),
+          const SizedBox(height: Spacing.xl),
+          _collabCenterEntry(),
           const SizedBox(height: Spacing.xl),
           SectionHeader(title: copy('sync.links')),
           _shareLinksSection(),
@@ -109,6 +112,7 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
       SyncStatusKind.offline => copy('sync.status.offline'),
     };
     final last = status.lastSyncedAt;
+    final failUntil = ref.read(syncEngineProvider)?.throttleUntil;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -149,8 +153,7 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
                 if (n <= 0) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(top: Spacing.xs),
-                  child: Text(
-                      '其中 $n 行多次失败已暂停自动重试，点「立即同步」强制重试',
+                  child: Text('其中 $n 行${copy('sync.deadLetterHint')}',
                       style: TextStyle(
                           color: scheme.error, fontSize: AppFontSizes.caption)),
                 );
@@ -162,8 +165,83 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
             Text('${copy('sync.errorRecent')}：${status.lastError}',
                 style: TextStyle(color: scheme.error, fontSize: AppFontSizes.caption)),
           ],
+          // 失败节流中：告诉用户「什么时候会自己好」，否则只看到「离线」很慌。
+          if (failUntil != null && failUntil.isAfter(DateTime.now())) ...[
+            const SizedBox(height: Spacing.xs),
+            Text(
+                '失败次数过多，自动同步已暂停，将于 ${_hmm(failUntil)} 自动恢复'
+                '（点「立即同步」可立刻重试）',
+                style: TextStyle(color: scheme.error, fontSize: AppFontSizes.caption)),
+          ],
         ]),
       ),
+    );
+  }
+
+  static String _hmm(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  // ===== 1.5 自动同步总开关 / 仅 Wi-Fi =====
+
+  /// 「即改即同步」的总闸与网络条件闸。
+  ///
+  /// 总开关关闭后：停周期任务、不排写后 push，但本地写仍会入队（一条不丢），
+  /// 手动「立即同步」照常可用；重新打开时会自动补推积压的改动。
+  Widget _autoSyncCard() {
+    final engine = ref.read(syncEngineProvider);
+    final scheme = Theme.of(context).colorScheme;
+    final auto = engine?.autoEnabled ?? true;
+    final wifiOnly = engine?.wifiOnly ?? false;
+    final kind = engine?.netKind ?? NetKind.unknown;
+    final blocked = engine?.wifiBlockedNow ?? false;
+    final caption = const TextStyle(fontSize: AppFontSizes.caption);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Column(children: [
+        SwitchListTile(
+          secondary: const Icon(Icons.sync_rounded, size: 20),
+          title: Text(copy('sync.auto.title')),
+          subtitle: Text(auto ? copy('sync.auto.onNote') : copy('sync.auto.offNote'),
+              style: caption),
+          value: auto,
+          onChanged: engine == null
+              ? null
+              : (v) async {
+                  await engine.setAutoEnabled(v);
+                  if (mounted) setState(() {});
+                },
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.wifi_rounded, size: 20),
+          title: Text(copy('sync.auto.wifiOnly')),
+          subtitle: Text(copy('sync.auto.wifiOnlyNote'), style: caption),
+          value: wifiOnly,
+          onChanged: engine == null
+              ? null
+              : (v) async {
+                  await engine.setWifiOnly(v);
+                  if (mounted) setState(() {});
+                },
+        ),
+        if (blocked)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Spacing.lg, 0, Spacing.lg, Spacing.md),
+            child: Row(children: [
+              Icon(Icons.info_outline_rounded, size: 16, color: scheme.error),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: Text(copy('sync.wifiBlocked'),
+                    style: caption.copyWith(color: scheme.error)),
+              ),
+            ]),
+          )
+        else if (wifiOnly && kind == NetKind.unknown)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Spacing.lg, 0, Spacing.lg, Spacing.md),
+            child: Text(copy('sync.auto.wifiUnknown'),
+                style: caption.copyWith(color: scheme.onSurfaceVariant)),
+          ),
+      ]),
     );
   }
 
@@ -293,6 +371,21 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
           title: Text(copy('sync.toggles.categories')),
           subtitle: Text(copy('sync.toggles.categoriesNote')),
           trailing: const Icon(Icons.lock_outline_rounded, size: 18),
+        ),
+      );
+
+  // ===== 3.5 分享与协作中心入口 =====
+
+  /// 同步页里最常被问的一句话是「邀请在哪、分享链接在哪」——直接给一个入口。
+  Widget _collabCenterEntry() => Card(
+        margin: EdgeInsets.zero,
+        child: ListTile(
+          leading: const Icon(Icons.ios_share_rounded, size: 20),
+          title: Text(copy('sync.collabCenter')),
+          subtitle: Text(copy('sync.collabCenterNote'),
+              style: const TextStyle(fontSize: AppFontSizes.caption)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => context.push('/profile/share'),
         ),
       );
 
@@ -434,7 +527,9 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
 
   Widget _freqSection() {
     final engine = ref.watch(syncEngineProvider);
-    final current = engine?.freq ?? SyncFreq.standard;
+    // 缺省实时：与引擎 SyncFreqX.fromKey 的缺省保持一致（此前这里回落 standard，
+    // 与引擎口径不符，首次进入页面会显示「标准 15s」而实际按实时跑）。
+    final current = engine?.freq ?? SyncFreq.realtime;
     return Card(
       margin: EdgeInsets.zero,
       child: Column(children: [

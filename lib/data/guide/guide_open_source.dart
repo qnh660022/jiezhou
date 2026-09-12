@@ -1,12 +1,19 @@
-/// 开源数据增强层（§7.2-②）：公开无版权争议源补充事实/坐标。
-/// 2026-09-06 真实现（用户要求「离线+在线结合做实」）：
-/// - Open-Meteo：城市坐标拉 3 日天气 → 「行前准备」天气事实条目（大陆直连实测可用）；
-/// - Photon（OSM 生态）：城市名+类别查真实景点 POI → 「景点」补充条目
-///   （实测 q=城市名&osm_tag=tourism 返回真实景点；美食查询噪音大不采用）。
-/// 所有条目带 source/sourceUrl 标注；种子文本优先，在线只补不改写（§7.16）。
+/// 开源数据增强层（§7.2-②）：公开无版权争议源补充**事实**。
+///
+/// ## 2026-09 修正（用户原话：「获取的只是地点，不是攻略，而且全是外国的」）
+/// 旧实现把 Photon/OSM 的 POI 当成「景点推荐」主体，导致：
+/// - 海外城市（`kCityCoords` 里东京/巴黎/伦敦等占一半）也能出内容 → 全是外国的；
+/// - 条目只有 `OSM·museum` 之类的外文地名，没有任何攻略信息 → 只是地点。
+///
+/// 现在的定位收窄为「**只补事实，不做攻略主体**」：
+/// - Open-Meteo 天气 → `prep`（真实、时效性、无版权争议）；
+/// - Photon/OSM POI → `spots` 微弱补充，且必须同时满足
+///   ① `countrycode == CN`；② 名称含中文（[hasCjk]）。
+/// 主体攻略内容由内置种子（5000 字/城）+ 去哪儿城市页抓取层承担。
 library;
 import 'dart:convert';
 
+import 'guide_content_filter.dart';
 import 'guide_http.dart';
 import 'guide_normalize.dart';
 import '../seed/city_coords.dart' show kCityCoords;
@@ -24,8 +31,8 @@ class GuideOpenSourceLayer {
       ? Future.value(fetchOverride!(url))
       : _http.fetchText(url, checkRobots: false);
 
-  /// 每栏最多补充条数（轻量、克制）。
-  static const _maxSpots = 4;
+  /// 每栏最多补充条数（轻量、克制；主体内容不靠这一层）。
+  static const _maxSpots = 3;
 
   /// 返回 null = 该层无数据（静默降级到下一层）。任何失败都不得抛出。
   Future<Map<String, List<Map<String, dynamic>>>?> enhance(
@@ -81,14 +88,15 @@ class GuideOpenSourceLayer {
     }
   }
 
-  // ============ Photon / OSM 景点 POI（spots 栏） ============
+  // ============ Photon / OSM 景点 POI（spots 栏，弱补充） ============
 
+  /// 只接受**国内 + 中文名**的 POI；外文/海外一律丢弃（用户明确要求去掉外国内容）。
   Future<List<Map<String, dynamic>>> _spots(GuideLocation loc) async {
     final q = Uri.encodeComponent(loc.name);
     final coords = kCityCoords[loc.name] ?? kCityCoords[loc.key];
     final bias = coords != null ? '&lat=${coords[0]}&lon=${coords[1]}' : '';
     final url = 'https://photon.komoot.io/api/?q=$q'
-        '&osm_tag=tourism&osm_tag=historic&limit=8$bias';
+        '&osm_tag=tourism&osm_tag=historic&limit=12$bias';
     final res = await _fetch(url);
     if (res.cls != GuideFetchClass.ok) return const [];
     try {
@@ -99,9 +107,12 @@ class GuideOpenSourceLayer {
         if (out.length >= _maxSpots) break;
         final p = (f['properties'] as Map?) ?? const {};
         final name = p['name']?.toString() ?? '';
-        if (name.isEmpty ||
-            name == loc.name ||
-            name.contains(loc.name) && name.length <= loc.name.length + 1) {
+        if (name.isEmpty) continue;
+        if (!hasCjk(name, min: 2)) continue; // 外文地名：丢弃
+        final country = (p['countrycode'] ?? p['country'] ?? '').toString();
+        if (!_isChina(country)) continue; // 海外 POI：丢弃
+        if (name == loc.name ||
+            (name.contains(loc.name) && name.length <= loc.name.length + 1)) {
           continue; // 地名自身/泛化命中不是景点
         }
         final osmType = p['osm_type']?.toString() ?? '';
@@ -111,9 +122,9 @@ class GuideOpenSourceLayer {
         out.add({
           'name': name,
           'addr': [district, city].where((s) => s.isNotEmpty).join(' '),
-          'tag': 'OSM·${p['osm_value'] ?? ''}',
+          'tag': '网络补充',
           'timeText': '',
-          'note': '来自网络补充（OpenStreetMap）',
+          'note': '来自 OpenStreetMap 的地点标注（仅坐标与名称，攻略详情见上方栏目）',
           'source': 'OpenStreetMap',
           if (osmType.isNotEmpty && osmId.isNotEmpty)
             'sourceUrl': 'https://www.openstreetmap.org/$osmType/$osmId',
@@ -123,5 +134,12 @@ class GuideOpenSourceLayer {
     } catch (_) {
       return const [];
     }
+  }
+
+  /// 国内判定：ISO 国家码 CN，或国家级字段里含「中国」/China。
+  bool _isChina(String country) {
+    final c = country.trim().toLowerCase();
+    if (c.isEmpty) return false;
+    return c == 'cn' || c == 'chn' || c.contains('中国') || c.contains('china');
   }
 }

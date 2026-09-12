@@ -28,20 +28,29 @@ class SyncTransportSupabase implements SyncTransport {
     }
   }
 
-  String _compositeFilter(int updatedMsAfter, String idAfter) {
-    final idPart = idAfter.isEmpty ? '' : ",and(updated_ms.eq.$updatedMsAfter,id.gt.$idAfter)";
+  /// 复合游标过滤表达式（纯函数，便于单测）：
+  /// `updated_ms > last OR (updated_ms = last AND <idColumn> > lastId)`。
+  ///
+  /// [idColumn] 必须传**该实体的主键列名**（`categories_sync` 是 `key`，其余 `id`）。
+  /// 此前硬编码 `id`，导致分类表数据超过一页时第二页 PostgREST 400（历史 bug M6）。
+  static String compositeCursorFilter(
+      int updatedMsAfter, String idAfter, String idColumn) {
+    final idPart = idAfter.isEmpty
+        ? ''
+        : ',and(updated_ms.eq.$updatedMsAfter,$idColumn.gt.$idAfter)';
     return 'updated_ms.gt.$updatedMsAfter$idPart';
   }
 
   @override
   Future<List<Map<String, dynamic>>> fetch(String entity,
       {required int updatedMsAfter, required String idAfter, required int limit}) async {
+    final idColumn = _idColumnOf(entity);
     final rows = await _client
         .from(entity)
         .select()
-        .or(_compositeFilter(updatedMsAfter, idAfter))
+        .or(compositeCursorFilter(updatedMsAfter, idAfter, idColumn))
         .order('updated_ms')
-        .order(_idColumnOf(entity))
+        .order(idColumn)
         .limit(limit);
     return (rows as List).cast<Map<String, dynamic>>();
   }

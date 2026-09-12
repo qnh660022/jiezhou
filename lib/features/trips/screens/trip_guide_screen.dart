@@ -1,8 +1,25 @@
-/// 目的地攻略页（V2.6 任务5，§7.10）：仅非 Web（Web 不注册路由）。
-/// 两段式加载（用户变更 2026-09-06）：先离线首屏（种子/缓存，零网络），
-/// 再在线优先补全（open/crawl/aggregate）——离线六栏与在线精选同屏可读。
-/// 多目的地（「成都-稻城」）按城 TabBar 分页，每城独立内容。
+/// 目的地攻略页（V2.6 任务5 → 2026-09 UI 重设计 + 多入口 + 城市切换）。
+///
+/// ## 页面层次（用户反馈「很没有层次感」，这是本次重设计的核心）
+/// ```
+/// AppBar：标题 + 换城市/刷新
+///   ├─ GuideCityHero      城市名 + 定位 + 统计（景点数/阅读时长/来源）
+///   ├─ GuideSectionGrid   六栏速览宫格（点一格滚到对应栏目）
+///   ├─ GuideSectionBody×6 栏目内容（按数据类型换渲染形态）
+///   ├─ GuideArticleList   在线游记流（去哪儿城市页）
+///   └─ 版权声明
+/// ```
+///
+/// ## 数据来源（两段式：离线先出，在线后补）
+/// 1. `getGuideMultiOffline*`（缓存/种子/AI 导入）零网络，立即渲染；
+/// 2. `getGuideMulti*` 补在线层（open 事实 + 去哪儿城市页正文）后替换。
+///
+/// ## 入口（2026-09 从 1 个扩到 3 个）
+/// - 行程详情「快捷操作」→ 带上 tripId（可「加入安排」）；
+/// - 行程列表顶部卡片 / 我的-目的地攻略 → 只带城市 key（无 tripId）。
 library;
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,17 +29,33 @@ import '../../../data/db/database.dart' show TripItem;
 import '../../../data/guide/guide_providers.dart';
 import '../../../data/guide/guide_service.dart' show GuideResult;
 import '../../../data/providers.dart' show tripsRepoProvider;
+import '../../../features/ledger/ledger_models.dart' show TripCardView;
+import '../../../features/ledger/ledger_providers.dart' show allTripsProvider;
 import '../../../platform/open_external.dart';
-import 'item_edit_screen.dart';
-
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
+import '../guide_city_picker.dart';
+import '../guide_widgets.dart';
+import 'item_edit_screen.dart' as edit;
 
 class TripGuideScreen extends ConsumerStatefulWidget {
-  const TripGuideScreen({super.key, required this.tripId, required this.destination});
+  const TripGuideScreen({
+    super.key,
+    this.tripId,
+    this.destination = '',
+    this.cityKey,
+  });
 
-  final String tripId;
+  /// 行程入口才有；城市入口为 null。
+  final String? tripId;
+
+  /// 行程目的地（多城用「-」分隔）。
   final String destination;
+
+  /// 城市入口直接给的 key。
+  final String? cityKey;
 
   @override
   ConsumerState<TripGuideScreen> createState() => _TripGuideScreenState();
@@ -32,42 +65,111 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
   /// 离线首屏结果（零网络，立即渲染）。
   List<GuideResult>? _offline;
 
-  /// 完整结果（在线层完成后替换展示；在线内容置顶）。
+  /// 完整结果（在线层完成后替换展示）。
   List<GuideResult>? _display;
 
   bool _refreshing = false;
 
+  /// 当前城市 key 列表（城市入口时由选择器驱动；行程入口由 destination 归一化）。
+  List<String> _cityKeys = const [];
+
+  /// 各栏折叠状态（key = cityKey|sectionKey），跨会话记忆。
+  Map<String, bool> _collapsed = {};
+
+  /// 栏目锚点：宫格点击后滚动到对应栏目。
+  final Map<String, GlobalKey> _sectionKeys = {};
+
+  /// 全部可选城市（换城市选择器数据源）。
+  List<GuideCityOption> _allCities = const [];
+
   @override
   void initState() {
     super.initState();
+    _loadCities();
     _load();
   }
 
   @override
   void didUpdateWidget(covariant TripGuideScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Builder 端 trip 异步加载：destination 从空串变为真实值后需重新拉取。
-    if (widget.destination != oldWidget.destination) {
+    // 行程入口：trip 异步加载后 destination 从空串变为真实值，需要重拉。
+    if (widget.destination != oldWidget.destination ||
+        widget.cityKey != oldWidget.cityKey) {
       _display = null;
       _offline = null;
       _load();
     }
   }
 
+  Future<void> _loadCities() async {
+    try {
+      final list = await ref.read(guideServiceProvider).allCities();
+      if (!mounted) return;
+      setState(() => _allCities = list);
+    } catch (_) {}
+  }
+
+  /// 当前要展示的城市 key 列表。
+  Future<List<String>> _resolveKeys() async {
+    final direct = widget.cityKey;
+    if (direct != null && direct.isNotEmpty) return [direct];
+    if (_cityKeys.isNotEmpty) return _cityKeys;
+    return const [];
+  }
+
   Future<void> _load({bool force = false}) async {
     final svc = ref.read(guideServiceProvider);
+    final keys = await _resolveKeys();
+
     if (!force) {
-      final off = await svc.getGuideMultiOffline(widget.destination);
+      // 离线首屏
+      final off = keys.isEmpty
+          ? await svc.getGuideMultiOffline(widget.destination)
+          : await svc.getGuideMultiOfflineByKeys(keys);
       if (!mounted) return;
       setState(() => _offline = off);
+      await _loadCollapsedState(off);
     }
-    final full =
-        await svc.getGuideMulti(widget.destination, forceRefresh: force);
+
+    final full = keys.isEmpty
+        ? await svc.getGuideMulti(widget.destination, forceRefresh: force)
+        : await svc.getGuideMultiByKeys(keys, forceRefresh: force);
     if (!mounted) return;
     setState(() {
       _display = full;
       _refreshing = false;
     });
+    await _loadCollapsedState(full);
+  }
+
+  /// 读该城的折叠/展开记忆（默认全部展开）。
+  Future<void> _loadCollapsedState(List<GuideResult> results) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final next = <String, bool>{};
+      for (final r in results) {
+        final key = r.location?.key;
+        if (key == null) continue;
+        final raw = sp.getString('guide_view_collapsed_$key');
+        if (raw == null) continue;
+        final m = (jsonDecode(raw) as Map).cast<String, dynamic>();
+        m.forEach((k, v) => next['$key|$k'] = v == true);
+      }
+      if (!mounted) return;
+      setState(() => _collapsed = {..._collapsed, ...next});
+    } catch (_) {}
+  }
+
+  Future<void> _persistCollapsed(String cityKey) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final mine = <String, bool>{};
+      for (final k in GuideCity.sectionKeys) {
+        final v = _collapsed['$cityKey|$k'];
+        if (v != null) mine[k] = v;
+      }
+      await sp.setString('guide_view_collapsed_$cityKey', jsonEncode(mine));
+    } catch (_) {}
   }
 
   Future<void> _reload() async {
@@ -75,9 +177,104 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
     await _load(force: true);
   }
 
+  /// 换城市：选择器返回 key；多城时作为新 Tab 追加。
+  Future<void> _pickCity({bool append = false}) async {
+    final picked = await showGuideCityPicker(
+      context: context,
+      cities: _allCities,
+      currentKey: _display?.isNotEmpty == true
+          ? _display!.first.location?.key
+          : widget.cityKey,
+    );
+    if (picked == null || !mounted) return;
+    final current = await _resolveKeys();
+    if (append) {
+      if (current.contains(picked)) return;
+      setState(() => _cityKeys = [...current, picked]);
+    } else {
+      setState(() {
+        _cityKeys = [picked];
+        _display = null;
+        _offline = null;
+      });
+    }
+    await _load();
+  }
+
+  Future<void> _clearAiContent(String cityKey) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(copy('guide.clearAiConfirm')),
+        content: Text(copy('guide.clearAiConfirmBody')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(copy('guide.cancel'))),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(copy('guide.clearAi'))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await ref.read(guideServiceProvider).clearCityOverride(cityKey);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(copy('guide.clearAiDone'))));
+    setState(() {
+      _display = null;
+      _offline = null;
+    });
+    await _load(force: true);
+  }
+
+  /// 宫格点击 → 滚到对应栏目。
+  ///
+  /// ## 为什么先展开、再「下一帧」滚动（2026-09-12 修 bug：内容一多就跳不动）
+  /// 1. 目标栏目若处于折叠态，先展开 —— 展开会改变整页布局，先滚再展开
+  ///    等于拿旧布局算出来的位移去滚，落点是错的；
+  /// 2. `Scrollable.ensureVisible` 依赖目标 RenderObject **已经被 layout**：
+  ///    一旦目标在视口外从未被布局过（内容一长必然如此），
+  ///    `RenderViewport.getOffsetToReveal` 里 `childScrollOffset(child)!`
+  ///    会拿到 null 并抛出空断言异常，跳转被静默吞掉（页面毫无反应）。
+  ///    配合 `_CityGuideView` 改成「整体一次布局」的滚动容器（见下方注释），
+  ///    目标永远已布局，再叠一层 `addPostFrameCallback` 保证顺序正确。
+  void _jumpToSection(String cityKey, String sectionKey) {
+    final id = '$cityKey|$sectionKey';
+    // ① 折叠着就先展开
+    if (_collapsed[id] == true) {
+      setState(() => _collapsed[id] = false);
+      _persistCollapsed(cityKey);
+    }
+    // ② 下一帧（布局已按展开后的形态更新）再滚动
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final ctx = _sectionKeys[id]?.currentContext;
+      if (ctx == null) return;
+      try {
+        await Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          alignment: 0.06,
+        );
+      } catch (_) {
+        // 极端情况（目标被卸载 / 滚动容器已 dispose）：静默放弃，不弹红屏。
+      }
+    });
+  }
+
+  Widget _sectionAnchor(String cityKey, String sectionKey, Widget child) {
+    final key = _sectionKeys.putIfAbsent(
+        '$cityKey|$sectionKey', () => GlobalKey());
+    return KeyedSubtree(key: key, child: child);
+  }
+
   @override
   Widget build(BuildContext context) {
     final results = _display ?? _offline;
+    final showTabs = (results?.length ?? 0) > 1;
     return Scaffold(
       appBar: AppBar(
         title: Text(copy('guide.title')),
@@ -86,41 +283,105 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
             onPressed: _refreshing ? null : _reload,
             icon: _refreshing
                 ? const SizedBox(
-                    width: 16, height: 16,
+                    width: 16,
+                    height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.refresh_rounded),
             tooltip: '刷新在线内容',
           ),
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              final key = results?.isNotEmpty == true
+                  ? results!.first.location?.key
+                  : widget.cityKey;
+              if (v == 'clear-ai' && key != null) _clearAiContent(key);
+              if (v == 'pick') _pickCity();
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                  value: 'pick', child: Text(copy('guide.switchCity'))),
+              if (results?.isNotEmpty == true && results!.first.isAiImported)
+                PopupMenuItem(
+                    value: 'clear-ai', child: Text(copy('guide.clearAi'))),
+            ],
+          ),
         ],
       ),
-      body: _buildBody(context, results),
+      body: _buildBody(context, results, showTabs),
     );
   }
 
-  Widget _buildBody(BuildContext context, List<GuideResult>? results) {
+  Widget _buildBody(
+      BuildContext context, List<GuideResult>? results, bool showTabs) {
     if (results == null) return _loadingList();
     if (results.isEmpty) {
-      return _empty(context, copy('guide.badDestination'));
+      return _emptyState(context, copy('guide.badDestination'));
     }
-    if (results.length == 1) {
+    if (!showTabs) {
       return RefreshIndicator(
-          onRefresh: _reload, child: _CityGuideView(result: results.first, tripId: widget.tripId, onlineDone: _display != null));
+        onRefresh: _reload,
+        child: _CityGuideView(
+          result: results.first,
+          tripId: widget.tripId,
+          onlineDone: _display != null,
+          collapsed: _collapsed,
+          onToggleSection: (sk) {
+            final cityKey = results.first.location?.key ?? '';
+            setState(() =>
+                _collapsed['$cityKey|$sk'] = !(_collapsed['$cityKey|$sk'] ?? false));
+            _persistCollapsed(cityKey);
+          },
+          onJumpSection: (sk) =>
+              _jumpToSection(results.first.location?.key ?? '', sk),
+          sectionAnchor: (sk, child) =>
+              _sectionAnchor(results.first.location?.key ?? '', sk, child),
+          onClearAi: results.first.isAiImported
+              ? () => _clearAiContent(results.first.location?.key ?? '')
+              : null,
+        ),
+      );
     }
-    // 多目的地：按城 TabBar 分页
     return DefaultTabController(
       length: results.length,
       child: Column(children: [
         TabBar(
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          tabs: [for (final r in results) Tab(text: r.location?.name ?? '')],
+          tabs: [
+            for (final r in results) Tab(text: r.location?.name ?? ''),
+            Tab(
+              icon: const Icon(Icons.add_rounded, size: 18),
+              text: copy('guide.addCity'),
+            ),
+          ],
+          onTap: (i) {
+            if (i == results.length) _pickCity(append: true);
+          },
         ),
         Expanded(
           child: TabBarView(children: [
             for (final r in results)
               RefreshIndicator(
-                  onRefresh: _reload,
-                  child: _CityGuideView(result: r, tripId: widget.tripId, onlineDone: _display != null)),
+                onRefresh: _reload,
+                child: _CityGuideView(
+                  result: r,
+                  tripId: widget.tripId,
+                  onlineDone: _display != null,
+                  collapsed: _collapsed,
+                  onToggleSection: (sk) {
+                    final cityKey = r.location?.key ?? '';
+                    setState(() => _collapsed['$cityKey|$sk'] =
+                        !(_collapsed['$cityKey|$sk'] ?? false));
+                    _persistCollapsed(cityKey);
+                  },
+                  onJumpSection: (sk) => _jumpToSection(r.location?.key ?? '', sk),
+                  sectionAnchor: (sk, child) =>
+                      _sectionAnchor(r.location?.key ?? '', sk, child),
+                  onClearAi: r.isAiImported
+                      ? () => _clearAiContent(r.location?.key ?? '')
+                      : null,
+                ),
+              ),
           ]),
         ),
       ]),
@@ -130,9 +391,9 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
   Widget _loadingList() => ListView(
         padding: const EdgeInsets.all(Spacing.lg),
         children: [
-          for (var i = 0; i < 3; i++)
+          for (var i = 0; i < 4; i++)
             Container(
-              height: 72,
+              height: i == 0 ? 120 : 72,
               margin: const EdgeInsets.only(bottom: Spacing.md),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -142,31 +403,51 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
         ],
       );
 
-  Widget _empty(BuildContext context, String message) => Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.explore_off_rounded,
-              size: 48, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(height: Spacing.md),
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: Spacing.lg),
-          FilledButton(onPressed: _reload, child: Text(copy('guide.retry'))),
-        ]),
+  Widget _emptyState(BuildContext context, String message) => EmptyState(
+        emoji: '🧭',
+        title: copy('guide.noCityPicked'),
+        message: message,
+        actionLabel: copy('guide.pickCity'),
+        onAction: () => _pickCity(),
       );
 }
 
-/// 单城内容：徽标三态 + 在线区块置顶（精选文章 + 网络补充）+ 离线六栏。
+/// 单城内容：城市头 + 六栏宫格 + 六个栏目 + 在线游记 + 声明。
 class _CityGuideView extends StatelessWidget {
   const _CityGuideView({
     required this.result,
     required this.tripId,
     required this.onlineDone,
+    required this.collapsed,
+    required this.onToggleSection,
+    required this.onJumpSection,
+    required this.sectionAnchor,
+    this.onClearAi,
   });
 
   final GuideResult result;
-  final String tripId;
+
+  /// null = 无行程上下文（城市入口），「加入安排」需先选行程。
+  final String? tripId;
 
   /// 完整阶段是否已完成（未完成且无种子时展示「正在获取网络攻略」）。
   final bool onlineDone;
+  final Map<String, bool> collapsed;
+  final void Function(String sectionKey) onToggleSection;
+  final void Function(String sectionKey) onJumpSection;
+
+  /// 给每个栏目挂一个滚动锚点（宫格点击用）。
+  ///
+  /// 接一个 child 并包上 `KeyedSubtree`：锚点必须是**真实被渲染的那棵树**，
+  /// 否则 `Scrollable.ensureVisible` 找不到上下文（早前版本只挂了个空
+  /// SizedBox 占位，点击宫格无反应）。
+  final Widget Function(String sectionKey, Widget child) sectionAnchor;
+  final VoidCallback? onClearAi;
+
+  String get _cityKey => result.location?.key ?? '';
+
+  bool _isCollapsed(String sectionKey) =>
+      collapsed['$_cityKey|$sectionKey'] ?? false;
 
   @override
   Widget build(BuildContext context) {
@@ -180,330 +461,334 @@ class _CityGuideView extends StatelessWidget {
             style: TextStyle(color: scheme.onSurfaceVariant)),
       ]);
     }
-    final online = result.hasOnline;
-    final badgeText = online
-        ? (result.layersUsed.contains('seed') ? '种子+网络' : '在线')
-        : '离线种子';
+
     final allEmpty = GuideCity.sectionKeys
         .every((k) => (result.sections[k] ?? const []).isEmpty);
-    return ListView(
-      padding: const EdgeInsets.all(Spacing.lg),
+    final articleCount = result.articles.length;
+    final spotCount = (result.sections['spots'] ?? const []).length +
+        (result.sections['food'] ?? const []).length;
+
+    // 滚动容器：**SingleChildScrollView + Column，而不是 ListView。**
+    //
+    // 这是「内容一多，宫格跳转就失效」的根因修复（2026-09-12）：
+    // ListView（哪怕用 `children:` 一次性建完 widget）在渲染层仍是懒布局的，
+    // 视口外的子项从未 layout，`Scrollable.ensureVisible` 通过
+    // `RenderViewport.getOffsetToReveal` 取位移时会拿到
+    // `childScrollOffset(child) == null`，空断言抛异常 → 跳转静默失败。
+    // 改成 Column 后整棵子树每帧都被 layout（绘制仍被视口裁剪，不会额外耗
+    // 绘制开销），`ensureVisible` 对任意长度的攻略都能算准落点。
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: Spacing.huge),
       physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        Row(children: [
-          Expanded(
-            child: Text(loc.name,
-                style: Theme.of(context).textTheme.headlineSmall),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ---------- 1. 城市头 ----------
+          GuideCityHero(
+            cityName: loc.name,
+            spots: spotCount,
+            textChars: result.textChars,
+            readingMinutes: result.readingMinutes,
+            sourceLabel: _sourceLabel(),
+            lead: _lead(),
           ),
-          _badge(context, badgeText,
-              highlight: online),
-        ]),
-        // 在线全败提示（明确告知离线兜底生效）
-        if (result.onlineAttempted && !online) ...[
-          const SizedBox(height: Spacing.sm),
-          Row(children: [
-            Icon(Icons.wifi_off_rounded,
-                size: 14, color: scheme.onSurfaceVariant),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text('在线内容暂时不可用，已展示离线攻略',
-                  style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: AppFontSizes.caption)),
-            ),
-          ]),
-        ],
-        if (allEmpty && !onlineDone) ...[
-          const SizedBox(height: Spacing.xl),
-          const Center(child: CircularProgressIndicator()),
-          const SizedBox(height: Spacing.sm),
-          Text('正在获取网络攻略…',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  color: scheme.onSurfaceVariant,
-                  fontSize: AppFontSizes.caption)),
-        ],
-        // ===== 在线区块（置顶） =====
-        if (result.articles.isNotEmpty) ...[
-          const SizedBox(height: Spacing.lg),
-          Text('在线精选', style: Theme.of(context).textTheme.titleMedium),
-          for (final a in result.articles)
-            Card(
-              margin: const EdgeInsets.only(top: Spacing.md),
-              child: ListTile(
-                title: Text(a['title'] as String? ?? ''),
-                subtitle: Text(
-                    '${a['source'] ?? ''} ${a['summary'] ?? ''}'.trim(),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: AppFontSizes.caption)),
-                trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-                onTap: () => _openArticle(a),
-              ),
-            ),
-        ],
-        if (result.onlineSections.isNotEmpty) ...[
-          const SizedBox(height: Spacing.lg),
-          Text('网络补充', style: Theme.of(context).textTheme.titleMedium),
-          for (final entry in result.onlineSections.entries)
-            if (entry.value.isNotEmpty)
-              Card(
-                margin: const EdgeInsets.only(top: Spacing.md),
-                child: Column(children: [
-                  for (final item in entry.value)
-                    ListTile(
-                      dense: true,
-                      leading: Icon(_iconOf(entry.key),
-                          size: 18, color: scheme.primary),
-                      title: Text(
-                          (item['title'] ?? item['name'] ?? '').toString(),
-                          style: const TextStyle(fontSize: AppFontSizes.body)),
-                      subtitle: (item['detail'] ??
-                                  item['note'] ??
-                                  item['addr'] ??
-                                  '')
-                              .toString()
-                              .isEmpty
-                          ? null
-                          : Text(
-                              (item['detail'] ?? item['note'] ?? item['addr'] ?? '')
-                                  .toString(),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: AppFontSizes.caption)),
-                      trailing: (item['sourceUrl'] as String?)?.isNotEmpty ?? false
-                          ? const Icon(Icons.link_rounded, size: 16)
-                          : null,
-                      onTap: () {
-                        final url = item['sourceUrl'] as String?;
-                        if (url != null && url.isNotEmpty) openExternal(url);
-                      },
+          // AI 导入提示条（黄色语义，提醒内容来源与时效性）
+          if (result.isAiImported)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.xl, Spacing.md, Spacing.xl, 0),
+              child: Container(
+                padding: const EdgeInsets.all(Spacing.md),
+                decoration: BoxDecoration(
+                  color: SemanticColors.warning.withValues(alpha: 0.12),
+                  borderRadius: AppRadius.input,
+                ),
+                child: Row(children: [
+                  const Icon(Icons.auto_awesome_rounded,
+                      size: 18, color: SemanticColors.warning),
+                  const SizedBox(width: Spacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(copy('guide.aiImportedTitle'),
+                            style: const TextStyle(
+                                fontSize: AppFontSizes.caption,
+                                fontWeight: FontWeight.w700)),
+                        Text(copy('guide.aiImportedNote'),
+                            style: TextStyle(
+                                fontSize: AppFontSizes.caption - 1,
+                                color: scheme.onSurfaceVariant)),
+                      ],
                     ),
+                  ),
+                  if (onClearAi != null)
+                    TextButton(
+                        onPressed: onClearAi,
+                        child: Text(copy('guide.clearAi'))),
                 ]),
               ),
-        ],
-        // ===== 离线六栏（种子打底；在线条目已在上方展示不重复） =====
-        if (result.sectionMiss('prep') != null) ..._missRows(context, result),
-        for (final key in GuideCity.sectionKeys) ...[
-          const SizedBox(height: Spacing.lg),
-          _SectionCard(
-            sectionKey: key,
-            items: (result.sections[key] ?? const [])
-                .where((item) => item['source'] == null)
-                .toList(),
-            tripId: tripId,
-            guideKey: loc.key,
+            ),
+          // 在线全败提示
+          if (result.onlineAttempted && !result.hasOnline) ...[
+            const SizedBox(height: Spacing.sm),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+              child: Row(children: [
+                Icon(Icons.wifi_off_rounded,
+                    size: 14, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(copy('guide.onlineFail'),
+                      style: TextStyle(
+                          color: scheme.onSurfaceVariant,
+                          fontSize: AppFontSizes.caption)),
+                ),
+              ]),
+            ),
+          ],
+          if (allEmpty && !onlineDone) ...[
+            const SizedBox(height: Spacing.xl),
+            const Center(child: CircularProgressIndicator()),
+            const SizedBox(height: Spacing.sm),
+            Text('正在获取网络攻略…',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: AppFontSizes.caption)),
+          ],
+
+          // ---------- 2. 六栏速览宫格 ----------
+          if (!allEmpty) ...[
+            const SizedBox(height: Spacing.sm),
+            GuideSectionGrid(
+              sections: result.sections,
+              onTap: onJumpSection,
+            ),
+          ],
+
+          // ---------- 3. 六个栏目 ----------
+          for (final key in GuideCity.sectionKeys)
+            Padding(
+              padding: const EdgeInsets.only(top: Spacing.lg),
+              child: sectionAnchor(
+                key,
+                // 栏目外边距放在锚点内侧，否则滚动定位会把 16px 间距算进去
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+                  child: GuideSectionBody(
+                    sectionKey: key,
+                    items: (result.sections[key] ?? const [])
+                        // 在线条目不在这里重复（它们在栏目里以「来自」标注展示）
+                        .toList(),
+                    expanded: !_isCollapsed(key),
+                    onToggle: () => onToggleSection(key),
+                    itemActionBuilder: (item) => _addAction(context, key, item),
+                  ),
+                ),
+              ),
+            ),
+
+          // ---------- 4. 在线游记流 ----------
+          if (articleCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: Spacing.lg),
+              child: GuideArticleList(
+                articles: result.articles,
+                onOpen: _openArticle,
+              ),
+            ),
+
+          // ---------- 5. 声明 ----------
+          const SizedBox(height: Spacing.xl),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+            child: Text(copy('guide.source'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: AppFontSizes.caption)),
           ),
         ],
-        const SizedBox(height: Spacing.xl),
-        Text(copy('guide.source'),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: scheme.onSurfaceVariant,
-                fontSize: AppFontSizes.caption)),
-        const SizedBox(height: Spacing.huge),
-      ],
+      ),
     );
   }
 
-  IconData _iconOf(String sectionKey) => switch (sectionKey) {
-        'prep' => Icons.wb_sunny_rounded,
-        'spots' => Icons.photo_camera_rounded,
-        'food' => Icons.restaurant_rounded,
-        'transport' => Icons.directions_transit_rounded,
-        'tips' => Icons.lightbulb_rounded,
-        _ => Icons.payments_rounded,
-      };
-
-  List<Widget> _missRows(BuildContext context, GuideResult result) {
-    final missing = GuideCity.sectionKeys
-        .where((k) => (result.sections[k] ?? const []).isEmpty)
-        .toList();
-    if (missing.isEmpty) return const [];
-    return [
-      const SizedBox(height: Spacing.sm),
-      Text(
-          missing
-              .map((k) => switch (k) {
-                    'prep' => '行前准备',
-                    'spots' => '景点',
-                    'food' => '美食',
-                    'transport' => '交通',
-                    'tips' => '避坑',
-                    _ => '预算',
-                  })
-              .join('、') +
-              copy('guide.missSection'),
-          style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: AppFontSizes.caption)),
-    ];
+  /// 数据来源标签（AI 导入 > 在线抓取 > 内置种子）。
+  String _sourceLabel() {
+    if (result.isAiImported) return copy('guide.sourceAi');
+    if (result.hasCrawledGuide) return copy('guide.sourceNetwork');
+    return copy('guide.sourceBuiltin');
   }
 
-  Widget _badge(BuildContext context, String text, {bool highlight = false}) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: 4),
-        decoration: BoxDecoration(
-          color: highlight
-              ? Theme.of(context).colorScheme.primaryContainer
-              : Theme.of(context).colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(text, style: const TextStyle(fontSize: AppFontSizes.caption)),
-      );
+  /// 一句话定位：优先「城市概述」，其次首条内容。
+  String? _lead() {
+    for (final it in result.sections['prep'] ?? const []) {
+      final t = (it['title'] ?? '').toString();
+      if (t.contains('概述') || t.contains('定位')) {
+        return (it['detail'] ?? '').toString();
+      }
+    }
+    final first = (result.sections['prep'] ?? const []).firstOrNull;
+    return first == null ? null : (first['detail'] ?? '').toString();
+  }
+
+  /// 「加入安排」：有 tripId 直接进选日期；无 tripId 先弹行程选择。
+  Widget? _addAction(
+      BuildContext context, String sectionKey, Map<String, dynamic> item) {
+    if (sectionKey != 'spots' && sectionKey != 'food') return null;
+    final name = (item['name'] ?? item['title'] ?? '').toString();
+    if (name.isEmpty) return null;
+    return _AddToPlanButton(
+      tripId: tripId,
+      guideKey: _cityKey,
+      sectionKey: sectionKey,
+      item: item,
+    );
+  }
 
   void _openArticle(Map<String, dynamic> a) {
     final url = a['sourceUrl'] as String? ?? a['url'] as String? ?? '';
     if (url.isEmpty) return;
-    // 文章默认外跳浏览器（§7.7）
     openExternal(url);
   }
 }
 
-/// 六栏折叠分节卡（默认全部展开）。
-class _SectionCard extends StatefulWidget {
-  const _SectionCard({
-    required this.sectionKey,
-    required this.items,
+// ---------------------------------------------------------------------------
+// 「加入安排」按钮
+// ---------------------------------------------------------------------------
+
+class _AddToPlanButton extends ConsumerStatefulWidget {
+  const _AddToPlanButton({
     required this.tripId,
     required this.guideKey,
+    required this.sectionKey,
+    required this.item,
   });
 
-  final String sectionKey;
-  final List<Map<String, dynamic>> items;
-  final String tripId;
+  final String? tripId;
   final String guideKey;
+  final String sectionKey;
+  final Map<String, dynamic> item;
 
   @override
-  State<_SectionCard> createState() => _SectionCardState();
+  ConsumerState<_AddToPlanButton> createState() => _AddToPlanButtonState();
 }
 
-class _SectionCardState extends State<_SectionCard> {
-  bool _expanded = true;
+class _AddToPlanButtonState extends ConsumerState<_AddToPlanButton> {
+  String? _tripId;
+  int? _addedDay;
 
-  String get _title => switch (widget.sectionKey) {
-        'prep' => copy('guide.sectionPrep'),
-        'spots' => copy('guide.sectionSpots'),
-        'food' => copy('guide.sectionFood'),
-        'transport' => copy('guide.sectionTransport'),
-        'tips' => copy('guide.sectionTips'),
-        _ => copy('guide.sectionBudget'),
-      };
+  String get _name =>
+      (widget.item['name'] ?? widget.item['title'] ?? '').toString();
+
+  @override
+  void initState() {
+    super.initState();
+    _tripId = widget.tripId;
+    _refresh();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AddToPlanButton old) {
+    super.didUpdateWidget(old);
+    if (old.tripId != widget.tripId || old.item != widget.item) {
+      _tripId = widget.tripId;
+      _refresh();
+    }
+  }
+
+  Future<void> _refresh() async {
+    final tid = _tripId;
+    if (tid == null || tid.isEmpty) return;
+    final sp = await SharedPreferences.getInstance();
+    final day = sp.getInt('guide_added_${tid}_${widget.guideKey}_$_name');
+    if (!mounted) return;
+    setState(() => _addedDay = day);
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Column(children: [
-        ListTile(
-          title: Text(_title, style: const TextStyle(fontWeight: FontWeight.w700)),
-          trailing: Icon(
-              _expanded
-                  ? Icons.expand_less_rounded
-                  : Icons.expand_more_rounded,
-              size: 20),
-          onTap: () => setState(() => _expanded = !_expanded),
-        ),
-        if (_expanded)
-          if (widget.items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(
-                  left: Spacing.lg, right: Spacing.lg, bottom: Spacing.lg),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(copy('guide.missSection'),
-                    style: TextStyle(
-                        color: scheme.onSurfaceVariant,
-                        fontSize: AppFontSizes.caption)),
-              ),
-            )
-          else
-            for (final item in widget.items)
-              ListTile(
-                dense: true,
-                title: Text(
-                    // 六栏条目主键不一：prep=title、spots/food=name、transport=mode、budget=item
-                    (item['title'] ?? item['name'] ?? item['mode'] ?? item['item'] ?? '')
-                        .toString(),
-                    style: const TextStyle(fontSize: AppFontSizes.body)),
-                subtitle: _subtitle(item),
-                trailing: (widget.sectionKey == 'spots' ||
-                        widget.sectionKey == 'food')
-                    ? _addButton(item)
-                    : null,
-              ),
-      ]),
+    if (_addedDay != null) {
+      return Text('已加入 D${(_addedDay ?? 0) + 1}',
+          style: TextStyle(
+              fontSize: AppFontSizes.caption, color: scheme.outline));
+    }
+    return TextButton(
+      onPressed: _onTap,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+        minimumSize: const Size(0, 32),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(widget.tripId == null
+          ? '加入行程'
+          : copy('guide.addPlan')),
     );
   }
 
-  Widget? _subtitle(Map<String, dynamic> item) {
-    final parts = <String>[
-      item['addr'] as String? ?? item['area'] as String? ?? '',
-      item['tag'] as String? ?? '',
-      item['timeText'] as String? ?? '',
-      item['note'] as String? ?? item['detail'] as String? ?? '',
-      item['rangeText'] as String? ?? '',
-      item['line'] as String? ?? '',
-    ].where((s) => s.isNotEmpty).toList();
-    if (parts.isEmpty) return null;
-    // 离线种子 2.0：内容精品化后不截断，完整展示 detail 便于长文阅读。
-    return Text(parts.join(' · '),
-        style: const TextStyle(fontSize: AppFontSizes.caption, height: 1.35));
-  }
-
-  Widget? _addButton(Map<String, dynamic> item) {
-    final name = (item['name'] ?? item['title'] ?? '').toString();
-    if (name.isEmpty) return null;
-    return Consumer(builder: (context, ref, _) {
-      return FutureBuilder<int?>(
-        future: _addedDay(name),
-        builder: (context, snap) {
-          final day = snap.data;
-          if (day != null) {
-            return Text('已加入 D${day + 1}',
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
-                    fontSize: AppFontSizes.caption));
-          }
-          return TextButton(
-            onPressed: () => _addToPlan(name, item),
-            child: Text(copy('guide.addPlan')),
-          );
-        },
+  Future<void> _onTap() async {
+    var tid = _tripId;
+    // 城市入口没有行程上下文：先让用户挑一个行程
+    if (tid == null || tid.isEmpty) {
+      final trips =
+          ref.read(allTripsProvider).value ?? const <TripCardView>[];
+      if (!mounted) return;
+      if (trips.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('还没有行程，先创建一个行程再来安排')));
+        return;
+      }
+      final picked = await showDraggableSheet<String>(
+        context: context,
+        initialChildSize: 0.5,
+        builder: (ctx, _) => ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(Spacing.lg),
+              child: Text('把「$_name」加到哪个行程？'),
+            ),
+            for (final t in trips)
+              ListTile(
+                leading: Text(t.emoji, style: const TextStyle(fontSize: 22)),
+                title: Text(t.name),
+                subtitle: t.destination.isEmpty
+                    ? null
+                    : Text(t.destination,
+                        style:
+                            const TextStyle(fontSize: AppFontSizes.caption)),
+                onTap: () => Navigator.pop(ctx, t.id),
+              ),
+          ],
+        ),
       );
-    });
-  }
-
-  /// 防重复记录：prefs['guide_added_<tripId>_<guideKey>_<name>'] = dateEpochDay。
-  Future<int?> _addedDay(String name) async {
-    final sp = await SharedPreferences.getInstance();
-    return sp.getInt('guide_added_${widget.tripId}_${widget.guideKey}_$name');
-  }
-
-  Future<void> _addToPlan(String name, Map<String, dynamic> item) async {
-    final sp = await SharedPreferences.getInstance();
-    // 选日期 sheet：行程 startEpochDay..endEpochDay（§7.9）
+      if (picked == null || !mounted) return;
+      tid = picked;
+      setState(() => _tripId = picked);
+    }
+    if (!mounted) return;
     final day = await showModalBottomSheet<int>(
       context: context,
-      builder: (ctx) => SafeArea(child: _DayPicker(tripId: widget.tripId)),
+      builder: (ctx) => SafeArea(child: _DayPicker(tripId: tid!)),
     );
     if (day == null || !mounted) return;
+    final sp = await SharedPreferences.getInstance();
     await sp.setInt(
-        'guide_added_${widget.tripId}_${widget.guideKey}_$name', day);
-    // 预填新建 TripItem（spot→attraction / food→food；cost 留空自填）
+        'guide_added_${tid}_${widget.guideKey}_$_name', day);
     final type = widget.sectionKey == 'food' ? 'food' : 'attraction';
-    final rawNote = (item['note'] ?? item['detail'] ?? '').toString();
+    final rawNote =
+        (widget.item['note'] ?? widget.item['detail'] ?? '').toString();
     final note = rawNote.isEmpty ? '来自攻略' : '$rawNote · 来自攻略';
     final now = DateTime.now().millisecondsSinceEpoch;
     final prefill = TripItem(
       id: 'guide_prefill',
-      tripId: widget.tripId,
+      tripId: tid,
       dateEpochDay: day,
       type: type,
-      name: name,
-      address: (item['addr'] ?? '').toString(),
+      name: _name,
+      address: (widget.item['addr'] ?? '').toString(),
       fromName: '',
       fromAddress: '',
       toName: '',
@@ -516,9 +801,10 @@ class _SectionCardState extends State<_SectionCard> {
     );
     if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ItemEditScreen(tripId: widget.tripId, item: prefill, prefillNew: true),
+      builder: (_) =>
+          edit.ItemEditScreen(tripId: tid!, item: prefill, prefillNew: true),
     ));
-    if (mounted) setState(() {});
+    setState(() => _addedDay = day);
   }
 }
 
@@ -579,12 +865,13 @@ class _DayPickerState extends ConsumerState<_DayPicker> {
   }
 
   String _fmt(int epochDay) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(epochDay * 86400000, isUtc: true);
+    final dt =
+        DateTime.fromMillisecondsSinceEpoch(epochDay * 86400000, isUtc: true);
     return '${dt.month}月${dt.day}日';
   }
 }
 
-/// 路由包装：由 tripId 解析 destination 后挂载攻略页。
+/// 路由包装（行程入口）：由 tripId 解析 destination 后挂载攻略页。
 class TripGuideScreenBuilder extends ConsumerWidget {
   const TripGuideScreenBuilder({super.key, required this.tripId});
 
@@ -595,7 +882,6 @@ class TripGuideScreenBuilder extends ConsumerWidget {
     return FutureBuilder(
       future: ref.read(tripsRepoProvider).getById(tripId),
       builder: (context, snap) {
-        // trip 未加载完成前不挂载攻略页（避免以空目的地发起请求）。
         if (!snap.hasData) {
           return Scaffold(
             appBar: AppBar(title: Text(copy('guide.title'))),

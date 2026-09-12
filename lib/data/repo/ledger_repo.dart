@@ -51,6 +51,16 @@ class LedgerRepository {
   /// 悬空 activeGroupId 会静默产出引用已消失团的「幽灵」成员/账单行——不可见且导出遗漏，
   /// 故必须在删除时点完成指针交接（逻辑层修复）。
   Future<void> deleteGroup(String id) async {
+    // 删除前先收集子行 id：事务提交后要逐行发 delete 墓碑并把归属变更的行程
+    // 重新入队，否则云端残留（其他端会一直看得见这个团 / 成员 / 账单）。
+    final childMembers =
+        await (db.select(db.members)..where((m) => m.groupId.equals(id))).get();
+    final childExpenses =
+        await (db.select(db.expenses)..where((e) => e.groupId.equals(id))).get();
+    final childSettlements =
+        await (db.select(db.settlements)..where((s) => s.groupId.equals(id))).get();
+    final linkedTrips =
+        await (db.select(db.trips)..where((t) => t.groupId.equals(id))).get();
     await db.transaction(() async {
       await (db.delete(db.expenses)..where((e)=>e.groupId.equals(id))).go();
       await (db.delete(db.settlements)..where((s)=>s.groupId.equals(id))).go();
@@ -58,7 +68,15 @@ class LedgerRepository {
       await (db.update(db.trips)..where((t)=>t.groupId.equals(id))).write(TripsCompanion(groupId:Value(null)));
       await (db.delete(db.groups)..where((g)=>g.id.equals(id))).go();
     });
+    // ⚠️ 一律在事务提交后 notify：hook 会立刻触发上行，事务内触发时 assemble
+    // 读不到本地行，会被判成「已删除」而误发墓碑。
     SyncOutboxService.notifyWrite("groups", id, op: "delete");
+    _notifyDelete("members", childMembers.map((m) => m.id));
+    _notifyDelete("expenses", childExpenses.map((e) => e.id));
+    _notifyDelete("settlements", childSettlements.map((s) => s.id));
+    for (final t in linkedTrips) {
+      SyncOutboxService.notifyWrite("trips", t.id); // groupId 置空 → 重新上行
+    }
     final current = await _ensureLoadedActiveGroup();
     if (current != id) return;
     final remaining = await (db.select(db.groups)
@@ -69,6 +87,20 @@ class LedgerRepository {
       if (g.id != id) { next = g; break; }
     }
     await setActiveGroup(next?.id);
+  }
+
+  /// 批量发 delete 墓碑（事务提交后调用；见 deleteGroup 注释）。
+  void _notifyDelete(String entity, Iterable<String> ids) {
+    for (final id in ids) {
+      SyncOutboxService.notifyWrite(entity, id, op: "delete");
+    }
+  }
+
+  /// 批量入队 upsert（导入 / 备份恢复 / 局域网合并等批量写路径用）。
+  void _notifyUpsert(String entity, Iterable<String> ids) {
+    for (final id in ids) {
+      SyncOutboxService.notifyWrite(entity, id);
+    }
   }
   /// 切换激活团：先更新内存缓存 → 持久化 → 广播给监听者
   Future<void> setActiveGroup(String? id) async {
@@ -83,13 +115,19 @@ class LedgerRepository {
     yield await _ensureLoadedActiveGroup();
     yield* _activeGroupCtl.stream;
   }
-  Future<void> setBudget(String gid, {bool enabled=false, int? budgetCents}) async { await (db.update(db.groups)..where((g)=>g.id.equals(gid))).write(GroupsCompanion(budgetEnabled:Value(enabled),budgetCents:Value(budgetCents),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); }
+  Future<void> setBudget(String gid, {bool enabled=false, int? budgetCents}) async {
+    await (db.update(db.groups)..where((g)=>g.id.equals(gid))).write(GroupsCompanion(budgetEnabled:Value(enabled),budgetCents:Value(budgetCents),updatedAt:Value(DateTime.now().millisecondsSinceEpoch)));
+    SyncOutboxService.notifyWrite("groups", gid); // 预算字段在 groups 上行映射内
+  }
 
   // === 成员 ===
   Stream<List<Member>> watchMembers(String gid) => (db.select(db.members)..where((m)=>m.groupId.equals(gid))..orderBy([(m)=>OrderingTerm.asc(m.createdAt)])).watch();
   Future<List<Member>> getMembers(String gid) => (db.select(db.members)..where((m)=>m.groupId.equals(gid))).get();
   Future<String> addMember(String gid, String name) async { final id=newId("member"); final count=await (db.selectOnly(db.members)..where(db.members.groupId.equals(gid))..addColumns([db.members.id.count()])).getSingle(); final idx=(count.read(db.members.id.count())??0)%8; await db.into(db.members).insert(MembersCompanion(id:Value(id),groupId:Value(gid),name:Value(name),colorIndex:Value(idx),createdAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("members", id); return id; }
-  Future<void> renameMember(String mid, String name) async { await (db.update(db.members)..where((m)=>m.id.equals(mid))).write(MembersCompanion(name:Value(name))); }
+  Future<void> renameMember(String mid, String name) async {
+    await (db.update(db.members)..where((m)=>m.id.equals(mid))).write(MembersCompanion(name:Value(name)));
+    SyncOutboxService.notifyWrite("members", mid);
+  }
   Future<void> deleteMember(String mid) async { await (db.delete(db.members)..where((m)=>m.id.equals(mid))).go(); SyncOutboxService.notifyWrite("members", mid, op: "delete"); }
   Future<bool> isMemberReferenced(String mid) async { final exps=await (db.select(db.expenses)..where((e)=>e.payersJson.like("%$mid%")|e.sharesJson.like("%$mid%"))).get(); return exps.isNotEmpty; }
 
@@ -274,8 +312,32 @@ class LedgerRepository {
     );
     SyncOutboxService.notifyWrite("settlements", sid);
   }
-  Future<void> completeSettlement(String sid) async { final s=await (db.select(db.settlements)..where((x)=>x.id.equals(sid))).getSingleOrNull(); if(s==null) return; final eids=jsonDecode(s.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(sid))); } await (db.update(db.settlements)..where((x)=>x.id.equals(sid))).write(SettlementsCompanion(status:Value("completed"),completedAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("settlements", sid); }
-  Future<void> undoLastSettlement(String gid) async { final s=await (db.select(db.settlements)..where((x)=>x.groupId.equals(gid)&x.status.equals("completed"))..orderBy([(x)=>OrderingTerm.desc(x.createdAt)])).get(); if(s.isEmpty) return; final last=s.first; final eids=jsonDecode(last.expenseIdsJson) as List; for(final e in eids) { await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(null))); } await (db.delete(db.settlements)..where((x)=>x.id.equals(last.id))).go(); SyncOutboxService.notifyWrite("settlements", last.id, op: "delete"); }
+  Future<void> completeSettlement(String sid) async {
+    final s = await (db.select(db.settlements)..where((x)=>x.id.equals(sid))).getSingleOrNull();
+    if (s == null) return;
+    final eids = jsonDecode(s.expenseIdsJson) as List;
+    for (final e in eids) {
+      await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(sid)));
+    }
+    await (db.update(db.settlements)..where((x)=>x.id.equals(sid))).write(SettlementsCompanion(status:Value("completed"),completedAt:Value(DateTime.now().millisecondsSinceEpoch)));
+    // 回写的 settled_round_id 是账单行内容 → 必须一并上行，
+    // 否则云端账单永远「未结算」，其他端重复催款。
+    _notifyUpsert("expenses", eids.map((e) => e.toString()));
+    SyncOutboxService.notifyWrite("settlements", sid);
+  }
+
+  Future<void> undoLastSettlement(String gid) async {
+    final s = await (db.select(db.settlements)..where((x)=>x.groupId.equals(gid)&x.status.equals("completed"))..orderBy([(x)=>OrderingTerm.desc(x.createdAt)])).get();
+    if (s.isEmpty) return;
+    final last = s.first;
+    final eids = jsonDecode(last.expenseIdsJson) as List;
+    for (final e in eids) {
+      await (db.update(db.expenses)..where((x)=>x.id.equals(e))).write(ExpensesCompanion(settledRoundId:Value(null)));
+    }
+    await (db.delete(db.settlements)..where((x)=>x.id.equals(last.id))).go();
+    _notifyUpsert("expenses", eids.map((e) => e.toString()));
+    SyncOutboxService.notifyWrite("settlements", last.id, op: "delete");
+  }
 
   // === 分类 ===
   Stream<List<Category>> watchCategories() => db.select(db.categories).watch();
@@ -349,7 +411,9 @@ class LedgerRepository {
 
     // ② 成员：旧→新 id 映射，保留 colorIndex；③ 账单：同一事务内落库
     final memberMap = <String,String>{};
-    return db.transaction<ImportReport>(() async {
+    final newMemberIds = <String>[];
+    final newExpenseIds = <String>[];
+    final report = await db.transaction<ImportReport>(() async {
       var memberCount = 0, expenseCount = 0;
       for (final m in mRaw) {
         final nid = newId("member");
@@ -361,6 +425,7 @@ class LedgerRepository {
           name: Value(name.isEmpty ? '(未命名)' : name),
           colorIndex: Value(m['colorIndex'] is num ? (m['colorIndex'] as num).toInt() % 8 : 0),
           createdAt: Value(now)));
+        newMemberIds.add(nid);
         memberCount++;
       }
 
@@ -372,8 +437,9 @@ class LedgerRepository {
         final payers = _remapShareList(e['payersJson'] ?? e['payers'], memberMap, () => droppedShares++);
         final shares = _remapShareList(e['sharesJson'] ?? e['shares'], memberMap, () => droppedShares++);
         final portions = _remapPortionsMap(e['portionsJson'] ?? e['portions'], memberMap, () => droppedPortions++);
+        final newEid = newId("expense");
         await db.into(db.expenses).insert(ExpensesCompanion(
-          id: Value(newId("expense")),
+          id: Value(newEid),
           groupId: Value(newGid),
           dateEpochDay: Value(_epochDayOf(e)),
           title: Value(title),
@@ -392,6 +458,7 @@ class LedgerRepository {
           tripId: const Value(null),          // 行程不在本备份范围内，悬空引用置空
           createdAt: Value(now),
         ));
+        newExpenseIds.add(newEid);
         expenseCount++;
       }
       if (droppedShares > 0) warnings.add('$droppedShares 条分摊记录因成员缺失被丢弃');
@@ -399,6 +466,11 @@ class LedgerRepository {
       if (badExpenses > 0) warnings.add('$badExpenses 条无效账单已跳过');
       return ImportReport(groups:1, members:memberCount, expenses:expenseCount, warnings:warnings);
     });
+    // 事务提交后统一入队：导入同样是本地写入，必须同步到云端（否则只在本机可见）。
+    SyncOutboxService.notifyWrite("groups", newGid);
+    _notifyUpsert("members", newMemberIds);
+    _notifyUpsert("expenses", newExpenseIds);
+    return report;
   }
 
   // === 专有格式备份（.tav） ===
@@ -481,6 +553,11 @@ class LedgerRepository {
     var addGroup = 0, updGroup = 0, members = 0, expenses = 0, settlements = 0,
         trips = 0, items = 0;
 
+    // 局域网快照合并进来的行同样是本地写入 → 事务提交后统一入队上行，
+    // 否则这些数据只在合并的这台机器上存在，永远上不了云。
+    final touched = <String, Set<String>>{};
+    void mark(String entity, String id) => (touched[entity] ??= {}).add(id);
+
     await db.transaction(() async {
       // ---- 团 ----
       final g = backup.group;
@@ -498,6 +575,7 @@ class LedgerRepository {
           updatedAt: Value(now),
         ));
         addGroup++;
+        mark('groups', gid);
       } else {
         final inUpd = g['updatedAt'] is int ? g['updatedAt'] as int : 0;
         if (inUpd >= (existsGroup.updatedAt ?? 0)) {
@@ -511,6 +589,7 @@ class LedgerRepository {
             ),
           );
           updGroup++;
+          mark('groups', gid);
         }
       }
 
@@ -535,6 +614,7 @@ class LedgerRepository {
           );
         }
         members++;
+        mark('members', mid);
       }
 
       // ---- 账单（LWW：createdAt 晚者胜；本地无则入库）----
@@ -574,6 +654,7 @@ class LedgerRepository {
           await (db.update(db.expenses)..where((x) => x.id.equals(eid))).write(comp);
         }
         expenses++;
+        mark('expenses', eid);
       }
 
       // ---- 结算轮（LWW createdAt）----
@@ -602,6 +683,7 @@ class LedgerRepository {
           await (db.update(db.settlements)..where((x) => x.id.equals(sid))).write(comp);
         }
         settlements++;
+        mark('settlements', sid);
       }
 
       // ---- 行程 + 安排（LWW updatedAt）----
@@ -643,6 +725,7 @@ class LedgerRepository {
             ));
           }
           trips++;
+          mark('trips', tid);
         }
         if (apply) {
           for (final it in _asMapList(t['items'])) {
@@ -658,10 +741,15 @@ class LedgerRepository {
               await (db.update(db.tripItems)..where((x) => x.id.equals(iid))).write(comp);
             }
             items++;
+            mark('trip_items', iid);
           }
         }
       }
     });
+
+    for (final kv in touched.entries) {
+      _notifyUpsert(kv.key, kv.value);
+    }
 
     return '合并完成：团$addGroup新增/更新$updGroup · 成员$members · 账单$expenses · '
         '结算$settlements · 行程$trips · 安排$items';
@@ -769,6 +857,8 @@ class LedgerRepository {
     final now = DateTime.now().millisecondsSinceEpoch;
     final tid = t['id'] as String?;
     if (tid == null) return;
+    // 备份导入的独立行程也要上云（调用方无事务包裹，可直接入队）。
+    final touchedItemIds = <String>[];
     final hit = await (db.select(db.trips)..where((x) => x.id.equals(tid))).get();
     final inUpd = t['updatedAt'] is int ? t['updatedAt'] as int : 0;
     final localUpd = hit.isEmpty ? -1 : hit.first.updatedAt;
@@ -826,6 +916,7 @@ class LedgerRepository {
         await (db.update(db.tripItems)..where((x) => x.id.equals(iid)))
             .write(comp);
       }
+      touchedItemIds.add(iid);
     }
     for (final c in _asMapList(t['checklist'])) {
       final cid = c['id'] as String?;
@@ -843,10 +934,23 @@ class LedgerRepository {
         sortOrder: Value(c['sortOrder'] is int ? c['sortOrder'] as int : 0),
       ));
     }
+    SyncOutboxService.notifyWrite('trips', tid);
+    _notifyUpsert('trip_items', touchedItemIds);
   }
 
   /// 清空全部业务数据（覆盖恢复用）。按外键依赖倒序删除。
+  ///
+  /// 覆盖恢复 = 整库替换（新导入的行都是新 id），所以必须在删除前收集旧 id，
+  /// 提交后逐行发 delete 墓碑；否则云端会永久留着被覆盖掉的旧账本。
+  /// categories 不在此列：字典表被清空后由备份 / 内置种子重建，云端副本无害。
   Future<void> _clearAllData() async {
+    final oldGroups = (await db.select(db.groups).get()).map((r) => r.id).toList();
+    final oldMembers = (await db.select(db.members).get()).map((r) => r.id).toList();
+    final oldExpenses = (await db.select(db.expenses).get()).map((r) => r.id).toList();
+    final oldSettlements =
+        (await db.select(db.settlements).get()).map((r) => r.id).toList();
+    final oldTrips = (await db.select(db.trips).get()).map((r) => r.id).toList();
+    final oldItems = (await db.select(db.tripItems).get()).map((r) => r.id).toList();
     await db.transaction(() async {
       await db.delete(db.expenses).go();
       await db.delete(db.settlements).go();
@@ -858,6 +962,12 @@ class LedgerRepository {
       await db.delete(db.categories).go();
       await db.delete(db.groups).go();
     });
+    _notifyDelete('groups', oldGroups);
+    _notifyDelete('members', oldMembers);
+    _notifyDelete('expenses', oldExpenses);
+    _notifyDelete('settlements', oldSettlements);
+    _notifyDelete('trips', oldTrips);
+    _notifyDelete('trip_items', oldItems);
   }
 
   /// CSV 批量导入账单到指定团。
@@ -900,6 +1010,8 @@ class LedgerRepository {
 
     var memberCount = 0, expenseCount = 0, badRows = 0;
     final warnings = <String>[];
+    final newMemberIds = <String>[];
+    final newExpenseIds = <String>[];
     await db.transaction(() async {
       for (final n in toCreate) {
         await db.into(db.members).insert(MembersCompanion(
@@ -909,6 +1021,7 @@ class LedgerRepository {
           colorIndex: Value(0),
           createdAt: Value(now),
         ));
+        newMemberIds.add(nameToId[n]!);
         memberCount++;
       }
       for (final r in rows) {
@@ -956,8 +1069,9 @@ class LedgerRepository {
         final categoryKey = (r['categoryKey'] as String? ?? '').trim();
         final typeRaw = (r['type'] as String? ?? 'normal').trim();
         final type = kExpenseTypeNames.contains(typeRaw) ? typeRaw : 'normal';
+        final newEid = newId('expense');
         await db.into(db.expenses).insert(ExpensesCompanion(
-          id: Value(newId('expense')),
+          id: Value(newEid),
           groupId: Value(groupId),
           dateEpochDay: Value(r['dateEpochDay'] is int ? r['dateEpochDay'] as int : 0),
           title: Value(title),
@@ -980,8 +1094,12 @@ class LedgerRepository {
           createdAt: Value(now),
         ));
         expenseCount++;
+        newExpenseIds.add(newEid);
       }
     });
+    // 提交后入队：CSV 批量导入也是本地写入，必须同步到云端。
+    _notifyUpsert('members', newMemberIds);
+    _notifyUpsert('expenses', newExpenseIds);
     if (badRows > 0) warnings.add('$badRows 条无效记录已跳过');
     return ImportReport(
       groups: 0,
@@ -1003,7 +1121,15 @@ class LedgerRepository {
   Future<ImportReport> _insertFullBackup(ImportResult r) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final warnings = <String>[];
-    return db.transaction<ImportReport>(() async {
+    // 事务内收集 id，提交后再统一入队（见方法末尾注释）。
+    final backupGroupId = r.group['id'] as String;
+    final memberIds = <String>[];
+    final expenseIds = <String>[];
+    final settlementIds = <String>[];
+    final backupTripIds = <String>[];
+    final backupTripItemIds = <String>[];
+    final backupCategoryKeys = <String>[];
+    final report = await db.transaction<ImportReport>(() async {
       await db.into(db.groups).insert(GroupsCompanion(
         id: Value(r.group['id'] as String),
         name: Value(_nonEmpty(r.group['name'] as String?, '导入的团')),
@@ -1016,6 +1142,7 @@ class LedgerRepository {
         updatedAt: Value(now),
       ));
       for (final m in r.members) {
+        memberIds.add(m['id'] as String);
         await db.into(db.members).insert(MembersCompanion(
           id: Value(m['id'] as String),
           groupId: Value(r.group['id'] as String),
@@ -1025,6 +1152,7 @@ class LedgerRepository {
         ));
       }
       for (final e in r.expenses) {
+        expenseIds.add(e['id'] as String);
         await db.into(db.expenses).insert(ExpensesCompanion(
           id: Value(e['id'] as String),
           groupId: Value(r.group['id'] as String),
@@ -1050,6 +1178,7 @@ class LedgerRepository {
         ));
       }
       for (final s in r.settlements) {
+        settlementIds.add(s['id'] as String);
         await db.into(db.settlements).insert(SettlementsCompanion(
           id: Value(s['id'] as String),
           groupId: Value(r.group['id'] as String),
@@ -1065,6 +1194,7 @@ class LedgerRepository {
       }
       var tripCount = 0, itemCount = 0;
       for (final t in r.trips) {
+        backupTripIds.add(t['id'] as String);
         await db.into(db.trips).insert(TripsCompanion(
           id: Value(t['id'] as String),
           name: Value(_nonEmpty(t['name'] as String?, '导入的行程')),
@@ -1081,11 +1211,13 @@ class LedgerRepository {
         ));
         tripCount++;
         for (final it in _asMapList(t['items'])) {
+          if (it['id'] is String) backupTripItemIds.add(it['id'] as String);
           await db.into(db.tripItems).insert(_tripItemCompanion(it, now, t['id'] as String));
           itemCount++;
         }
       }
       for (final c in r.customCategories) {
+        if (c['key'] is String) backupCategoryKeys.add(c['key'] as String);
         await db.into(db.categories).insert(
           CategoriesCompanion(
             key: Value(c['key'] as String),
@@ -1107,6 +1239,17 @@ class LedgerRepository {
         warnings: warnings,
       );
     });
+    // 提交后入队：备份恢复是本地写入，必须同步到云端。
+    // ⚠️ 必须在事务提交之后：hook 会触发 debounce→drain，若在事务内触发，
+    // assemble 读不到未提交的行会走 delete 分支，可能把云端已有行软删。
+    SyncOutboxService.notifyWrite("groups", backupGroupId);
+    _notifyUpsert("members", memberIds);
+    _notifyUpsert("expenses", expenseIds);
+    _notifyUpsert("settlements", settlementIds);
+    _notifyUpsert("trips", backupTripIds);
+    _notifyUpsert("trip_items", backupTripItemIds);
+    _notifyUpsert("categories", backupCategoryKeys);
+    return report;
   }
 
   Map<String, dynamic> _groupExpenseMap(Expense e) => <String, dynamic>{

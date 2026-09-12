@@ -2,10 +2,15 @@
 ///
 /// 确认卡：敏感操作预览 + 取消/确认按钮，确认后走 [commitAiAction]
 /// 本地落库（零 token）。危险操作（删除类）用 error 色带警示。
+///
+/// 2026-09 新增 [GuideImportCard]：AI 生成的攻略内容预览与导入
+/// （用户需求 5「支持软件中 AI 生成攻略并导入攻略（要有确认卡）」）。
 library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../data/guide/guide_providers.dart' show guideServiceProvider;
+import '../../../shared/copy_tokens.dart';
 import '../../../theme/tokens.dart';
 import '../ai_confirm_actions.dart' show commitAiAction;
 
@@ -391,5 +396,213 @@ class _StatShell extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 攻略导入确认卡（guide_import_confirm）
+// ---------------------------------------------------------------------------
+
+/// AI 生成攻略的导入确认卡。
+///
+/// 展示：城市、六栏条数与字数、正文合计与预计阅读时长、内容缺口提示，
+/// 以及「AI 生成内容仅供参考」的提醒。点「导入攻略」后由
+/// [commitAiAction] 走 `import_guide` 本地落盘（不发任何 AI 请求）。
+class GuideImportCard extends ConsumerStatefulWidget {
+  const GuideImportCard({super.key, required this.data});
+
+  final Map<String, dynamic> data;
+
+  @override
+  ConsumerState<GuideImportCard> createState() => _GuideImportCardState();
+}
+
+class _GuideImportCardState extends ConsumerState<GuideImportCard> {
+  bool _committing = false;
+  bool _done = false;
+  String? _error;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final data = widget.data;
+    final cityName = (data['cityName'] ?? '').toString();
+    final rows = (data['rows'] as List?)?.cast<Map>() ?? const [];
+    final gaps = (data['gaps'] as List?)?.cast<String>() ?? const <String>[];
+    final minutes = (data['readingMinutes'] as num?)?.toInt() ?? 0;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.widthOf(context) * 0.85),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerLow,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomRight: Radius.circular(18),
+            bottomLeft: Radius.circular(4),
+          ),
+          border: Border.all(color: scheme.primary.withValues(alpha: 0.5), width: 1.2),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg, Spacing.md, Spacing.lg, Spacing.sm),
+              child: Row(children: [
+                Icon(Icons.menu_book_rounded, size: 16, color: scheme.primary),
+                const SizedBox(width: Spacing.sm),
+                Expanded(
+                  child: Text(
+                    '${copy('guide.aiImportTitle')} · $cityName',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: AppFontSizes.body),
+                  ),
+                ),
+              ]),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg, Spacing.sm, Spacing.lg, 0),
+              child: Column(
+                children: [
+                  for (final r in rows)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(children: [
+                        SizedBox(
+                          width: 72,
+                          child: Text((r['label'] ?? '').toString(),
+                              style: TextStyle(
+                                  fontSize: AppFontSizes.caption,
+                                  color: scheme.onSurfaceVariant)),
+                        ),
+                        Expanded(
+                          child: Text((r['value'] ?? '').toString(),
+                              style: TextStyle(
+                                  fontSize: AppFontSizes.caption,
+                                  fontWeight: FontWeight.w600,
+                                  color: scheme.onSurface)),
+                        ),
+                      ]),
+                    ),
+                ],
+              ),
+            ),
+            if (minutes > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    Spacing.lg, Spacing.sm, Spacing.lg, 0),
+                child: Text('约 $minutes 分钟读完',
+                    style: TextStyle(
+                        fontSize: AppFontSizes.caption,
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700)),
+              ),
+            if (gaps.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    Spacing.lg, Spacing.sm, Spacing.lg, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(Spacing.sm),
+                  decoration: BoxDecoration(
+                    color: SemanticColors.warning.withValues(alpha: 0.12),
+                    borderRadius: AppRadius.input,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('还可以更完整：',
+                          style: TextStyle(
+                              fontSize: AppFontSizes.caption,
+                              fontWeight: FontWeight.w700,
+                              color: scheme.onSurface)),
+                      for (final g in gaps.take(4))
+                        Text('· $g',
+                            style: TextStyle(
+                                fontSize: AppFontSizes.caption - 1,
+                                color: scheme.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg, Spacing.sm, Spacing.lg, Spacing.sm),
+              child: Text(copy('guide.aiImportNote'),
+                  style: TextStyle(
+                      fontSize: AppFontSizes.caption - 1,
+                      color: scheme.onSurfaceVariant)),
+            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    Spacing.lg, 0, Spacing.lg, Spacing.sm),
+                child: Text(_error!,
+                    style: TextStyle(
+                        fontSize: AppFontSizes.caption,
+                        color: scheme.error)),
+              ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(Spacing.md),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (_done)
+                    TextButton.icon(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.check_circle_rounded, size: 16),
+                      label: Text(copy('guide.aiImported')),
+                    )
+                  else
+                    FilledButton(
+                      onPressed: _committing ? null : _commit,
+                      child: _committing
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : Text(copy('guide.aiImportAction')),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _commit() async {
+    setState(() {
+      _committing = true;
+      _error = null;
+    });
+    final city = (widget.data['city'] as Map?)?.cast<String, dynamic>();
+    if (city == null) {
+      setState(() {
+        _committing = false;
+        _error = '内容丢失，请让 AI 重新生成一次';
+      });
+      return;
+    }
+    final err = await ref.read(guideServiceProvider).importCityGuide(city);
+    if (!mounted) return;
+    setState(() {
+      _committing = false;
+      _error = err;
+      _done = err == null;
+    });
+    if (err == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已导入「${city['name']}」攻略')));
+    }
   }
 }

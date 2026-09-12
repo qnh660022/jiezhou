@@ -86,11 +86,24 @@ class _SharedGroupScreenState extends ConsumerState<SharedGroupScreen>
 
   AppDatabase get _db => ref.read(dbProvider);
 
+  /// 当前离线（可写通道是否可用）。
+  bool get _online => ref.watch(cloudClientProvider) != null;
+
+  /// 我是不是这个共享团的 owner。
+  ///
+  /// 成员增删 / 结算这类写操作在云端按「团长」语义落 owner_user_id，
+  /// 非 owner 提交必然失败（历史上按钮却对所有人可见 → 点了只得到一句网络错误）。
+  bool get _isOwner {
+    final me = ref.read(currentUserIdProvider);
+    final owner = ref.read(syncEngineProvider)?.sharedOwnerUserIdOf(widget.groupId);
+    return me != null && owner != null && me == owner;
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = _db;
-    final scheme = Theme.of(context).colorScheme;
-    final online = ref.watch(cloudClientProvider) != null;
+    final online = _online;
+    final isOwner = _isOwner;
     return Scaffold(
       appBar: AppBar(
         title: FutureBuilder<String>(
@@ -121,9 +134,10 @@ class _SharedGroupScreenState extends ConsumerState<SharedGroupScreen>
       ),
       body: TabBarView(controller: _tabs, children: [
         _BillsTab(groupId: widget.groupId, online: online),
-        _MembersTab(groupId: widget.groupId, online: online),
+        _MembersTab(groupId: widget.groupId, online: online, isOwner: isOwner),
         _StatsTab(groupId: widget.groupId),
-        _SettleTab(groupId: widget.groupId, online: online),
+        _SettleTab(
+            groupId: widget.groupId, online: online, isOwner: isOwner),
       ]),
     );
   }
@@ -308,54 +322,114 @@ class _BillsTabState extends ConsumerState<_BillsTab>
           .watch(),
       builder: (_, snap) {
         final expenses = snap.data ?? const <SharedExpense>[];
-        if (expenses.isEmpty) {
-          return Center(
-              child: Text('暂无共享账单',
-                  style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: AppFontSizes.caption)));
-        }
         return ListView(
           padding: const EdgeInsets.all(Spacing.lg),
           children: [
-            for (final e in expenses)
-              Card(
-                margin: const EdgeInsets.only(bottom: Spacing.sm),
-                child: ListTile(
-                  dense: true,
-                  title: Text(e.title),
-                  subtitle: Text(
-                      '${_fmtDay(e.dateEpochDay)} · ${e.categoryKey}'
-                      '${e.settledRoundId != null ? ' · 已结算' : ''}',
-                      style:
-                          const TextStyle(fontSize: AppFontSizes.caption)),
-                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(formatMoney(e.amountCents),
-                        style: TextStyle(
-                            color: e.amountCents < 0
-                                ? SemanticColors.income
-                                : scheme.onSurface,
-                            fontWeight: FontWeight.w700)),
-                    if (widget.online) ...[
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        tooltip: '编辑',
-                        onPressed: () => _edit(e),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                        tooltip: '删除',
-                        onPressed: () => _delete(e),
-                      ),
-                    ],
-                  ]),
-                  onTap: () => _showDetail(e),
+            // 受邀成员也应能记账（共享账本的核心诉求）；此前只有编辑/删除，
+            // 没有新增入口 → 成员只能围观。
+            if (widget.online) ...[
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _add,
+                  icon: const Icon(Icons.add_rounded),
+                  label: Text(copy('share.addBill')),
                 ),
               ),
+              const SizedBox(height: Spacing.md),
+            ],
+            if (expenses.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: Spacing.lg),
+                child: Text('暂无共享账单',
+                    style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        fontSize: AppFontSizes.caption)),
+              )
+            else
+              for (final e in expenses)
+                Card(
+                  margin: const EdgeInsets.only(bottom: Spacing.sm),
+                  child: ListTile(
+                    dense: true,
+                    title: Text(e.title),
+                    subtitle: Text(
+                        '${_fmtDay(e.dateEpochDay)} · ${e.categoryKey}'
+                        '${e.settledRoundId != null ? ' · 已结算' : ''}',
+                        style:
+                            const TextStyle(fontSize: AppFontSizes.caption)),
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(formatMoney(e.amountCents),
+                          style: TextStyle(
+                              color: e.amountCents < 0
+                                  ? SemanticColors.income
+                                  : scheme.onSurface,
+                              fontWeight: FontWeight.w700)),
+                      if (widget.online) ...[
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          tooltip: '编辑',
+                          onPressed: () => _edit(e),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                          tooltip: '删除',
+                          onPressed: () => _delete(e),
+                        ),
+                      ],
+                    ]),
+                    onTap: () => _showDetail(e),
+                  ),
+                ),
           ],
         );
       },
     );
+  }
+
+  /// 新增一笔共享账单（在线直写；成功后写回本地镜像，无需等拉取）。
+  Future<void> _add() async {
+    final form = await showDialog<_BillForm?>(
+      context: context,
+      builder: (_) => const _BillFormDialog(),
+    );
+    if (form == null) return;
+    final all = await members();
+    if (all.isEmpty) {
+      await toastResult(false);
+      return;
+    }
+    final shares = splitShares(
+        totalCents: form.cents, memberIds: all.map((m) => m.id).toList());
+    final per = [
+      for (final s in shares) {'memberId': s.memberId, 'cents': s.cents}
+    ];
+    final id = newId('expense');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final row = expenseRow(
+      id: id,
+      payers: per,
+      shares: per,
+      dateEpochDay: form.dateEpochDay,
+      title: form.title,
+      categoryKey: form.categoryKey,
+      type: 'normal',
+      cents: form.cents,
+      createdMs: now,
+    );
+    final ok = await directUpsert('expenses_sync', row, onMirror: () async {
+      await refreshExpenseMirror(
+        id: id,
+        dateEpochDay: form.dateEpochDay,
+        title: form.title,
+        categoryKey: form.categoryKey,
+        cents: form.cents,
+        payersJson: row['payers_json'] as String,
+        sharesJson: row['shares_json'] as String,
+        createdAt: now,
+      );
+    });
+    await toastResult(ok, okMsg: '已记账');
   }
 
   void _showDetail(SharedExpense e) {
@@ -482,10 +556,12 @@ class _BillsTabState extends ConsumerState<_BillsTab>
 // ============ Tab 2 成员 ============
 
 class _MembersTab extends ConsumerStatefulWidget {
-  const _MembersTab({required this.groupId, required this.online});
+  const _MembersTab(
+      {required this.groupId, required this.online, required this.isOwner});
 
   final String groupId;
   final bool online;
+  final bool isOwner;
 
   @override
   ConsumerState<_MembersTab> createState() => _MembersTabState();
@@ -521,7 +597,7 @@ class _MembersTabState extends ConsumerState<_MembersTab>
                           style: const TextStyle(fontSize: 13)),
                     ),
                     title: Text(m.name),
-                    trailing: widget.online
+                    trailing: widget.online && widget.isOwner
                         ? IconButton(
                             icon: const Icon(Icons.person_remove_outlined, size: 18),
                             tooltip: '移出本团',
@@ -531,13 +607,19 @@ class _MembersTabState extends ConsumerState<_MembersTab>
                   ),
               ]),
             ),
-            if (widget.online) ...[
+            if (widget.online && widget.isOwner) ...[
               const SizedBox(height: Spacing.md),
               OutlinedButton.icon(
                 onPressed: _add,
                 icon: const Icon(Icons.person_add_alt_rounded),
                 label: const Text('添加成员'),
               ),
+            ] else if (widget.online) ...[
+              const SizedBox(height: Spacing.md),
+              Text(copy('share.ownerOnlyTap'),
+                  style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: AppFontSizes.caption)),
             ],
             const SizedBox(height: Spacing.md),
             Text('成员变更即时写云端并对所有共享成员可见。',
@@ -736,10 +818,12 @@ class _StatsTabState extends ConsumerState<_StatsTab> {
 // ============ Tab 4 结算 ============
 
 class _SettleTab extends ConsumerStatefulWidget {
-  const _SettleTab({required this.groupId, required this.online});
+  const _SettleTab(
+      {required this.groupId, required this.online, required this.isOwner});
 
   final String groupId;
   final bool online;
+  final bool isOwner;
 
   @override
   ConsumerState<_SettleTab> createState() => _SettleTabState();
@@ -800,7 +884,9 @@ class _SettleTabState extends ConsumerState<_SettleTab>
                                     style: TextStyle(
                                         color: scheme.onSurfaceVariant,
                                         fontSize: AppFontSizes.caption)),
-                              if (widget.online && outstanding.isNotEmpty) ...[
+                              if (widget.online &&
+                                  widget.isOwner &&
+                                  outstanding.isNotEmpty) ...[
                                 const SizedBox(height: Spacing.md),
                                 SizedBox(
                                   width: double.infinity,
@@ -811,6 +897,15 @@ class _SettleTabState extends ConsumerState<_SettleTab>
                                   ),
                                 ),
                               ],
+                              if (widget.online && !widget.isOwner)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: Spacing.sm),
+                                  child: Text(copy('share.ownerOnlyTap'),
+                                      style: TextStyle(
+                                          color: scheme.onSurfaceVariant,
+                                          fontSize: AppFontSizes.caption)),
+                                ),
                               if (!widget.online)
                                 Padding(
                                   padding:

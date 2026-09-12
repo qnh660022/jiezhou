@@ -4,8 +4,8 @@
 /// - 有 updatedAt 列的实体（trips/tripItems/groups）：本地 updatedMs = updatedAt；
 /// - 无 updatedAt 列的实体（members/expenses/settlements）：本地以 createdAt 承载
 ///   （云端胜写回时 createdAt = 云端 updated_ms，等效 seq）；
-/// - categories：本地无时间戳列，本地有效值 = outbox pending 事件时间（无则 0）；
-///   为免"云端恒胜"造成无谓重写，行数据与云端全等时不动作。
+/// - categories：本地无时间戳列，本地有效值 = outbox pending 事件时间（无则 -1
+///   表示云端恒胜，同值幂等覆盖）。
 /// 防环：本地胜再入队产生一条比云端更新的事件（事件时点单调递增），下一轮推上即收敛。
 library;
 import '../db/database.dart';
@@ -25,6 +25,13 @@ class SyncMerger {
   /// 我参与的共享团 id 集合（引擎每次 pull 前 via list_my_collabs 刷新）。
   Set<String> collabGroupIds = {};
 
+  /// 协作名单是否**成功加载过**（list_my_collabs 失败时为 false）。
+  ///
+  /// 名单未知时，任何「非本人」的云端行一律跳过：既不落本地业务表（否则他人
+  /// 共享账本数据会被当成自己的账本，还可能被后续 push 上行——历史 bug H7），
+  /// 也不落镜像（避免把「已退出但名单过期」的团又拉回来）。
+  bool collabContextKnown = false;
+
   Future<void> mergeRow(SyncEntity entity, Map<String, dynamic> cloud) async {
     final id = cloud[entity.idColumn] as String?;
     if (id == null || id.isEmpty) return;
@@ -38,16 +45,29 @@ class SyncMerger {
 
     // ---- 分流：共享镜像 or 业务表 ----
     final toShared = _routeToShared(entity, cloud);
-    if (toShared == null) return; // 非本人且不在协作名单 → 不可见/跳过
+    if (toShared == null) return; // 非本人且名单未知/不在协作名单 → 跳过，绝不落业务表
 
     final local = await _readLocal(entity, id, toShared);
-    final localMs = await _effectiveLocalMs(entity, id, local);
+    final pending = await outbox.pendingEntry(entity.localKey, id);
+
+    // 本地行已不存在，但 outbox 还压着未上行的事件（删除/重建意图）→
+    // 不复活、不覆盖，交给 push 把本地意图发上去。否则「离线删除 → 云端胜
+    // 插回本地 → assemble 又推回云端」会让删除被静默撤销（历史 bug H1）。
+    if (local == null && pending != null) return;
+
+    final localMs = await _effectiveLocalMs(entity, id, local, pending);
 
     if (local == null || cloudMs > localMs) {
       await _upsertLocal(entity, cloud, toShared); // 云端胜
     } else if (cloudMs < localMs) {
-      await outbox.enqueue(entity.name, id, 'upsert',
-          localMs > _nowHint ? localMs : _nowHint); // 本地胜：排队上行（防环收敛）
+      // 本地胜：排队上行（防环收敛）。走 hook 以便统一触发 debounce（否则该行
+      // 进了 outbox 却没人排 push，只能等下一次业务写入或手动同步——历史 bug H6）。
+      final at = localMs > _nowHint ? localMs : _nowHint;
+      if (SyncOutboxService.hook != null) {
+        SyncOutboxService.notifyWriteAt(entity.localKey, id, 'upsert', at);
+      } else {
+        await outbox.enqueue(entity.localKey, id, 'upsert', at);
+      }
     }
     // 相等：不动作（防抖）
   }
@@ -55,13 +75,21 @@ class SyncMerger {
   int _nowHint = DateTime.now().millisecondsSinceEpoch;
 
   /// 更新身份上下文（每轮 pull 前由引擎调用）。
-  void refreshContext({String? userId, required Set<String> collabGroups}) {
+  ///
+  /// [known] 传 null 表示沿用上次的「名单是否可靠」结论（引擎在 rpc 前先刷一次
+  /// 身份，rpc 后再用真实结果刷新）。
+  void refreshContext(
+      {String? userId, required Set<String> collabGroups, bool? known}) {
     currentUserId = userId;
     collabGroupIds = collabGroups;
+    if (known != null) collabContextKnown = known;
     _nowHint = DateTime.now().millisecondsSinceEpoch;
   }
 
-  /// null = 该行对当前账号无意义（非本人、也不在其协作团内）。
+  /// null = 该行对当前账号无意义（不落业务表、不落镜像）。
+  ///
+  /// 规则：本人的行 → false（落本地业务表）；他人的行 → 仅当协作名单**已成功
+  /// 加载**且该团在名单内才落共享镜像（true），否则一律 null 跳过。
   bool? _routeToShared(SyncEntity entity, Map<String, dynamic> cloud) {
     switch (entity) {
       case SyncEntity.trips:
@@ -70,14 +98,16 @@ class SyncMerger {
         return false; // 行程/字典不协作，RLS 也只对 owner 可见
       case SyncEntity.groups:
         final owner = cloud['owner_user_id'] as String?;
-        if (owner != null && owner == currentUserId) return false;
-        return collabGroupIds.contains(cloud['id']);
+        if (owner == null || owner == currentUserId) return false;
+        if (!collabContextKnown) return null;
+        return collabGroupIds.contains(cloud['id']) ? true : null;
       case SyncEntity.members:
       case SyncEntity.expenses:
       case SyncEntity.settlements:
         final owner = cloud['owner_user_id'] as String?;
-        if (owner != null && owner == currentUserId) return false;
-        return collabGroupIds.contains(cloud['group_id']);
+        if (owner == null || owner == currentUserId) return false;
+        if (!collabContextKnown) return null;
+        return collabGroupIds.contains(cloud['group_id']) ? true : null;
     }
   }
 
@@ -114,17 +144,20 @@ class SyncMerger {
     }
   }
 
-  Future<int> _effectiveLocalMs(SyncEntity entity, String id, dynamic local) async {
+  Future<int> _effectiveLocalMs(
+      SyncEntity entity, String id, dynamic local, OutboxEntry? pending) async {
     if (local == null) return 0;
     if (entity == SyncEntity.categories) {
-      // categories 无本地时间戳列：有 pending 事件则以事件时间为本地口径；
-      // 无 pending 返回 -1 → 云端恒胜（同值幂等覆盖，无语义变化）。
-      final pending = await outbox.pendingUpdatedMs(entity.name, id);
-      return pending ?? -1;
+      // categories 无本地时间戳列：本地有效值 = pending 事件时点，下界为「当前」
+      // （只要有本地待上行意图就让本地胜，避免 pending 时点 ≤ 云端 updated_ms
+      // 时本地改名被云端旧值静默吃掉——历史 bug L1）。无 pending 返回 -1 →
+      // 云端恒胜（同值幂等覆盖，无语义变化）。
+      if (pending == null) return -1;
+      return pending.updatedMs > _nowHint ? pending.updatedMs : _nowHint;
     }
     final rowMs = SyncCodec.rowUpdatedMs(entity, local);
-    final pending = await outbox.pendingUpdatedMs(entity.name, id);
-    if (pending != null && pending > rowMs) return pending;
+    final pendingMs = pending?.updatedMs;
+    if (pendingMs != null && pendingMs > rowMs) return pendingMs;
     return rowMs;
   }
 

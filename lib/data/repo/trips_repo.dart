@@ -39,6 +39,8 @@ class TripsRepository {
     final existing = await getById(trip.id);
     if (existing == null) {
       await db.into(db.trips).insert(TripsCompanion(id:Value(trip.id),name:Value(trip.name),destination:Value(trip.destination),emoji:Value(trip.emoji),cover:Value(trip.cover),startEpochDay:Value(trip.startEpochDay),endEpochDay:Value(trip.endEpochDay),note:Value(trip.note),groupId:Value(trip.groupId),archived:Value(trip.archived),createdAt:Value(trip.createdAt),updatedAt:Value(trip.updatedAt)));
+      // 新建分支此前漏了入队：只在本地落库，云端永远看不到这条行程（bug B7）。
+      SyncOutboxService.notifyWrite("trips", trip.id);
     } else {
       await updateTrip(trip);
     }
@@ -51,12 +53,26 @@ class TripsRepository {
   }
 
   Future<void> deleteTrip(String id) async {
+    // 先收集子行 id：删除/摘链后就读不到了，无法再补墓碑或重上行（bug B8）。
+    final itemIds = (await getItems(id)).map((i) => i.id).toList();
+    final linkedExpenseIds = (await (db.select(db.expenses)
+              ..where((e) => e.tripId.equals(id)))
+            .get())
+        .map((e) => e.id)
+        .toList();
     await (db.update(db.expenses)..where((e)=>e.tripId.equals(id))).write(ExpensesCompanion(tripId:Value(null),tripItemId:Value(null)));
     await (db.delete(db.tripItems)..where((t)=>t.tripId.equals(id))).go();
     await (db.delete(db.checklistItems)..where((c)=>c.tripId.equals(id))).go();
     await (db.delete(db.albumPhotos)..where((a)=>a.tripId.equals(id))).go();
     await (db.delete(db.trips)..where((t)=>t.id.equals(id))).go();
+    // 关联账单被摘掉 tripId，需重新上行；行程安排逐条发墓碑。
     SyncOutboxService.notifyWrite("trips", id, op: "delete");
+    for (final iid in itemIds) {
+      SyncOutboxService.notifyWrite("trip_items", iid, op: "delete");
+    }
+    for (final eid in linkedExpenseIds) {
+      SyncOutboxService.notifyWrite("expenses", eid);
+    }
   }
 
   Future<void> archiveTrip(String id, bool v) async { await (db.update(db.trips)..where((t)=>t.id.equals(id))).write(TripsCompanion(archived:Value(v),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("trips", id); }
@@ -65,8 +81,16 @@ class TripsRepository {
     final newId_ = newId("trip"); final now = DateTime.now().millisecondsSinceEpoch;
     final s = await (db.select(db.trips)..where((t)=>t.id.equals(srcId))).getSingle();
     await db.into(db.trips).insert(TripsCompanion(id:Value(newId_),name:Value(s.name),destination:Value(s.destination),emoji:Value(s.emoji),cover:Value(s.cover),startEpochDay:Value(s.startEpochDay),endEpochDay:Value(s.endEpochDay),note:Value(s.note),archived:Value(false),createdAt:Value(now),updatedAt:Value(now)));
+    final copiedItemIds = <String>[];
     for (final i in await getItems(srcId)) {
-      await db.into(db.tripItems).insert(TripItemsCompanion(id:Value(i.id+"_cp"),tripId:Value(newId_),dateEpochDay:Value(i.dateEpochDay),type:Value(i.type),name:Value(i.name),address:Value(i.address),lat:Value(i.lat),lng:Value(i.lng),photoUri:Value(i.photoUri),startTimeMin:Value(i.startTimeMin),durationMin:Value(i.durationMin),costCents:Value(i.costCents),costCurrency:Value(i.costCurrency),note:Value(i.note),sortOrder:Value(i.sortOrder),fromName:Value(i.fromName),fromAddress:Value(i.fromAddress),fromLat:Value(i.fromLat),fromLng:Value(i.fromLng),toName:Value(i.toName),toAddress:Value(i.toAddress),toLat:Value(i.toLat),toLng:Value(i.toLng),flightNo:Value(i.flightNo),createdAt:Value(now),updatedAt:Value(now)));
+      final iid = i.id + "_cp";
+      copiedItemIds.add(iid);
+      await db.into(db.tripItems).insert(TripItemsCompanion(id:Value(iid),tripId:Value(newId_),dateEpochDay:Value(i.dateEpochDay),type:Value(i.type),name:Value(i.name),address:Value(i.address),lat:Value(i.lat),lng:Value(i.lng),photoUri:Value(i.photoUri),startTimeMin:Value(i.startTimeMin),durationMin:Value(i.durationMin),costCents:Value(i.costCents),costCurrency:Value(i.costCurrency),note:Value(i.note),sortOrder:Value(i.sortOrder),fromName:Value(i.fromName),fromAddress:Value(i.fromAddress),fromLat:Value(i.fromLat),fromLng:Value(i.fromLng),toName:Value(i.toName),toAddress:Value(i.toAddress),toLat:Value(i.toLat),toLng:Value(i.toLng),flightNo:Value(i.flightNo),createdAt:Value(now),updatedAt:Value(now)));
+    }
+    // 复制出的副本也要上行（此前整条路径零入队：本地可见、云端没有 —— bug B6）。
+    SyncOutboxService.notifyWrite("trips", newId_);
+    for (final iid in copiedItemIds) {
+      SyncOutboxService.notifyWrite("trip_items", iid);
     }
     return newId_;
   }
@@ -98,6 +122,8 @@ class TripsRepository {
       }
     }
     await (db.update(db.trips)..where((t)=>t.id.equals(tid))).write(TripsCompanion(startEpochDay:Value(s),endEpochDay:Value(e),updatedAt:Value(DateTime.now().millisecondsSinceEpoch)));
+    // 行程起止日变了也要上行（此前只改了本地 —— bug B6）。
+    SyncOutboxService.notifyWrite("trips", tid);
   }
 
   // ===== Album =====
@@ -151,7 +177,7 @@ class TripsRepository {
   Future<TripImportReport> importTripBackupMap(Map<String, dynamic> root) async {
     final backup = parseTripBackupMap(root);
     final result = applyTripImport(backup);
-    return db.transaction<TripImportReport>(() async {
+    final report = await db.transaction<TripImportReport>(() async {
       await _insertTripBackup(result);
       final name = (result.trip['name'] as String? ?? '').trim();
       return TripImportReport(
@@ -161,6 +187,18 @@ class TripsRepository {
         checklist: result.stats.checklist,
       );
     });
+    // 提交后入队：导入的行程/安排是本地新写入，必须同步到云端（此前零入队 —— bug B6）。
+    // ⚠️ 必须在事务提交之后：hook 会触发 debounce→drain，若在事务内触发，
+    // assemble 读不到未提交的行会走 delete 分支，可能把云端已有行软删。
+    final importedTripId = result.trip['id'];
+    if (importedTripId is String) {
+      SyncOutboxService.notifyWrite("trips", importedTripId);
+      for (final it in result.items) {
+        final iid = it['id'];
+        if (iid is String) SyncOutboxService.notifyWrite("trip_items", iid);
+      }
+    }
+    return report;
   }
 
   Future<void> _insertTripBackup(TripImportResult r) async {

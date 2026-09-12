@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/date_utils.dart';
 import '../../../data/db/database.dart';
+import '../../../data/guide/guide_providers.dart' show guideServiceProvider;
 import '../../../data/providers.dart';
 import '../../../export/share_helper.dart';
 
@@ -19,6 +20,8 @@ import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/screens/qr_scan_screen.dart';
+import '../guide_city_picker.dart' show showGuideCityPicker;
+import '../guide_widgets.dart' show GuideRouteArgs;
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
 import '../../../shared/copy_tokens.dart';
@@ -203,6 +206,12 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
       }
     }
 
+    // ---------- 列表最底部：目的地攻略入口 ----------
+    // 2026-09-12 调整：从列表顶部下移到末尾（首页主体是「我的行程」，
+    // 攻略是次级入口），并去掉一排预览城市 chips，只留一条入口。
+    children.add(const SizedBox(height: Spacing.lg));
+    children.add(const _GuideEntryCard());
+
     return CustomScrollView(
       controller: _scroll,
       slivers: [
@@ -224,10 +233,78 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
 }
 
 
+/// 目的地攻略入口（行程列表页**最底部**的一条入口）。
+///
+/// 2026-09-12 调整：
+/// - 位置：从列表顶部下移到末尾 —— 首页主体是行程，攻略是次级入口；
+/// - 形态：不再铺一排城市快捷 chips（用户反馈「不要显示那些预览城市」），
+///   只留一行入口，点击后弹城市选择器（`showGuideCityPicker`，全国 330 城
+///   + 海外手填，比 6 个固定 chip 覆盖面大得多）。
+class _GuideEntryCard extends ConsumerWidget {
+  const _GuideEntryCard();
+
+  Future<void> _openPicker(BuildContext context, WidgetRef ref) async {
+    final cities = await ref.read(guideServiceProvider).allCities();
+    if (!context.mounted) return;
+    final key = await showGuideCityPicker(context: context, cities: cities);
+    if (key == null || !context.mounted) return;
+    context.push('/guide', extra: GuideRouteArgs(cityKey: key));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+      child: SectionCard(
+        padding: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: AppRadius.card,
+          onTap: () => _openPicker(context, ref),
+          child: Padding(
+            padding: const EdgeInsets.all(Spacing.lg),
+            child: Row(children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(Spacing.md),
+                ),
+                child: Icon(Icons.menu_book_rounded,
+                    size: 19, color: scheme.primary),
+              ),
+              const SizedBox(width: Spacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(copy('guide.homeTitle'),
+                        style: TextStyle(
+                            fontSize: AppFontSizes.bodyLarge,
+                            fontWeight: FontWeight.w700,
+                            color: scheme.onSurface)),
+                    Text(copy('guide.homeSub'),
+                        style: TextStyle(
+                            fontSize: AppFontSizes.caption - 1,
+                            color: scheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: Spacing.sm),
+              Icon(Icons.chevron_right_rounded,
+                  size: 20, color: scheme.onSurfaceVariant),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 首页加载骨架
 class _HomeSkeleton extends StatelessWidget {
   const _HomeSkeleton();
-
   @override
   Widget build(BuildContext context) {
     return ListView(

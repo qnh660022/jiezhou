@@ -1,4 +1,10 @@
 /// 行程 DAO：Trip+TripItem CRUD，复制行程，日期夹紧。
+///
+/// ⚠️ 写方法（insertTrip/updateTrip/deleteTrip/insertItem/updateItem/deleteItem/
+/// copy/copyItems/夹紧日期/排序）**均不触发上云入队**，目前全项目无调用点。
+/// 正式写路径是 `lib/data/repo/trips_repo.dart`（那里逐处 `notifyWrite`）。
+/// 若要启用本 DAO：必须在每个写方法后补 `SyncOutboxService.notifyWrite(...)`，
+/// 否则本地改了、云端不知情（历史上正是同类遗漏导致大量数据不上云）。
 library;
 import 'package:drift/drift.dart';
 import '../tables.dart';

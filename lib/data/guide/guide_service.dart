@@ -1,13 +1,13 @@
 /// 攻略主入口（§7.4）：分层调度 + 缓存读写 + 更新包拉取。
 /// 任何路径都不抛（失败=降级结果）；多源合并规则：种子优先、在线补空（§7.16）。
 ///
-/// 2026-09-06 重构（用户变更「离线+在线结合做实、在线优先」）：
-/// - getGuideMultiOffline：纯离线阶段（缓存/种子），零网络，供首屏立即渲染；
-/// - getGuideMulti：完整阶段（种子→open→crawl→aggregate），30 分钟内直接回缓存，
-///   过期自动重跑在线层——进入页面默认在线优先，离线内容始终同屏可读；
-/// - open 层真实现（Open-Meteo 天气 + OSM 景点 POI）；
-/// - 文章发现多链路（必应检索 → 站内搜索兜底），与正文爬取共享一次发现；
-/// - 各层参与打 debugPrint 日志，供真机验收断言。
+/// 2026-09 换源重构：
+/// - 在线正文层由「必应检索 + 四家白名单」换成「去哪儿攻略城市页一城一 URL」
+///   （实测唯一 robots 放行 + 服务端直出中文正文的国内源，详见 crawler_rules）；
+/// - open 层收窄为「只补事实」（天气 + 国内中文 POI），不再当攻略主体；
+/// - 种子层新增最高优先级：App 内 AI 生成并导入的单城覆盖包（`layersUsed` 记 `ai`）；
+/// - `getGuideMultiByKeys` / `getGuideMultiOfflineByKeys`：按城市 key 直接取，
+///   支撑「按城市切换攻略」入口。
 library;
 import 'dart:convert';
 
@@ -45,7 +45,7 @@ class GuideResult {
   /// 在线补充条目（按栏；条目带 source 标注）——UI「网络补充」区块置顶展示。
   final Map<String, List<Map<String, dynamic>>> onlineSections;
 
-  /// 实际参与层（seed/open/crawl/aggregate/cache）。
+  /// 实际参与层（seed / ai / open / crawl / aggregate / cache）。
   final List<String> layersUsed;
 
   /// 本次是否尝试过在线层（全败时 UI 提示「在线内容暂时不可用」）。
@@ -58,6 +58,18 @@ class GuideResult {
 
   bool get hasOnline =>
       layersUsed.any((l) => l == 'open' || l == 'crawl' || l == 'aggregate');
+
+  /// 正文来自 App 内 AI 生成并导入的内容（优先级最高的种子层）。
+  bool get isAiImported => layersUsed.contains('ai');
+
+  /// 正文来自去哪儿的国内攻略页（在线抓取）。
+  bool get hasCrawledGuide => layersUsed.contains('crawl');
+
+  /// 正文汉字总数（阅读时长估算用）。
+  int get textChars => GuideCity.textCharCount(null, sections);
+
+  /// 预计阅读分钟数（350 汉字/分钟）。
+  int get readingMinutes => GuideCity.readingMinutes(textChars);
 
   String? sectionMiss(String key) =>
       (sections[key] ?? const []).isEmpty ? copy('guide.missSection') : null;
@@ -74,7 +86,8 @@ class GuideService {
     this.enableOnline = true,
   })  : cache = cache ?? GuideCache(),
         http = http ?? GuideHttp.instance,
-        seedSource = seedSource ?? GuideSeedSource(cache ?? GuideCache()),
+        seedSource = seedSource ??
+            GuideSeedSource(cache ?? GuideCache()),
         crawlLayer = crawlLayer ?? GuideCrawlLayer(GuideHttp.instance),
         aggregator = aggregator ?? const GuideAggregator(),
         openSource = openSource ?? GuideOpenSourceLayer(http: GuideHttp.instance);
@@ -112,17 +125,54 @@ class GuideService {
       {bool forceRefresh = false}) async {
     final locs = await _normalize(destination);
     if (locs.isEmpty) return const [];
-    final out = <GuideResult>[];
-    for (final loc in locs) {
-      out.add(await _buildFull(loc, forceRefresh));
+    return _buildAll(locs, forceRefresh);
+  }
+
+  /// 直接按城市 key 取攻略（不经过 destination 归一化）。
+  ///
+  /// 供「按城市切换」入口使用：用户在精品城市选择器点了「杭州」，传的就是 key。
+  /// 未知 key 也能走（会命中 `city_coords` 之外的通用路径 → 无种子 → 空态），
+  /// 由调用方决定是否提示。
+  Future<List<GuideResult>> getGuideMultiByKeys(List<String> keys,
+      {bool forceRefresh = false}) async {
+    final names = await seedSource.cityNameIndex();
+    final locs = <GuideLocation>[];
+    final seen = <String>{};
+    for (final raw in keys) {
+      final key = raw.trim();
+      if (key.isEmpty || !seen.add(key)) continue;
+      locs.add(GuideLocation(key, names[key] ?? key));
     }
-    return out;
+    if (locs.isEmpty) return const [];
+    return _buildAll(locs, forceRefresh);
   }
 
   /// 纯离线首屏：缓存（7 天内）或种子，零网络请求。多目的地逐城返回。
   Future<List<GuideResult>> getGuideMultiOffline(String destination) async {
     final locs = await _normalize(destination);
     if (locs.isEmpty) return const [];
+    return _buildOffline(locs);
+  }
+
+  /// 纯离线首屏（按 key）。
+  Future<List<GuideResult>> getGuideMultiOfflineByKeys(List<String> keys) async {
+    final names = await seedSource.cityNameIndex();
+    final locs = <GuideLocation>[];
+    final seen = <String>{};
+    for (final raw in keys) {
+      final key = raw.trim();
+      if (key.isEmpty || !seen.add(key)) continue;
+      locs.add(GuideLocation(key, names[key] ?? key));
+    }
+    if (locs.isEmpty) return const [];
+    return _buildOffline(locs);
+  }
+
+  /// 精品/内置城市清单（换城市选择器 + 行程页入口共用）。
+  Future<List<({String key, String name, String area})>> allCities() =>
+      seedSource.allCities();
+
+  Future<List<GuideResult>> _buildOffline(List<GuideLocation> locs) async {
     final out = <GuideResult>[];
     for (final loc in locs) {
       final cached = await cache.readCity(loc.key);
@@ -132,7 +182,8 @@ class GuideService {
       }
       final seed = await seedSource.getSeed(loc.key);
       if (seed != null) {
-        out.add(_fromSeed(seed, loc));
+        out.add(_fromSeed(seed, loc,
+            isAi: await _isAiImported(loc.key)));
       } else {
         out.add(GuideResult(
           location: loc,
@@ -141,6 +192,15 @@ class GuideService {
           layersUsed: const [],
         ));
       }
+    }
+    return out;
+  }
+
+  Future<List<GuideResult>> _buildAll(
+      List<GuideLocation> locs, bool force) async {
+    final out = <GuideResult>[];
+    for (final loc in locs) {
+      out.add(await _buildFull(loc, force));
     }
     return out;
   }
@@ -160,9 +220,10 @@ class GuideService {
         }
       }
     }
-    // 2) 种子层（瞬时、离线打底）
+    // 2) 种子层（瞬时、离线打底）——可能是 AI 导入内容，按 ai 记层
     final layers = <String>[];
     final seed = await seedSource.getSeed(loc.key);
+    final isAiSeed = await _isAiImported(loc.key);
     final sections = <String, List<Map<String, dynamic>>>{};
     final seedNames = <String, Set<String>>{};
     if (seed != null) {
@@ -175,71 +236,65 @@ class GuideService {
             .map((e) => (e['name'] ?? e['title'] ?? '').toString())
             .toSet();
       }
-      layers.add('seed');
-      _log(loc, 'seed(${sections.values.fold<int>(0, (n, l) => n + l.length)}条)');
+      layers.add(isAiSeed ? 'ai' : 'seed');
+      _log(
+          loc,
+          '${isAiSeed ? 'ai' : 'seed'}'
+          '(${sections.values.fold<int>(0, (n, l) => n + l.length)}条)');
     }
-    // 3) 在线层：open（天气+POI，全平台可用）→ crawl/aggregate（白名单文章流）
+    // 3) 在线层：open（天气/国内 POI，全平台可用）→ crawl（去哪儿城市页）
     final onlineSections = <String, List<Map<String, dynamic>>>{};
+    // 该栏种子已有几条：够了就不再让在线层往这栏塞东西。
+    // 否则 Open-Meteo 的「未来3天天气」会被怼进种子已经写得很足的「行前准备」里，
+    // 让精品内容被网络条目挤下去（用户明确反馈过「获取的只是地点，不是攻略」）。
+    final seedEnough = <String, bool>{
+      for (final k in GuideCity.sectionKeys)
+        k: (sections[k] ?? const []).length >= 3,
+    };
     List<Map<String, dynamic>> articles = [];
     var onlineAttempted = false;
     if (_onlinePossible) {
       onlineAttempted = true;
-      // 3a) open 层
+      // 3a) open 层：只补事实（天气 + 国内中文 POI），不承担攻略主体
       try {
         final enhanced = await openSource.enhance(loc);
         if (enhanced != null) {
-          layers.add('open');
-          _log(loc, 'open(${enhanced.keys.join("/")})');
+          var used = false;
           enhanced.forEach((k, v) {
+            if (seedEnough[k] == true) return; // 种子已够，不补
             onlineSections[k] = [
               ...(onlineSections[k] ?? const []),
               ...v,
             ];
+            used = true;
           });
+          if (used) {
+            layers.add('open');
+            _log(loc, 'open(${enhanced.keys.join("/")})');
+          }
         }
       } catch (_) {}
-      // 3b) 白名单文章流：一次发现，正文爬取与文章聚合共享链接
-      List<String> links = [];
+      // 3b) 白名单城市页：一次请求 = 一城的国内中文攻略正文
       try {
-        links = await crawlLayer.discoverArticleLinks(loc.name);
-        if (links.isNotEmpty) _log(loc, 'discovered(${links.length})');
+        final crawled = await crawlLayer.crawlCity(loc.key);
+        if (crawled != null && !crawled.isEmpty) {
+          var used = false;
+          crawled.sections.forEach((k, v) {
+            if (seedEnough[k] == true) return;
+            onlineSections[k] = [
+              ...(onlineSections[k] ?? const []),
+              ...v,
+            ];
+            used = true;
+          });
+          // 文章流独立于六栏：无论种子怎么填都要（游记列表是种子里没有的）
+          final qc = aggregator.filterAndScore(crawled.articles);
+          articles = qc.isEmpty ? crawled.articles : qc;
+          if (used || articles.isNotEmpty) layers.add('crawl');
+          _log(loc,
+              'crawl(${crawled.sections.keys.join("/")}${articles.isEmpty ? '' : ' +${articles.length}篇'})');
+        }
       } catch (_) {}
-      if (links.isNotEmpty) {
-        try {
-          final crawled =
-              await crawlLayer.crawl(loc.key, links.take(3).toList());
-          if (crawled.isNotEmpty) {
-            layers.add('crawl');
-            _log(loc, 'crawl(${crawled.keys.join("/")})');
-            crawled.forEach((k, v) {
-              onlineSections[k] = [
-                ...(onlineSections[k] ?? const []),
-                ...v,
-              ];
-            });
-          }
-        } catch (_) {}
-        try {
-          final raw = <Map<String, dynamic>>[];
-          for (final link in links.take(10)) {
-            final res = await http.fetchText(link);
-            if (res.cls == GuideFetchClass.ok) {
-              raw.add({
-                'title': _titleOf(res.body) ?? link,
-                'url': link,
-                'sourceUrl': link,
-                'summary': aggregator.summarize(res.body),
-              });
-            }
-          }
-          final qc = aggregator.filterAndScore(raw);
-          if (qc.isNotEmpty) {
-            articles = qc;
-            layers.add('aggregate');
-            _log(loc, 'aggregate(${qc.length}篇)');
-          }
-        } catch (_) {}
-      }
     }
     // 4) 合并：种子文本优先，在线条目去重后追加（§7.16 不改写种子）
     final merged = _mergeSections(sections, seedNames, onlineSections);
@@ -257,6 +312,15 @@ class GuideService {
       onlineSections: onlineSections,
       onlineAttempted: onlineAttempted,
     );
+  }
+
+  /// 该城当前种子是否来自「App 内 AI 生成并导入」（优先级最高那一层）。
+  Future<bool> _isAiImported(String key) async {
+    try {
+      return await cache.readCityOverride(key) != null;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// 在线条目去重（与种子同名/同栏已存在则丢弃）后并入 sections。
@@ -283,7 +347,8 @@ class GuideService {
 
   // ============ 构造辅助 ============
 
-  GuideResult _fromSeed(Map<String, dynamic> seed, GuideLocation loc) {
+  GuideResult _fromSeed(Map<String, dynamic> seed, GuideLocation loc,
+      {bool isAi = false}) {
     final rawSections = (seed['sections'] as Map?) ?? {};
     final sections = <String, List<Map<String, dynamic>>>{};
     for (final k in GuideCity.sectionKeys) {
@@ -295,7 +360,7 @@ class GuideService {
         location: loc,
         sections: sections,
         articles: const [],
-        layersUsed: const ['seed']);
+        layersUsed: [if (isAi) 'ai' else 'seed']);
   }
 
   GuideResult _fromCached(Map<String, dynamic> cached, GuideLocation loc,
@@ -383,10 +448,44 @@ class GuideService {
     return normalizeGuideDestinations(destination, seedNames: names);
   }
 
-  String? _titleOf(String html) {
-    final m = RegExp(r'<title[^>]*>([^<]+)</title>', caseSensitive: false)
-        .firstMatch(html);
-    return m?.group(1)?.trim();
+  // ============ App 内 AI 生成攻略：导入 / 删除 ============
+
+  /// 该城是否已有 AI 导入内容（攻略页显示「我的 AI」徽章 + 删除入口）。
+  Future<bool> hasCityOverride(String key) async {
+    try {
+      return await cache.readCityOverride(key) != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 导入一份 AI 生成的攻略（确认卡点「导入」后调用）。
+  ///
+  /// 校验不过一律拒绝并返回错误文案；通过则落盘为最高优先级种子层。
+  /// 返回 null = 成功。
+  Future<String?> importCityGuide(Map<String, dynamic> city) async {
+    final err = GuideCity.validate(city);
+    if (err != null) return '内容结构不完整（$err），未导入';
+    final key = city['key'] as String;
+    final chars = GuideCity.textCharCount(city);
+    if (chars < 800) return '正文仅 $chars 字，太短了，未导入';
+    final ok = await cache.writeCityOverride(key, city);
+    if (!ok) return '写入失败（可能是存储空间或权限问题）';
+    seedSource.invalidateCityOverride(key);
+    // 已有缓存带着旧的 seed 文本，必须失效，否则 30 分钟新鲜窗会继续返回旧内容
+    try {
+      await cache.deleteCity(key);
+    } catch (_) {}
+    return null;
+  }
+
+  /// 删除该城的 AI 内容，回落到内置种子。
+  Future<void> clearCityOverride(String key) async {
+    await cache.clearCityOverride(key);
+    seedSource.invalidateCityOverride(key);
+    try {
+      await cache.deleteCity(key);
+    } catch (_) {}
   }
 }
 

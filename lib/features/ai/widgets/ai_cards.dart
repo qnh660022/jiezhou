@@ -7,7 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/seed/item_types.dart';
 import '../../../theme/tokens.dart';
 import '../ai_tools.dart' show commitExpenseDraft, commitTravelPack;
-import 'ai_confirm_card.dart' show ActionConfirmCard, ExpenseStatsCard;
+import 'ai_confirm_card.dart'
+    show ActionConfirmCard, ExpenseStatsCard, GuideImportCard;
 
 /// 卡片入口：按 type 分发到具体卡片。
 class AiCardView extends StatelessWidget {
@@ -40,6 +41,8 @@ class AiCardView extends StatelessWidget {
             plan: (data['plan'] as Map?)?.cast<String, dynamic>() ?? const {});
       case 'action_confirm':
         return ActionConfirmCard(data: data);
+      case 'guide_import_confirm':
+        return GuideImportCard(data: data);
       case 'expense_stats':
         return ExpenseStatsCard(data: data);
       default:

@@ -25,6 +25,7 @@ import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../guide_widgets.dart' show GuideRouteArgs;
 import 'item_detail_screen.dart';
 import 'item_edit_screen.dart';
 
@@ -1930,9 +1931,13 @@ class _QuickActionsCard extends StatelessWidget {
                 action(Icons.photo_library_rounded, '相册',
                     () => context.push('/trips/album', extra: tripId)),
                 // 目的地攻略：与地图/相册同排（用户变更 2026-09-06；Web 仍不注册路由）
+                // 2026-09 改走顶层 /guide：从行程详情打开也不切走行程 Tab
                 if (!kIsWeb)
-                  action(Icons.menu_book_rounded, '攻略',
-                      () => context.push('/trips/guide', extra: tripId)),
+                  action(
+                      Icons.menu_book_rounded,
+                      '攻略',
+                      () => context.push('/guide',
+                          extra: GuideRouteArgs(tripId: tripId))),
                 action(Icons.account_balance_wallet_rounded, '账本', onTapLedger),
                 action(Icons.more_horiz_rounded, '更多',
                     () => _openMoreSheet(context, tripId)),

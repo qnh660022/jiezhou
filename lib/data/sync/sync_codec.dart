@@ -102,6 +102,8 @@ abstract final class SyncCodec {
         'created_ms': r.createdAt,
       };
 
+  /// 本地 Categories 表无时间戳列，故此处不产出 `created_ms`；
+  /// 该列由信封以入队事件时点补齐（SyncEnvelope.toCloudJson，口径见 §3.3.2）。
   static Map<String, dynamic> categoryToCloud(db.Category r) => {
         'name': r.name,
         'icon': r.icon,

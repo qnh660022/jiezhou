@@ -62,6 +62,20 @@ const Map<String, CopyToken> _tokens = {
   'sync.links': CopyToken('sync.links', '分享链接'),
   'sync.linksEmpty': CopyToken('sync.linksEmpty', '暂无分享链接'),
   'sync.invites': CopyToken('sync.invites', '邀请码管理'),
+  'sync.auto.title': CopyToken('sync.auto.title', '自动同步'),
+  'sync.auto.onNote': CopyToken('sync.auto.onNote', '改动即刻上传，无需手动'),
+  'sync.auto.offNote': CopyToken('sync.auto.offNote', '已关闭自动同步；改动仍会排队，点「立即同步」上传'),
+  'sync.auto.wifiOnly': CopyToken('sync.auto.wifiOnly', '仅 Wi-Fi 同步'),
+  'sync.auto.wifiOnlyNote':
+      CopyToken('sync.auto.wifiOnlyNote', '移动网络下暂停自动同步；仍可手动同步'),
+  'sync.auto.wifiUnknown':
+      CopyToken('sync.auto.wifiUnknown', '当前网络类型无法判断，已按允许同步处理'),
+  'sync.deadLetterHint':
+      CopyToken('sync.deadLetterHint', '多次失败，已暂停自动重试，点「立即同步」强制重试'),
+  'sync.collabCenter': CopyToken('sync.collabCenter', '分享与协作'),
+  'sync.collabCenterNote':
+      CopyToken('sync.collabCenterNote', '邀请旅伴、只读链接、邀请码与局域网同步'),
+  'sync.wifiBlocked': CopyToken('sync.wifiBlocked', '已按「仅 Wi-Fi」暂停自动同步（当前为移动网络）'),
 
   // ===== 云端账号页 =====
   'cloud.title': CopyToken('cloud.title', '云端账号'),
@@ -119,6 +133,29 @@ const Map<String, CopyToken> _tokens = {
   'share.passBad': CopyToken('share.passBad', '口令不正确'),
   'share.notFound': CopyToken('share.notFound', '分享不存在或已被撤销'),
   'share.needLogin': CopyToken('share.needLogin', '先登录，再加入共享账本'),
+  'share.centerTitle': CopyToken('share.centerTitle', '分享与协作'),
+  'share.myShared': CopyToken('share.myShared', '我的共享账本'),
+  'share.mySharedEmpty': CopyToken('share.mySharedEmpty', '还没有共享账本：邀请旅伴，或输入邀请码加入'),
+  'share.copyCode': CopyToken('share.copyCode', '复制邀请码'),
+  'share.copyLink': CopyToken('share.copyLink', '复制邀请链接'),
+  'share.shareLink': CopyToken('share.shareLink', '分享'),
+  'share.copied': CopyToken('share.copied', '已复制'),
+  'share.addBill': CopyToken('share.addBill', '记一笔'),
+  'share.ownerOnlyTap': CopyToken('share.ownerOnlyTap', '仅团长可操作'),
+  'share.readonlyEmpty': CopyToken('share.readonlyEmpty', '还没有只读分享链接'),
+  'share.createReadonly': CopyToken('share.createReadonly', '生成只读链接'),
+  'share.joinEntry': CopyToken('share.joinEntry', '输入邀请码加入'),
+  'share.lanEntry': CopyToken('share.lanEntry', '局域网同步（同 Wi-Fi 快照合并）'),
+  'share.myLedgers': CopyToken('share.myLedgers', '我创建的账本（邀请旅伴）'),
+  'share.myLedgersEmpty':
+      CopyToken('share.myLedgersEmpty', '还没有账本：先到「账本」页创建一个'),
+  'share.inviteCodeLabel': CopyToken('share.inviteCodeLabel', '邀请码'),
+  'share.inviteNone': CopyToken('share.inviteNone', '点右侧「邀请」生成邀请码'),
+  'share.signInHint': CopyToken('share.signInHint', '登录后即可邀请旅伴、生成只读分享链接'),
+  'share.readonlyNote':
+      CopyToken('share.readonlyNote', '任何人不登录即可查看，只能看不能改，可随时撤销'),
+  'share.createReadonlyEmpty':
+      CopyToken('share.createReadonlyEmpty', '还没有可分享的行程或账本'),
 
   // ===== 通知 =====
   'notify.syncFailTitle': CopyToken('notify.syncFailTitle', '云端失联'),
@@ -147,6 +184,44 @@ const Map<String, CopyToken> _tokens = {
   'guide.sectionBudget': CopyToken('guide.sectionBudget', '预算参考'),
   'guide.missSection': CopyToken('guide.missSection', '信息暂未获取'),
   'guide.flightNone': CopyToken('guide.flightNone', '航班信息暂未收录，可手动填写'),
+
+  // ===== 攻略（2026-09 UI 重设计 + 多入口 + AI 导入） =====
+  'guide.homeTitle': CopyToken('guide.homeTitle', '目的地攻略'),
+  'guide.homeSub': CopyToken('guide.homeSub', '50 座热门城市 · 每城 15 分钟精读'),
+  'guide.homeMore': CopyToken('guide.homeMore', '更多城市'),
+  'guide.switchCity': CopyToken('guide.switchCity', '换城市'),
+  'guide.pickCity': CopyToken('guide.pickCity', '选择城市'),
+  'guide.gotIt': CopyToken('guide.gotIt', '知道了'),
+  'guide.sourceAi': CopyToken('guide.sourceAi', '我的 AI 生成'),
+  'guide.sourceNetwork': CopyToken('guide.sourceNetwork', '已联网补充'),
+  'guide.sourceBuiltin': CopyToken('guide.sourceBuiltin', '内置精选·离线可读'),
+  'guide.onlineFail': CopyToken('guide.onlineFail', '在线内容暂时不可用，已展示离线攻略'),
+  'guide.secCountUnit': CopyToken('guide.secCountUnit', '条'),
+  'guide.readMinutes': CopyToken('guide.readMinutes', '约 {n} 分钟读完'),
+  'guide.noCityPicked': CopyToken('guide.noCityPicked', '还没有选择城市'),
+  'guide.addCity': CopyToken('guide.addCity', '加城市'),
+  'guide.aiImportedTitle': CopyToken('guide.aiImportedTitle', '内容来自你的 AI 生成'),
+  'guide.aiImportedNote':
+      CopyToken('guide.aiImportedNote', 'AI 生成内容仅供参考，票价与预约规则请以官方为准'),
+  'guide.clearAi': CopyToken('guide.clearAi', '删除本城 AI 内容'),
+  'guide.clearAiDone': CopyToken('guide.clearAiDone', '已删除，回落到内置攻略'),
+  'guide.clearAiConfirm': CopyToken('guide.clearAiConfirm', '删除这城的 AI 生成内容？'),
+  'guide.clearAiConfirmBody':
+      CopyToken('guide.clearAiConfirmBody', '删除后会显示内置攻略，已导入的内容无法恢复'),
+  'guide.aiImportTitle': CopyToken('guide.aiImportTitle', '导入 AI 生成的攻略'),
+  'guide.aiImportNote':
+      CopyToken('guide.aiImportNote', '导入后会覆盖内置内容，成为这城攻略的优先内容源'),
+  'guide.aiImportAction': CopyToken('guide.aiImportAction', '导入攻略'),
+  'guide.aiImported': CopyToken('guide.aiImported', '已导入'),
+  'guide.aiImportedGo': CopyToken('guide.aiImportedGo', '去查看'),
+  'guide.pasteImport': CopyToken('guide.pasteImport', '粘贴导入'),
+  'guide.pasteImportHint': CopyToken('guide.pasteImportHint',
+      '把外部 AI 生成的攻略 JSON 贴进来即可：六栏结构、汉字 3000 字以上才收。已导入内容会成为这城攻略的优先来源。'),
+  'guide.pasteImportPreview': CopyToken('guide.pasteImportPreview', '检查内容'),
+  'guide.pasteImportAction': CopyToken('guide.pasteImportAction', '导入并覆盖'),
+  'guide.pasteImportOverwrite':
+      CopyToken('guide.pasteImportOverwrite', '导入后会覆盖内置内容，可在攻略页菜单里删除'),
+  'guide.cancel': CopyToken('guide.cancel', '取消'),
 
   // ===== 外部服务空态（任务4） =====
   'svc.cityNoCoord': CopyToken('svc.cityNoCoord', '城市无坐标'),

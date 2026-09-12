@@ -1,17 +1,87 @@
 # -*- coding: utf-8 -*-
-"""生成 assets/data/guide_seed_v1.json（离线攻略种子 2.0）。
+"""生成 assets/data/guide_seed_v1.json（离线攻略种子）。
+
 内容口径：真实可查的常识性要点；把握不足的条目不写（宁缺勿编）。
 预算参考为常见区间，标注“参考”。
-2.0 变更：精选 30 城内容精品化（每城 5000 字级，可读 5 分钟以上，六栏条目与
-detail 全面加厚）；新增 15 城（含补齐 xian/wuhan/changsha）；version 升 v2，
-与预留官网更新包 guide_seed_v2.json 版本对齐（后端暂未部署，见 guide_seed_source.dart）。"""
+
+## 版本演进
+- 2.0：精选 30 城内容精品化；新增 15 城（含补齐 xian/wuhan/changsha）；version 升 v2。
+- 3.0（2026-09，本轮）：
+  * 每城新增 `area` 字段（攻略页「换城市」按大区分组，见 docs/攻略种子数据契约.md）；
+  * 精品线从 30 城扩到 **50 城**（PREMIUM_50），单城目标正文 5500 字以上（约 15 分钟阅读）；
+  * 输出改紧凑 JSON（不缩进）——正文翻倍后缩进会白占大量体积。
+
+## 契约
+字段/条数/字数红线见 docs/攻略种子数据契约.md；
+生成后**必须**跑 `python scripts/check_guide_seed.py`，全绿才算完成。
+
+## 加厚 50 城内容的标准流程
+1. 用 docs/攻略生成提示词模板.md 逐城生成（外部 AI，一次一城）；
+2. 把生成的内容按本文件的 `city(...)` DSL 贴进来，**同 key 会覆盖前面的定义**；
+3. 重跑本脚本 → 再跑 check_guide_seed.py。
+"""
 import json
 
 C = {}
 
+# ============================================================
+# 大区归属（新增城市请登记到这里，并同步 PREMIUM_50 / check 脚本）
+# ============================================================
+AREA = {
+    # 直辖市
+    "beijing": "直辖市", "shanghai": "直辖市", "tianjin": "华北",
+    "chongqing": "西南",
+    # 华东
+    "hangzhou": "华东", "suzhou": "华东", "nanjing": "华东", "xiamen": "华东",
+    "huangshan": "华东", "wuxi": "华东", "yangzhou": "华东", "shaoxing": "华东",
+    "ningbo": "华东", "quanzhou": "华东", "wuyuan": "华东", "jinan": "华东",
+    "jingdezhen": "华东", "wuzhen": "华东", "weihai": "华东", "taian": "华东",
+    "qingdao": "华东",
+    # 华南
+    "guangzhou": "华南", "shenzhen": "华南", "guilin": "华南", "sanya": "华南",
+    "shantou": "华南", "foshan": "华南", "chaozhou": "华南", "haikou": "华南",
+    "beihai": "华南", "zhuhai": "华南", "hongkong": "港澳台", "macau": "港澳台",
+    # 华中 / 西南
+    "chengdu": "西南", "kunming": "西南", "dali": "西南", "lijiang": "西南",
+    "zhangjiajie": "华中", "guiyang": "西南", "luoyang": "华中",
+    "xishuangbanna": "西南", "shangrila": "西南", "leshan": "西南",
+    "wuhan": "华中", "changsha": "华中", "yichang": "华中", "enshi": "华中",
+    "daocheng": "西南", "jiuzhaigou": "西南", "emeishan": "西南",
+    "anshun": "西南", "tengchong": "西南", "zhangjiajie_fenghuang": "华中",
+    # 西北
+    "xian": "西北", "dunhuang": "西北", "zhangye": "西北", "xining": "西北",
+    "lanzhou": "西北", "urumqi": "西北", "turpan": "西北", "tianshui": "西北",
+    "yinchuan": "西北", "lasa": "西北",
+    # 华北 / 东北
+    "changchun": "东北", "changbaishan": "东北", "shenyang": "东北",
+    "dalian": "东北", "harbin": "东北", "yanji": "东北", "mohe": "东北",
+    "hulunbuir": "华北", "huihe": "华北", "taiyuan": "华北", "datong": "华北",
+    "chengde": "华北", "qinhuangdao": "华北", "pingyao": "华北",
+    "wutaishan": "华北", "yanan": "西北", "kaifeng": "华中",
+    "zhengzhou": "华中", "hefei": "华东", "nanchang": "华东", "fuzhou": "华东",
+    "nanning": "华南", "taibei": "港澳台",
+}
+
+# 精品 50 城：内容加厚与字数校验以这份清单为准（与 docs/攻略生成提示词模板.md 一致）
+PREMIUM_50 = [
+    "beijing", "shanghai",
+    "hangzhou", "suzhou", "nanjing", "xiamen", "huangshan", "wuxi", "yangzhou",
+    "shaoxing", "ningbo", "quanzhou", "wuyuan", "jinan", "jingdezhen",
+    "guangzhou", "shenzhen", "guilin", "sanya", "shantou", "foshan", "chaozhou",
+    "haikou", "beihai",
+    "chengdu", "chongqing", "kunming", "dali", "lijiang", "zhangjiajie",
+    "guiyang", "luoyang", "xishuangbanna", "shangrila", "leshan",
+    "xian", "dunhuang", "zhangye", "xining",
+    "harbin", "dalian", "qingdao", "tianjin", "shenyang", "changchun",
+    "hongkong", "macau", "taibei",
+    "weihai", "yanji",
+]
+
+
 def city(key, name, prep, spots, food, transport, tips, budget):
     C[key] = {
         "key": key, "name": name,
+        "area": AREA.get(key, ""),
         "sections": {
             "prep": prep, "spots": spots, "food": food,
             "transport": transport, "tips": tips, "budget": budget,
@@ -2451,10 +2521,57 @@ for c in C.values():
         while len(c["sections"][k]) < 3:
             c["sections"][k].append(gen[len(c["sections"][k]) % len(gen)])
 
-with open('assets/data/guide_seed_v1.json', 'w', encoding='utf-8') as f:
-    cities = list(C.values())
-    json.dump({"version": "v2", "updatedAtMs": 1788624000000, "cities": cities},
-              f, ensure_ascii=False, indent=1)
-print('cities:', len(cities))
+# 精品 50 城必须都在册（新增城市前先登记 AREA 与 PREMIUM_50）
+_missing = [k for k in PREMIUM_50 if k not in C]
+if _missing:
+    raise SystemExit(
+        "精品 50 城里这些还没写内容：%s\n"
+        "（精品线以 PREMIUM_50 为准；临时下线请同时改 check_guide_seed.py）"
+        % " ".join(_missing))
+
+# ============================================================
+# 外部 AI 交付内容合并（scripts/import_guide_cities.py 写到这里）
+#
+# 为什么用「覆盖层」而不是直接改本文件：本文件是 2600 行的手写内容，程序化插入
+# city(...) 调用容易把结构弄坏。交付内容统一落 scripts/guide_overrides/<key>.json，
+# 生成时按 key 覆盖——**同 key 覆盖，重跑幂等**。人工确认满意后可以把内容搬进上面的
+# DSL 区（那时删掉对应 json 即可，输出不变）。
+# ============================================================
+import glob as _glob
+import os as _os
+
+_ov_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'guide_overrides')
+_ov_used = []
+for _p in sorted(_glob.glob(_os.path.join(_ov_dir, '*.json'))):
+    try:
+        with open(_p, encoding='utf-8') as _f:
+            _d = json.load(_f)
+    except Exception as _e:
+        print('!! 覆盖包读取失败，已跳过：%s (%s)' % (_p, _e))
+        continue
+    _sections = _d.get('sections')
+    if not isinstance(_sections, dict) or _d.get('key') not in C:
+        print('!! 覆盖包结构或 key 不合法，已跳过：%s' % _p)
+        continue
+    for _k in ('prep', 'spots', 'food', 'transport', 'tips', 'budget'):
+        if isinstance(_sections.get(_k), list) and _sections[_k]:
+            C[_d['key']]['sections'][_k] = _sections[_k]
+    if _d.get('area'):
+        C[_d['key']]['area'] = _d['area']
+    _ov_used.append(_d['key'])
+
+# 输出：紧凑 JSON（不缩进）——正文翻倍后 indent 会白占几百 KB
+_out = 'assets/data/guide_seed_v1.json'
+cities = list(C.values())
+with open(_out, 'w', encoding='utf-8') as f:
+    json.dump({"version": "v3", "updatedAtMs": 1788624000000, "cities": cities},
+              f, ensure_ascii=False, separators=(',', ':'))
+
 import os
-print('size:', os.path.getsize('assets/data/guide_seed_v1.json'))
+_size = os.path.getsize(_out)
+print('cities:', len(cities))
+print('premium:', len(PREMIUM_50), '(全部在册)' if not _missing else '')
+if _ov_used:
+    print('overrides applied: %d (%s)' % (len(_ov_used), ' '.join(_ov_used)))
+print('size: %.2f MB' % (_size / 1048576.0))
+print('下一步：python scripts/check_guide_seed.py')

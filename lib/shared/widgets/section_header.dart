@@ -2,17 +2,24 @@ import 'package:flutter/material.dart';
 import '../../theme/tokens.dart';
 
 /// 区块标题：左侧标题 + 右侧可选「查看全部 ›」
+///
+/// 2026-09：右侧入口改为「有 [onTrailingTap] 才渲染」——此前必须显式传
+/// `trailingLabel: null` 才能藏掉它，调用方很容易忘，于是出现只有字样、
+/// 点了没反应的假入口。现在 `trailingLabel` 缺省为「查看全部」，
+/// 但没有回调就不渲染。
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
     required this.title,
     this.subtitle,
-    this.trailingLabel = '查看全部',
+    this.trailingLabel,
     this.onTrailingTap,
   });
 
   final String title;
   final String? subtitle;
+
+  /// 右侧入口文案；仅当 [onTrailingTap] 非空时渲染，缺省「查看全部」。
   final String? trailingLabel;
   final VoidCallback? onTrailingTap;
 
@@ -35,7 +42,7 @@ class SectionHeader extends StatelessWidget {
               ],
             ),
           ),
-          if (trailingLabel != null && onTrailingTap != null)
+          if (onTrailingTap != null)
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onTrailingTap,
@@ -43,7 +50,7 @@ class SectionHeader extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: Spacing.xs),
                 child: Row(
                   children: [
-                    Text(trailingLabel!,
+                    Text(trailingLabel ?? '查看全部',
                         style: TextStyle(
                             fontSize: AppFontSizes.caption,
                             fontWeight: FontWeight.w500,

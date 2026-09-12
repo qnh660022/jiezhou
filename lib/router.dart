@@ -24,9 +24,11 @@ import 'features/ledger/screens/ledger_home_screen.dart';
 
 import 'features/ledger/screens/members_screen.dart';
 import 'features/ledger/screens/settle_screen.dart';
+import 'features/ledger/screens/shared_ledger_screen.dart' show SharedGroupScreen;
 import 'features/ledger/screens/stats_screen.dart';
 import 'features/settings/screens/about_screen.dart';
 import 'features/settings/screens/cloud_account_screen.dart';
+import 'features/settings/screens/share_center_screen.dart';
 import 'features/settings/screens/sync_center_screen.dart';
 import 'features/settings/screens/privacy_screen.dart';
 import 'features/settings/screens/profile_screen.dart';
@@ -37,6 +39,7 @@ import 'features/trips/screens/trip_album_screen.dart';
 import 'features/trips/screens/trip_detail_screen.dart';
 import 'features/trips/screens/trip_edit_screen.dart';
 import 'features/trips/screens/trip_export_screen.dart';
+import 'features/trips/guide_widgets.dart' show GuideRouteArgs;
 import 'features/trips/screens/trip_guide_screen.dart';
 import 'features/trips/screens/trip_map_screen.dart';
 import 'features/trips/screens/trip_share_screen.dart';
@@ -152,7 +155,14 @@ List<RouteBase> buildAppRoutes() => [
                   path: 'guide',
                   name: 'trip-guide',
                   builder: (context, state) {
-                    final tripId = state.extra as String? ?? '';
+                    // 兼容旧调用（extra 传 tripId 字符串）与新调用（GuideRouteArgs）
+                    final extra = state.extra;
+                    if (extra is GuideRouteArgs) {
+                      return extra.tripId != null
+                          ? TripGuideScreenBuilder(tripId: extra.tripId!)
+                          : TripGuideScreen(cityKey: extra.cityKey);
+                    }
+                    final tripId = extra as String? ?? '';
                     return TripGuideScreenBuilder(tripId: tripId);
                   },
                 ),
@@ -190,6 +200,15 @@ List<RouteBase> buildAppRoutes() => [
                 name: 'members',
                 builder: (context, state) => const MembersScreen(),
               ),
+              // 共享团详情（受邀端镜像）：账本首页「共享账本」卡片跳这里。
+              // 此前 SharedLedgerSection 已 push(/ledger/shared/:id) 但路由未注册，
+              // 点击直接死路（bug：分享/协作「根本不知道从哪进」的根因之一）。
+              GoRoute(
+                path: 'shared/:id',
+                name: 'shared-group',
+                builder: (context, state) => SharedGroupScreen(
+                    groupId: state.pathParameters['id'] ?? ''),
+              ),
             ],
           ),
         ]),
@@ -215,6 +234,12 @@ List<RouteBase> buildAppRoutes() => [
                 name: 'privacy',
                 builder: (context, state) => const PrivacyScreen(),
               ),
+              // 分享与协作中心：邀请旅伴 / 只读链接 / 加团 / 局域网，一处收口。
+              GoRoute(
+                path: 'share',
+                name: 'share-center',
+                builder: (context, state) => const ShareCenterScreen(),
+              ),
               GoRoute(
                 path: 'cloud',
                 name: 'cloud-account',
@@ -239,6 +264,27 @@ List<RouteBase> buildAppRoutes() => [
       builder: (context, state) =>
           InviteScreen(code: state.uri.queryParameters['c']),
     ),
+    // ============ 目的地攻略（2026-09 需求 3：多入口） ============
+    //
+    // 顶层注册而不是挂在 /trips 分支下：从「行程列表页卡片」「我的」「账本」
+    // 等任意位置打开都不会切走当前 Tab。参数走 extra（GuideRouteArgs），
+    // 支持只有城市 key、没有行程上下文的用法。
+    // Web 端不注册：浏览器 CORS 无法直连国内源，且该功能定位纯本地（§7.8）。
+    if (!kIsWeb)
+      GoRoute(
+        path: '/guide',
+        name: 'guide',
+        builder: (context, state) {
+          final extra = state.extra;
+          if (extra is GuideRouteArgs) {
+            return extra.tripId != null
+                ? TripGuideScreenBuilder(tripId: extra.tripId!)
+                : TripGuideScreen(cityKey: extra.cityKey);
+          }
+          final cityKey = state.uri.queryParameters['city'];
+          return TripGuideScreen(cityKey: cityKey);
+        },
+      ),
     // ============ 只读分享页（Web 顶层，匿名可访问，无桌面宽度要求） ============
     GoRoute(
       path: '/s/:token',

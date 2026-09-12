@@ -5,6 +5,10 @@
   "outputDirectory": "build/web",
   "rewrites": [
     {
+      "source": "/s/:token",
+      "destination": "/api/share?token=:token"
+    },
+    {
       "source": "/((?!.*\\.).*)",
       "destination": "/index.html"
     }

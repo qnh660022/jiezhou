@@ -104,6 +104,17 @@ class ProfileScreen extends ConsumerWidget {
             onTap: () => context.push('/ledger/groups'),
           ),
         ),
+        // 分享与协作中心：邀请旅伴 / 只读分享链接 / 输入邀请码加团 / 局域网同步。
+        // 此前这些入口散落且未登录时全隐藏，用户找不到（本轮补齐聚合入口）。
+        _StaggerIn(
+          index: 5,
+          child: _ProfileTile(
+            icon: Icons.ios_share_rounded,
+            title: '分享与协作',
+            subtitle: '邀请旅伴、只读分享链接、加入别人的账本',
+            onTap: () => context.push('/profile/share'),
+          ),
+        ),
         if (!kIsWeb)
           _StaggerIn(
             index: 5,
@@ -236,6 +247,12 @@ class ProfileScreen extends ConsumerWidget {
                   ref.invalidate(budgetAlertsEnabledProvider);
                 },
                 onTap: () {},
+              ),
+              _ProfileTile(
+                icon: Icons.menu_book_rounded,
+                title: copy('guide.homeTitle'),
+                subtitle: copy('guide.homeSub'),
+                onTap: () => context.push('/guide'),
               ),
               _ProfileTile(
                 icon: Icons.map_outlined,

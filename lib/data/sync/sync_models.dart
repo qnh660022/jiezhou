@@ -32,6 +32,26 @@ enum SyncEntity {
 
   /// 该实体的本地行 id 列名（categories 主键是 key）。
   String get idColumn => this == SyncEntity.categories ? 'key' : 'id';
+
+  /// 本地实体键（snake_case）：发件箱 `entity` 列、`sync_meta` 游标键、
+  /// 仓库层 `SyncOutboxService.notifyWrite(...)`、上云开关判定 **一律**用此键。
+  ///
+  /// ⚠️ 不要用 [name] 当本地键：Dart 枚举名取自标识符，`tripItems` 的 [name]
+  /// 是 `tripItems`，而全仓库（仓储写路径 / db_access / 引擎闸门 / 同步中心
+  /// 计数）都写 `trip_items`。历史 bug H10：上行装配 `_resolveEntity` 按
+  /// [name] 匹配 → `trip_items` 匹配失败 → 该行被当作脏数据静默清理，
+  /// **行程安排永远上不了云**（且没有任何报错，用户只看到数据不同步）。
+  String get localKey => this == SyncEntity.tripItems ? 'trip_items' : name;
+
+  /// 由本地键反查实体；未知键返回 null（脏数据 / 迁移残留）。
+  static SyncEntity? byLocalKey(String key) {
+    for (final s in SyncEntity.values) {
+      // 兼容 [name]：修复 H10 之前合流层曾用 `tripItems` 入队，
+      // 旧库可能残留该键的行，按 name 也认出来避免被当脏数据丢弃。
+      if (s.localKey == key || s.name == key) return s;
+    }
+    return null;
+  }
 }
 
 /// 上行操作语义：本地行当前存在 → upsert；已被删除 → delete（云端标 deleted=true）。
@@ -66,8 +86,16 @@ class SyncEnvelope {
         'deleted': true,
       };
     }
+    final payload = Map<String, dynamic>.from(row);
+    // `created_ms` 在所有云表都是 not null（无默认值），漏传会被 PostgREST 以
+    // 23502 拒绝（"null value in column ... violates not-null constraint"），
+    // 进而该实体整批失败、8 次后退化成死信——历史 bug：Categories 本地表
+    // 无任何时间戳列，`categoryToCloud` 也就漏了这一列，分类同步长期卡死。
+    // 兜底口径与 §3.3.2 一致：本地无创建时间的实体，用**入队事件时点**充当
+    // 创建时间（行内已有 created_ms 的实体保持原值，不被覆盖）。
+    payload.putIfAbsent('created_ms', () => updatedMs);
     return {
-      ...row,
+      ...payload,
       entity.idColumn: rowId,
       'updated_ms': updatedMs,
       'deleted': false,

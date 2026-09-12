@@ -9,6 +9,7 @@ import 'package:travel_assistant/data/sync/sync_outbox_service.dart';
 import 'package:travel_assistant/data/sync/sync_pusher.dart';
 import 'package:travel_assistant/data/sync/sync_transport_fake.dart';
 import 'package:travel_assistant/data/sync/db_access.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -27,21 +28,6 @@ void main() {
   });
 
   tearDown(() async => db.close());
-
-  Trip tripRow(String id, int updatedAt, {String name = '北京行'}) => Trip(
-        id: id,
-        name: name,
-        destination: '',
-        emoji: '✈️',
-        cover: 'ocean',
-        startEpochDay: 0,
-        endEpochDay: 1,
-        note: '',
-        groupId: null,
-        archived: false,
-        createdAt: updatedAt - 100,
-        updatedAt: updatedAt,
-      );
 
   group('outbox', () {
     test('L1-P0 同 (entity,rowId) 连续变更仅一条，updatedMs 取最新（覆盖合并）', () async {
@@ -123,6 +109,41 @@ void main() {
       // 一键重置
       final reset = await outbox.resetDeadLetters();
       expect(reset, 1);
+    });
+  });
+
+  group('上行列完整性（云端 not null 无默认值列必须带上）', () {
+    test('L1-P0 Categories 上行补齐 created_ms（缺列 = 23502，整实体卡死）', () async {
+      final now = 1000;
+      await db.into(db.categories).insert(CategoriesCompanion.insert(
+            key: 'cat_dog',
+            name: const Value('遛狗'),
+            icon: const Value('🐕'),
+            builtin: const Value(false),
+          ));
+      await outbox.enqueue('categories', 'cat_dog', 'upsert', now);
+      final pusher = SyncPusher(outbox, transport, accessor);
+      final r = await pusher.drain();
+      expect(r.ok, isTrue, reason: '漏 created_ms 会被 fake 按真表 NOT NULL 拒绝');
+      final cloud = transport.tables['categories_sync']!['cat_dog']!;
+      expect(cloud['key'], 'cat_dog');
+      expect(cloud['created_ms'], now); // 本地无时间戳 → 入队事件时点兜底
+      expect(cloud['updated_ms'], now);
+      expect(await outbox.pendingCount(), 0);
+    });
+
+    test('L1-P0 行内已有 created_ms 的实体不被事件时点覆盖', () async {
+      final now = 2000;
+      await db.into(db.trips).insert(TripsCompanion.insert(
+            id: 't1',
+            name: '行',
+            createdAt: now - 500, // 真实创建时间
+            updatedAt: now,
+          ));
+      await outbox.enqueue('trips', 't1', 'upsert', now);
+      final pusher = SyncPusher(outbox, transport, accessor);
+      expect((await pusher.drain()).ok, isTrue);
+      expect(transport.tables['trips_sync']!['t1']!['created_ms'], now - 500);
     });
   });
 

@@ -5,8 +5,7 @@
 library;
 import 'dart:async';
 
-import 'package:drift/drift.dart' hide isNull;
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -63,6 +62,19 @@ void _refreshIdentity(WidgetRef ref, SupabaseClient? client) {
   ref.read(currentUserEmailProvider.notifier).state = client?.auth.currentUser?.email;
 }
 
+/// 匿名公开路由（只读分享页 `/s/<token>`、邀请页 `/invite`）。
+///
+/// 这两条路由是给「没装 App 的人」在浏览器里直接看的，访问者没有账号、
+/// 也没有本设备数据可同步。此时启动同步引擎只会白拉一次本地数据库
+/// （Web 上 = 下载并初始化 sqlite3.wasm + drift worker，几 MB 且拖慢首屏），
+/// 因此只建 client、不建引擎。原生端恒为 false，行为完全不变。
+bool get isAnonymousWebRoute => kIsWeb && _isPublicWebPath;
+
+bool get _isPublicWebPath {
+  final p = Uri.base.path;
+  return p.startsWith('/s/') || p.startsWith('/invite');
+}
+
 /// App 首帧后调用一次：resolve 配置 → 建 client → 引擎冷启动。
 /// 配置无效时静默保持未配置态。
 Future<void> bootstrapCloud(WidgetRef ref) async {
@@ -71,7 +83,7 @@ Future<void> bootstrapCloud(WidgetRef ref) async {
   ref.read(cloudClientProvider.notifier).state = client;
   ref.read(cloudReadyProvider.notifier).state = client != null;
   _refreshIdentity(ref, client);
-  if (client != null) {
+  if (client != null && !isAnonymousWebRoute) {
     final engine = _spawnEngine(ref, client);
     await engine?.start();
   }
@@ -87,9 +99,14 @@ Future<void> onSignedIn(WidgetRef ref) async {
   await engine?.start();
 }
 
-/// 登出后调用：停调度；保留 outbox 与引导标记。
+/// 登出后调用：停调度 + 复位运行时状态；保留 outbox 与引导标记。
+///
+/// 必须调 `resetRuntimeState()`：只 stop 的话，节流标志 / 失败计数 / 协作名单
+/// 会残留到下一个账号，新账号一登录就顶着「离线 / 节流」（历史 bug M9）。
 Future<void> onSignedOut(WidgetRef ref) async {
-  ref.read(syncEngineProvider)?.stop();
+  final engine = ref.read(syncEngineProvider);
+  engine?.stop();
+  engine?.resetRuntimeState();
   _refreshIdentity(ref, ref.read(cloudClientProvider));
 }
 

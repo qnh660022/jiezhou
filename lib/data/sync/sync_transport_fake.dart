@@ -55,6 +55,23 @@ class SyncTransportFake implements SyncTransport {
 
   String _idCol(String entity) => entity == 'categories_sync' ? 'key' : 'id';
 
+  /// 云表「not null 且无默认值」列（口径：docs/db_v26.sql 逐表核对）。
+  /// 真表漏传会被 PostgREST 以 23502 拒绝（`null value in column "created_ms"
+  /// ... violates not-null constraint`）→ 该实体整批失败 → 8 次后退化成死信。
+  /// fake 必须与真表同样严格，否则这类 bug 在测试里会静默通过
+  /// （历史 bug：categories_sync 漏 created_ms，分类同步长期卡死）。
+  /// 未列入的列均有默认值或有默认表达式（owner_user_id default auth.uid()），
+  /// id/key 为主键、deleted/updated_ms 由信封恒带。
+  static const Map<String, Set<String>> requiredColumns = {
+    'trips_sync': {'created_ms'},
+    'trip_items_sync': {'trip_id', 'created_ms'},
+    'groups_sync': {'created_ms'},
+    'members_sync': {'group_id', 'created_ms'},
+    'expenses_sync': {'group_id', 'created_ms'},
+    'settlements_sync': {'group_id', 'created_ms'},
+    'categories_sync': {'created_ms'},
+  };
+
   @override
   Future<void> upsert(String entity, List<Map<String, dynamic>> rows) async {
     if (nextUpsertError != null) {
@@ -65,6 +82,16 @@ class SyncTransportFake implements SyncTransport {
     upsertCalls++;
     final t = tables.putIfAbsent(entity, () => {});
     for (final r in rows) {
+      // 墓碑是 UPDATE 既有行（新行不发明文墓碑，见 pusher.assemble），不校验缺列。
+      if (r['deleted'] != true) {
+        for (final col in requiredColumns[entity] ?? const <String>{}) {
+          if (r[col] == null) {
+            throw Exception(
+                'PostgrestException(23502): null value in column "$col" '
+                'of relation "$entity" violates not-null constraint');
+          }
+        }
+      }
       final id = r[_idCol(entity)] as String;
       // upsert 合并：delete 行只覆盖 deleted/updated_ms，不吞其他列（§3.6）
       t[id] = {...(t[id] ?? const <String, dynamic>{}), ...r};

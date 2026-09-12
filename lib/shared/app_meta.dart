@@ -15,3 +15,6 @@ const String kWebAppUrl = 'https://purser.22006.dpdns.org';
 
 /// 拼只读分享链接的完整 URL。
 String shareLinkUrl(String token) => '$kWebAppUrl/s/$token';
+
+/// 拼「邀请旅伴」链接的完整 URL（对方登录后自动加入该团）。
+String inviteLinkUrl(String code) => '$kWebAppUrl/invite?c=$code';

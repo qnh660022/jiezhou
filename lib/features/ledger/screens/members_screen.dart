@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../domain/models.dart';
 import '../../../data/sync/sync_control_providers.dart';
@@ -329,7 +330,10 @@ class MemberRow extends ConsumerWidget {
 }
 
 
-/// 「邀请旅伴」入口（云功能；未登录/未配置时点击走登录引导 sheet）。
+/// 「邀请旅伴」入口（云功能）。
+///
+/// 未登录时**不再整块隐藏**——隐藏会让用户完全看不到「可以邀请旅伴」这件事，
+/// 是「分享功能根本不知道从哪进」的根因之一。改为显示但点击走登录引导。
 class _InviteTile extends ConsumerWidget {
   const _InviteTile({required this.groupId});
 
@@ -338,7 +342,8 @@ class _InviteTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final uid = ref.watch(currentUserIdProvider);
-    if (groupId == null || uid == null) return const SizedBox.shrink();
+    if (groupId == null) return const SizedBox.shrink();
+    final signedIn = uid != null;
     return Padding(
       padding: const EdgeInsets.only(bottom: Spacing.md),
       child: Card(
@@ -346,13 +351,16 @@ class _InviteTile extends ConsumerWidget {
         child: ListTile(
           leading: const Icon(Icons.group_add_rounded),
           title: Text(copy('share.invite')),
-          subtitle: Text(copy('share.inviteCode'),
+          subtitle: Text(
+              signedIn ? copy('share.inviteCode') : copy('share.signInHint'),
               style: const TextStyle(fontSize: AppFontSizes.caption)),
           trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => showModalBottomSheet(
-            context: context,
-            builder: (_) => InviteCompanionSheet(groupId: groupId!),
-          ),
+          onTap: () => signedIn
+              ? showModalBottomSheet(
+                  context: context,
+                  builder: (_) => InviteCompanionSheet(groupId: groupId!),
+                )
+              : context.push('/profile/cloud'),
         ),
       ),
     );

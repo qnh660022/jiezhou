@@ -29,8 +29,13 @@ class SyncPuller {
 
   /// 单实体增量拉取直至追平。
   Future<PullResult> pull(SyncEntity entity) async {
-    var last = await meta.lastPulledMs(entity.name);
-    var lastId = '';
+    // 游标键统一用 [SyncEntity.localKey]（snake_case）：此前用 `entity.name`，
+    // 与 outbox 的 `trip_items` 形成两套键名（H10 同源问题）。改用统一键后
+    // `tripItems` 的历史游标作废，会做一次全量重拉——拉取是幂等的，代价可接受。
+    var last = await meta.lastPulledMs(entity.localKey);
+    // 复合游标第二段同样从持久化状态恢复：只从内存 '' 起步会把「同毫秒且 id
+    // 不大于上次尾行」的行重复拉一遍（幂等但白费流量 / 触发本地胜噪声）。
+    var lastId = await meta.lastPulledId(entity.localKey);
     var total = 0;
     try {
       while (true) {
@@ -47,7 +52,7 @@ class SyncPuller {
         final lastRow = rows.last;
         last = (lastRow['updated_ms'] as num?)?.toInt() ?? last;
         lastId = (lastRow[entity.idColumn] as String?) ?? lastId;
-        await meta.advance(entity.name, last); // 每页成功即推进
+        await meta.advance(entity.localKey, last, lastId: lastId); // 每页成功即推进
         if (rows.length < pageLimit) break;
       }
       return PullResult(pulled: total);

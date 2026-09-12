@@ -22,3 +22,8 @@ final guideByTripProvider =
   final dest = trip?.destination ?? '';
   return ref.read(guideServiceProvider).getGuide(dest);
 });
+
+/// 当前正在生成的攻略草稿城市 key（AI 生成攻略用）。
+///
+/// 工具执行器每轮都会新建，草稿 key 必须落在 provider 里才能跨工具调用传递。
+final guideDraftKeyProvider = StateProvider<String?>((ref) => null);

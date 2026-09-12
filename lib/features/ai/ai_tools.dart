@@ -15,6 +15,11 @@ import 'package:drift/drift.dart' show Value;
 import '../../core/date_utils.dart';
 import '../../core/uid.dart';
 import '../../data/db/database.dart' hide Settlement; // hide to avoid conflict with models.dart
+import '../../data/guide/guide_ai_draft.dart';
+import '../../data/guide/guide_models.dart';
+import '../../data/guide/guide_providers.dart'
+    show guideDraftKeyProvider, guideServiceProvider;
+import '../../data/guide/guide_service.dart' show GuideService;
 import '../../data/providers.dart';
 import '../../data/seed/currencies.dart';
 import '../../data/seed/item_types.dart';
@@ -24,6 +29,7 @@ import '../../domain/models.dart';
 import '../ledger/ledger_models.dart';
 import '../ledger/ledger_providers.dart';
 import '../trips/trip_template_store.dart';
+import '../../shared/copy_tokens.dart';
 import '../../theme/tokens.dart';
 import '../../theme/theme_provider.dart';
 
@@ -506,6 +512,67 @@ final List<AiToolDefinition> kAiTools = [
       'required': ['memberName'],
     },
   ),
+  // ===== 目的地攻略生成（2026-09 需求 5；内容由用户确认后本地导入） =====
+  const AiToolDefinition(
+    name: 'guide_list_cities',
+    description:
+        '列出「目的地攻略」里已有的城市（含 key）。生成攻略前先用它核对城市，'
+        '不要自己造 key——key 不对会导致导入的内容挂不到城市上。',
+    parametersSchema: {'type': 'object', 'properties': {}},
+  ),
+  const AiToolDefinition(
+    name: 'guide_prepare',
+    description:
+        '开始为一座城市生成攻略。必须最先调用。之后用 guide_add_section 逐栏提交内容，'
+        '最后用 guide_finish 出确认卡。一次只做一座城市。',
+    parametersSchema: {
+      'type': 'object',
+      'properties': {
+        'city': {'type': 'string', 'description': '城市中文名，如「杭州」'},
+      },
+      'required': ['city'],
+    },
+  ),
+  const AiToolDefinition(
+    name: 'guide_add_section',
+    description:
+        '提交攻略某一栏的内容（同一栏可多次调用追加）。严格按各栏字段结构给，不要自创字段名。'
+        '字数建议：prep 每条 120-220 字、spots 200-350 字、food 150-280 字、'
+        'transport 100-200 字、tips 100-200 字；六栏合计目标 5500 字以上。'
+        '字段：prep=[{title,detail}]；spots=[{name,addr,tag,timeText,note}]（tag 限 '
+        '必去/经典/小众/亲子）；food=[{name,area,note}]；transport=[{mode,line,note}]；'
+        'tips=[{title,detail}]；budget=[{item,rangeText}]。'
+        '票价/时间/预约规则必须写「（参考）」或「以官方公告为准」，不确定的宁可不写、不许编造。',
+    parametersSchema: {
+      'type': 'object',
+      'properties': {
+        'section': {
+          'type': 'string',
+          'enum': ['prep', 'spots', 'food', 'transport', 'tips', 'budget'],
+          'description': 'prep 行前准备 / spots 景点 / food 美食 / '
+              'transport 交通 / tips 避坑 / budget 预算',
+        },
+        'items': {
+          'type': 'array',
+          'description': '条目数组，元素结构随 section 变化',
+          'items': {'type': 'object'},
+        },
+      },
+      'required': ['section', 'items'],
+    },
+  ),
+  const AiToolDefinition(
+    name: 'guide_status',
+    description: '查看当前攻略草稿的进度（各栏条数、总字数、还差什么）。',
+    parametersSchema: {'type': 'object', 'properties': {}},
+  ),
+  const AiToolDefinition(
+    name: 'guide_finish',
+    description:
+        '结束生成并出「导入攻略」确认卡。用户点确认后内容才写入本机并成为该城攻略。'
+        '内容明显不足时先别调用，用 guide_add_section 补齐。',
+    parametersSchema: {'type': 'object', 'properties': {}},
+  ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -594,6 +661,17 @@ class AiToolExecutor {
           return await _setTheme(args);
         case 'set_budget_alerts_enabled':
           return await _setAlerts(args);
+        // ===== 目的地攻略生成 =====
+        case 'guide_list_cities':
+          return await _guideListCities();
+        case 'guide_prepare':
+          return await _guidePrepare(args);
+        case 'guide_add_section':
+          return await _guideAddSection(args);
+        case 'guide_status':
+          return await _guideStatus(args);
+        case 'guide_finish':
+          return await _guideFinish(args);
         default:
           return AiToolOutcome('{"error":"未知工具 $name"}');
       }
@@ -1711,6 +1789,143 @@ class AiToolExecutor {
     await _ref.read(prefsRepoProvider).setBudgetAlertsEnabled(enabled);
     _ref.invalidate(budgetAlertsEnabledProvider);
     return AiToolOutcome('{"ok":true,"message":"预算预警已${enabled ? '开启' : '关闭'}"}');
+  }
+
+  // ---- 目的地攻略生成（2026-09 需求 5） ----
+  //
+  // 为什么按栏分多次工具调用：模型单次输出上限（本项目 maxTokens=4096）不可能
+  // 一次吐出 6000 字中文，所以设计成
+  //   guide_prepare → guide_add_section ×N（逐栏） → guide_finish（出确认卡）
+  // 草稿落在 SharedPreferences，跨轮次累积；用户点确认后才真正成为该城攻略。
+
+  GuideService get _guide => _ref.read(guideServiceProvider);
+
+  Future<AiToolOutcome> _guideListCities() async {
+    final cities = await _guide.allCities();
+    final withArea = cities.where((c) => c.area.isNotEmpty).toList();
+    return AiToolOutcome(jsonStr({
+      'total': cities.length,
+      'featured': withArea.length,
+      'cities': [
+        for (final c in cities) {'key': c.key, 'name': c.name},
+      ],
+      'hint': '生成攻略请用上面的 name 与 key；一次只生成一座城市',
+    }));
+  }
+
+  Future<AiToolOutcome> _guidePrepare(Map<String, dynamic> args) async {
+    final city = (args['city'] as String? ?? '').trim();
+    if (city.isEmpty) return AiToolOutcome('{"error":"缺少城市名"}');
+    final cities = await _guide.allCities();
+    final hit = cities.where((c) => c.name == city).firstOrNull ??
+        cities.where((c) => c.name.contains(city)).firstOrNull ??
+        cities.where((c) => c.key == city.toLowerCase()).firstOrNull;
+    if (hit == null) {
+      return AiToolOutcome(jsonStr({
+        'error': '攻略库里没有「$city」。请先用 guide_list_cities 看可用城市，'
+            '或换成最接近的城市名',
+      }));
+    }
+    await GuideAiDraft.start(
+        cityKey: hit.key, cityName: hit.name, area: hit.area);
+    _ref.read(guideDraftKeyProvider.notifier).state = hit.key;
+    return AiToolOutcome(jsonStr({
+      'ok': true,
+      'key': hit.key,
+      'name': hit.name,
+      'alreadyImported': await _guide.hasCityOverride(hit.key),
+      'next': '用 guide_add_section 依次提交 prep / spots / food / transport / tips / budget',
+      'targets': {
+        'prep': '8-10 条（预约、季节、交通卡、住宿选址、节奏）',
+        'spots': '14-18 条（必去/经典/小众/亲子，每条 200-350 字）',
+        'food': '10-14 条（招牌菜与老字号，每条 150-280 字）',
+        'transport': '7-9 条（机场/高铁/市内/周边）',
+        'tips': '8-12 条（排队、黄牛、闭馆日、天气）',
+        'budget': '6-8 条（住宿/餐饮/门票/交通/体验，区间写「（参考）」）',
+      },
+    }));
+  }
+
+  Future<AiToolOutcome> _guideAddSection(Map<String, dynamic> args) async {
+    final section = (args['section'] as String? ?? '').trim();
+    final raw = args['items'];
+    if (!GuideCity.sectionKeys.contains(section)) {
+      return AiToolOutcome(jsonStr({
+        'error': 'section 必须是 ${GuideCity.sectionKeys.join("/")} 之一',
+      }));
+    }
+    if (raw is! List || raw.isEmpty) {
+      return AiToolOutcome('{"error":"items 必须是非空数组"}');
+    }
+    final draft = await _currentDraft();
+    if (draft == null) {
+      return AiToolOutcome('{"error":"还没有开始生成，请先调用 guide_prepare"}');
+    }
+    final count = draft.putSection(section, raw);
+    await draft.save();
+    return AiToolOutcome(jsonStr({
+      'ok': true,
+      'section': section,
+      'sectionLabel': GuideCity.sectionLabels[section],
+      'count': count,
+      'totalChars': draft.textChars,
+      'remaining': draft.gaps(),
+    }));
+  }
+
+  Future<AiToolOutcome> _guideStatus(Map<String, dynamic> args) async {
+    final draft = await _currentDraft();
+    if (draft == null) {
+      return AiToolOutcome('{"error":"还没有草稿，请先调用 guide_prepare"}');
+    }
+    return AiToolOutcome(jsonStr({
+      'key': draft.cityKey,
+      'name': draft.cityName,
+      'counts': {
+        for (final k in GuideCity.sectionKeys)
+          k: (draft.sections[k] ?? const []).length,
+      },
+      'totalChars': draft.textChars,
+      'remaining': draft.gaps(),
+    }));
+  }
+
+  Future<AiToolOutcome> _guideFinish(Map<String, dynamic> args) async {
+    final draft = await _currentDraft();
+    if (draft == null) {
+      return AiToolOutcome('{"error":"还没有草稿，请先调用 guide_prepare"}');
+    }
+    if (draft.itemCount == 0) {
+      return AiToolOutcome('{"error":"草稿是空的，先用 guide_add_section 提交内容"}');
+    }
+    final city = draft.toCityJson();
+    return AiToolOutcome(
+      jsonStr({
+        'renderedCard': 'guide_import_confirm',
+        'hint': '已出示「导入攻略」确认卡；用户点确认后才会写入本机。'
+            '回答一句话说明即可，不要复述卡片内容',
+      }),
+      cardType: 'guide_import_confirm',
+      cardData: {
+        'title': copy('guide.aiImportTitle'),
+        'cityKey': draft.cityKey,
+        'cityName': draft.cityName,
+        'rows': [
+          for (final r in draft.summaryRows()) {'label': r[0], 'value': r[1]},
+        ],
+        'textChars': draft.textChars,
+        'readingMinutes': GuideCity.readingMinutes(draft.textChars),
+        'gaps': draft.gaps(),
+        'city': city,
+      },
+    );
+  }
+
+  /// 取当前草稿：城市 key 存在 provider 里，跨工具调用传递。
+  Future<GuideAiDraft?> _currentDraft() async {
+    final key = _ref.read(guideDraftKeyProvider);
+    if (key == null) return null;
+    return GuideAiDraft.load(key);
   }
 }
 

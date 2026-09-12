@@ -155,16 +155,22 @@ void main() {
     });
   });
 
-  group('open 层（Open-Meteo 天气 + OSM 景点 POI）', () {
-    test('L1-P1 天气+POI 解析、种子同名去重由 service 合并保证', () async {
+  group('open 层（Open-Meteo 天气 + OSM 国内中文 POI）', () {
+    test('L1-P1 天气+POI 解析；外文/海外 POI 被丢弃（2026-09 去外国内容）', () async {
       const weatherJson = '{"daily":{"time":["2026-09-06","2026-09-07","2026-09-08"],'
           '"temperature_2m_max":[30,31,29],"temperature_2m_min":[22,23,21],'
           '"precipitation_probability_max":[10,80,20]}}';
       const poiJson = '{"features":['
-          '{"properties":{"name":"成都博物馆","osm_type":"W","osm_id":"1",'
+          // 国内 + 中文名：保留
+          '{"properties":{"name":"成都博物馆","countrycode":"CN","osm_type":"W","osm_id":"1",'
           '"osm_value":"museum","district":"西御河街道","city":"成都市"}},'
-          '{"properties":{"name":"成都","osm_type":"N","osm_id":"2"}},' // 地名自身应被过滤
-          '{"properties":{"name":"人民公园","osm_type":"W","osm_id":"3",'
+          // 地名自身：过滤
+          '{"properties":{"name":"成都","countrycode":"CN","osm_type":"N","osm_id":"2"}},'
+          // 海外 + 中文名：过滤（countrycode 不是 CN）
+          '{"properties":{"name":"东京国立博物馆","countrycode":"JP","osm_type":"W","osm_id":"4"}},'
+          // 国内但外文名：过滤（无汉字）
+          '{"properties":{"name":"Tokyo Tower","countrycode":"CN","osm_type":"W","osm_id":"5"}},'
+          '{"properties":{"name":"人民公园","countrycode":"CN","osm_type":"W","osm_id":"3",'
           '"osm_value":"park","city":"成都市"}}]}';
       final layer = GuideOpenSourceLayer(fetchOverride: (url) {
         if (url.contains('open-meteo')) {
@@ -178,7 +184,7 @@ void main() {
       expect((out['prep']!.first['detail'] as String).contains('降水概率80%'),
           isTrue);
       final spotNames = out['spots']!.map((e) => e['name']).toList();
-      expect(spotNames, ['成都博物馆', '人民公园']); // 地名自身被过滤
+      expect(spotNames, ['成都博物馆', '人民公园']); // 地名自身/海外/外文全被过滤
       expect(out['spots']!.every((e) => e['sourceUrl'] != null), isTrue);
     });
 
@@ -216,21 +222,42 @@ void main() {
     });
   });
 
-  group('白名单纪律（§7.6）', () {
-    test('L1-P0 白名单命中与拒绝', () {
+  group('白名单纪律（§7.6，2026-09 换源）', () {
+    test('L1-P0 去哪儿城市页命中、子页与未知域拒绝', () {
       expect(
-          matchGuideRule('https://www.mafengwo.cn/yj/12345')?.name, '马蜂窝');
-      expect(matchGuideRule('https://evil.example.com/yj/1'), isNull);
+          matchGuideRule('https://travel.qunar.com/p-cs300195-hangzhou')?.name,
+          '去哪儿攻略');
+      expect(matchGuideRule('https://evil.example.com/p-cs1-hangzhou'), isNull);
+      // 子页实测 404，不进白名单
       expect(
-          matchGuideRule('https://www.mafengwo.cn/hotel/1'), isNull); // 路径不符
+          matchGuideRule('https://travel.qunar.com/p-cs300195-hangzhou-meishi'),
+          isNull);
     });
 
-    test('L1-P1 搜狐旅游在白名单内（多链路实测可直抓源）', () {
-      final rule = matchGuideRule('https://www.sohu.com/a/811864015_122045638',
-          articles: true);
-      expect(rule?.name, '搜狐旅游');
-      expect(matchGuideRule('https://www.sohu.com/sport/1', articles: true),
-          isNull); // 非文章路径
+    test('L1-P1 实测禁抓的站点不再放行（全站 Disallow 或反爬壳）', () {
+      // 马蜂窝 robots: User-agent:* Disallow:/
+      expect(matchGuideRule('https://www.mafengwo.cn/yj/12345'), isNull);
+      expect(isKnownBlockedHost('www.mafengwo.cn'), isTrue);
+      // 穷游：安全验证壳
+      expect(matchGuideRule('https://bbs.qyer.com/thread-99'), isNull);
+      expect(isKnownBlockedHost('bbs.qyer.com'), isTrue);
+      // 知乎专栏：403 + robots 全禁
+      expect(matchGuideRule('https://zhuanlan.zhihu.com/p/123'), isNull);
+      // 搜狐：robots 对通用 UA 全禁
+      expect(
+          matchGuideRule('https://www.sohu.com/a/811864015_122045638',
+              articles: true),
+          isNull);
+    });
+
+    test('L1-P1 停用规则仍留在表里可审计', () {
+      final names =
+          kGuideCrawlerRules.where((r) => !r.enabled).map((r) => r.name).toSet();
+      expect(names, containsAll(['马蜂窝', '穷游网', '知乎', '搜狐旅游']));
+      // 每条停用规则都要写明实测依据
+      for (final r in kGuideCrawlerRules.where((r) => !r.enabled)) {
+        expect(r.note.isNotEmpty, isTrue, reason: '${r.name} 缺 note');
+      }
     });
   });
 

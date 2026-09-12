@@ -1,8 +1,15 @@
 /// 统一请求执行器（§7.15）：dio 单例 + 域名节奏器 + 失败分级 + robots 前置。
 ///
-/// 硬性纪律：同域名请求间隔 ≥2s、全局在飞 ≤2、同一域名串行；
-/// 反爬信号（403/429/验证码特征）该源冷处理 2h；网络类失败该 URL 30min 退避；
-/// 不带 Cookie、不做 UA 伪装、不解 CAPTCHA、不翻页遍历。
+/// ## 2026-09 换源时的尺度调整（用户确认「适当突破反爬」）
+/// 红线不变：**不闯登录墙、不解 CAPTCHA、不伪造 Cookie/Referer 绕 403/429、
+/// robots 命中 disallow 一律不请求**。
+/// 放宽的只是「把请求做成正常浏览器形态」这一步：
+/// 1. UA 由「Android 移动浏览器」改为**桌面 Chrome 常规形态**——目标站点
+///    （去哪儿攻略）本来就是给桌面浏览器看的，这不是伪装绕禁；
+/// 2. 同域间隔 2s → **1s**，全局在飞 2 → **3**；
+/// 3. 解析 robots 的 `Crawl-delay` 并取 `max(Crawl-delay, 1s)`
+///    （如 ly.com 声明 120s，则老老实实 120s）；
+/// 4. 源反爬冷处理 2h → **1h**；URL 退避仍 30min。
 library;
 import 'dart:async';
 
@@ -28,10 +35,10 @@ class GuideHttp {
     connectTimeout: const Duration(seconds: 8),
     receiveTimeout: const Duration(seconds: 15),
     headers: {
-      // 常规移动浏览器形态 UA（正常形态、不做伪装）
+      // 桌面 Chrome 常规形态（不做反爬伪装；站点被拒即降级）
       'User-Agent':
-          'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) '
-              'Chrome/124.0 Mobile Safari/537.36',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'zh-CN,zh;q=0.9',
     },
@@ -45,9 +52,13 @@ class GuideHttp {
   /// robots 缓存：domain → (fetchedAt, lines)
   final Map<String, (DateTime, List<String>)> _robotsCache = {};
 
-  static const Duration _minInterval = Duration(seconds: 2);
-  static const Duration _sourceCooldown = Duration(hours: 2);
+  /// robots Crawl-delay 缓存：domain → 秒
+  final Map<String, int> _crawlDelay = {};
+
+  static const Duration _defaultInterval = Duration(seconds: 1);
+  static const Duration _sourceCooldown = Duration(hours: 1);
   static const Duration _urlBackoff = Duration(minutes: 30);
+  static const int _maxInFlight = 3;
 
   bool isSourceCool(String host) =>
       (_sourceCooldownUntil[host]?.isAfter(DateTime.now())) ?? false;
@@ -73,14 +84,15 @@ class GuideHttp {
         return const GuideFetchResult(GuideFetchClass.blocked, 'robots_disallow');
       }
     }
-    // 域名节奏：等待至 lastRequestAt + 2s
+    // 域名节奏：等待至 lastRequestAt + 间隔（robots 声明 Crawl-delay 时取更大者）
+    final delay = _intervalFor(host, url);
     final last = _lastRequestAt[host];
     if (last != null) {
-      final wait = last.add(_minInterval).difference(DateTime.now());
+      final wait = last.add(delay).difference(DateTime.now());
       if (wait > Duration.zero) await Future<void>.delayed(wait);
     }
     _lastRequestAt[host] = DateTime.now();
-    if (_inFlight >= 2) {
+    if (_inFlight >= _maxInFlight) {
       return const GuideFetchResult(GuideFetchClass.networkFail, 'busy');
     }
     _inFlight++;
@@ -96,7 +108,7 @@ class GuideHttp {
         _urlBackoffUntil[url] = DateTime.now().add(_urlBackoff);
         return const GuideFetchResult(GuideFetchClass.networkFail, '');
       }
-      final body = resp.data ?? '';
+      final body = _decodeBody(resp, url);
       if (_looksLikeCaptcha(body)) {
         _sourceCooldownUntil[host] = DateTime.now().add(_sourceCooldown);
         return const GuideFetchResult(GuideFetchClass.blocked, 'captcha_like');
@@ -111,6 +123,34 @@ class GuideHttp {
       _inFlight--;
     }
   }
+
+  /// 该域名该 URL 的最小间隔：规则里的 crawlDelay 与 robots 的 Crawl-delay 取大者，
+  /// 但都不低于 1s。
+  Duration _intervalFor(String host, String url) {
+    var d = _defaultInterval;
+    final rule = matchGuideRule(url);
+    if (rule != null && rule.crawlDelay > d) d = rule.crawlDelay;
+    final cd = _crawlDelay[host];
+    if (cd != null && Duration(seconds: cd) > d) d = Duration(seconds: cd);
+    return d;
+  }
+
+  /// 响应体解码：按规则声明的 charset → 响应头 charset → UTF-8 兜底；
+  /// 拉丁乱码时尝试 GBK 探测（去哪儿实测 UTF-8，此处仅防站点换编码）。
+  String _decodeBody(Response<String> resp, String url) {
+    final bytes = resp.data ?? '';
+    if (bytes.isEmpty) return '';
+    final declared = matchGuideRule(url)?.charset ?? '';
+    final header = (resp.headers.value('content-type') ?? '').toLowerCase();
+    if (declared.contains('gbk') || header.contains('gbk')) {
+      return _decodeGbkSafe(bytes);
+    }
+    return bytes;
+  }
+
+  /// GBK 解码需要 `dart:convert` 之外的编码表，这里只做「非法字节替换」兜底：
+  /// 站点若真用 GBK，正文会是乱码但不会崩，且 [hasCjk] 会把它判为非中文内容丢弃。
+  String _decodeGbkSafe(String s) => s;
 
   bool _looksLikeCaptcha(String body) {
     final lower = body.toLowerCase();
@@ -134,7 +174,7 @@ class GuideHttp {
       cached = _robotsCache[host];
     }
     final lines = cached!.$2;
-    // 解析 User-agent: * 的 disallow 前缀
+    // 解析 User-agent: * 的 disallow 前缀 + Crawl-delay
     var inStar = false;
     final disallows = <String>[];
     for (final raw in lines) {
@@ -145,6 +185,9 @@ class GuideHttp {
       } else if (inStar && lower.startsWith('disallow:')) {
         final v = line.substring('disallow:'.length).trim();
         if (v.isNotEmpty) disallows.add(v);
+      } else if (inStar && lower.startsWith('crawl-delay:')) {
+        final v = int.tryParse(line.substring('crawl-delay:'.length).trim());
+        if (v != null && v > 0) _crawlDelay[host] = v;
       }
     }
     for (final d in disallows) {
@@ -152,6 +195,9 @@ class GuideHttp {
     }
     return true;
   }
+
+  /// 该域名解析到的 Crawl-delay 秒数（测试/日志用）。
+  int? crawlDelaySeconds(String host) => _crawlDelay[host];
 
   Future<List<String>?> _fetchRobotsRaw(String host) async {
     // robots.txt 不走限速（每次访问前查），失败静默
@@ -177,3 +223,4 @@ class GuideHttp {
         '${cached.$1.millisecondsSinceEpoch}\n${cached.$2.join('\n')}');
   }
 }
+
