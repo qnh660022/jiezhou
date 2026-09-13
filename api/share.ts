@@ -27,9 +27,8 @@ const TOKEN_RE =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const PASS_RE = /^\d{4}$/;
 
-/** 主色对齐 App 默认绿（决策 #7：固定浅色，不响应系统深色模式） */
+/** 主色对齐 App 默认绿（决策 #7：固定浅色，不响应系统深色模式）；收入绿见 CSS --income */
 const COLOR_PRIMARY = '#00A878';
-const COLOR_INCOME = '#1E9E6A';
 
 const NEUTRAL_TITLE = '芥舟 · 只读分享';
 const NEUTRAL_DESC = '来自芥舟 · 旅途助手的分享';
@@ -221,7 +220,7 @@ function fmtDay(epochDay: number): string {
   return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
 }
 
-/** 行程条目右侧金额：¥ + 整数；null 不显示 */
+/** 行程条目右侧金额：¥ + 整数，绿色胶囊；null 不显示 */
 function costHtml(cents: unknown): string {
   if (typeof cents !== 'number') return '';
   return `<span class="cost">¥${(cents / 100).toFixed(0)}</span>`;
@@ -234,10 +233,31 @@ function costHtml(cents: unknown): string {
 function amountHtml(cents: unknown): string {
   if (typeof cents !== 'number') return '';
   if (cents < 0) {
-    return `<span class="cost income">-¥${(Math.abs(cents) / 100).toFixed(2)}</span>`;
+    return `<span class="amt income">-¥${(Math.abs(cents) / 100).toFixed(2)}</span>`;
   }
-  return `<span class="cost">¥${(cents / 100).toFixed(2)}</span>`;
+  return `<span class="amt">¥${(cents / 100).toFixed(2)}</span>`;
 }
+
+/** 周X（按 UTC，纯展示）；hero 日期胶囊 / 日分组头部共用 */
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+function dayChipHtml(epochDay: number): string {
+  const d = new Date(epochDay * 86400000);
+  return `<div class="day-chip">${esc(fmtDay(epochDay))} ${WEEKDAYS[d.getUTCDay()]}</div>`;
+}
+
+/** 类别图标（仅视觉映射，categoryKey 原文仍照常展示，未知回退 🧾） */
+const CATEGORY_ICONS: Record<string, string> = {
+  food: '🍜', transport: '🚌', hotel: '🏨', ticket: '🎫', shopping: '🛍️',
+  play: '🎮', medical: '💊', flight: '✈️', train: '🚄', living: '🏠', other: '🧾',
+};
+
+function catIcon(key: unknown): string {
+  return CATEGORY_ICONS[String(key ?? '').trim().toLowerCase()] ?? '🧾';
+}
+
+/** 成员头像色板（与 App 主题种子色同源，按下标循环取用） */
+const MEMBER_COLORS = ['#00A878', '#2F80ED', '#F2994A', '#F06B9C', '#7B61FF', '#E0B14B'];
 
 /** 内容页动态 og/title（内容页才输出动态摘要） */
 function metaFor(shareKind: 'trip' | 'group', data: SnapshotData): { title: string; desc: string } {
@@ -263,48 +283,79 @@ function metaFor(shareKind: 'trip' | 'group', data: SnapshotData): { title: stri
 
 function tripBody(data: SnapshotData): string {
   const t = data.trip ?? {};
-  let html = `<section class="cover"><h1>${esc(
-    [t.emoji, t.name].filter(Boolean).join(' ')
-  )}</h1>`;
-  if (t.destination) html += `<p class="dest">${esc(t.destination)}</p>`;
-  if (t.groupName) html += `<p class="group">与「${esc(t.groupName)}」同行</p>`;
-  html += '</section>';
+  let hero = '<header class="hero">';
+  if (t.emoji) hero += `<div class="badge">${esc(t.emoji)}</div>`;
+  hero += `<h1>${esc(t.name)}</h1>`;
+  if (t.destination) hero += `<p class="dest">📍 ${esc(t.destination)}</p>`;
+  // 日期胶囊：start/end 均有效才显示（既有字段纯展示，不新增数据）
+  const s = t.startEpochDay;
+  const e = t.endEpochDay;
+  if (typeof s === 'number' && typeof e === 'number') {
+    hero += `<div class="pill">${esc(fmtDay(s))} – ${esc(fmtDay(e))}</div>`;
+  }
+  if (t.groupName) hero += `<p class="with">与「${esc(t.groupName)}」同行</p>`;
+  hero += '</header>';
 
   const items = Array.isArray(data.items) ? data.items : [];
+  let inner = '';
   if (!items.length) {
-    html += '<div class="empty">暂无行程安排</div>';
+    inner = '<div class="empty"><div class="ico">🗺️</div><p>暂无行程安排</p></div>';
+  } else {
+    // 按日期分组（items 已按 dateEpochDay, sortOrder 排序，相邻同日即同组；null 归「日期待定」）
+    type Item = NonNullable<SnapshotData['items']>[number];
+    const groups: { day: number | null; items: Item[] }[] = [];
+    for (const it of items) {
+      const day = typeof it.dateEpochDay === 'number' ? it.dateEpochDay : null;
+      const last = groups[groups.length - 1];
+      if (last && last.day === day) last.items.push(it);
+      else groups.push({ day, items: [it] });
+    }
+    for (const g of groups) {
+      inner += g.day == null ? '<div class="day-chip">日期待定</div>' : dayChipHtml(g.day);
+      inner += '<div class="tl">';
+      for (const it of g.items) {
+        // 副标：地址（日期上移到分组胶囊；空段跳过）
+        const sub = it.address ? `<div class="s">${esc(it.address)}</div>` : '';
+        inner += `<div class="item"><div class="main"><div class="t">${esc(it.name)}</div>${sub}</div>${costHtml(it.costCents)}</div>`;
+      }
+      inner += '</div>';
+    }
   }
-  for (const it of items) {
-    // 副标：{M月d日} · {address}，空段跳过，分隔符「 · 」
-    const segs: string[] = [];
-    if (typeof it.dateEpochDay === 'number') segs.push(fmtDay(it.dateEpochDay));
-    if (it.address) segs.push(String(it.address));
-    const sub = segs.map((x) => esc(x)).join(' · ');
-    html += `<div class="card"><div class="main"><div class="t">${esc(it.name)}</div>${
-      sub ? `<div class="s">${sub}</div>` : ''
-    }</div>${costHtml(it.costCents)}</div>`;
-  }
-  return html;
+  return `${hero}<main class="wrap"><div class="sheet">${inner}</div></main>`;
 }
 
 function groupBody(data: SnapshotData): string {
   const g = data.group ?? {};
-  let html = `<section class="cover"><h1>${esc(
-    [g.icon, g.name].filter(Boolean).join(' ')
-  )}</h1></section>`;
+  let hero = '<header class="hero">';
+  if (g.icon) hero += `<div class="badge">${esc(g.icon)}</div>`;
+  hero += `<h1>${esc(g.name)}</h1>`;
 
   const members = Array.isArray(data.members) ? data.members : [];
   if (members.length) {
-    html += `<p class="members">成员：${members.map((m) => esc(m?.name)).join('、')}</p>`;
+    // 头像圆点：背景色按 colorIndex 从色板取值（纯视觉），白色首字，最多显示 5 个
+    hero += '<div class="avatars">';
+    const shown = members.slice(0, 5);
+    for (let i = 0; i < shown.length; i++) {
+      const name = String(shown[i]?.name ?? '').trim();
+      const color = MEMBER_COLORS[i % MEMBER_COLORS.length];
+      hero += `<div class="ava" style="background:${color}">${esc(name.slice(0, 1) || '·')}</div>`;
+    }
+    if (members.length > 5) {
+      hero += `<div class="ava more">+${members.length - 5}</div>`;
+    }
+    hero += '</div>';
+    hero += `<p class="ava-names">成员：${members.map((m) => esc(m?.name)).join('、')}</p>`;
   }
+  hero += '</header>';
 
-  html += '<div class="sec">账单明细</div>';
+  let inner = '<div class="sec">账单明细</div>';
   const expenses = Array.isArray(data.expenses) ? data.expenses : [];
   if (!expenses.length) {
-    html += '<div class="empty">暂无账单</div>';
+    inner += '<div class="empty"><div class="ico">💤</div><p>暂无账单</p></div>';
   }
   for (const ex of expenses) {
-    html += `<div class="card"><div class="main"><div class="t">${esc(ex.title)}</div>${
+    // categoryKey 原文展示不变；左侧图标仅视觉映射
+    inner += `<div class="bill"><div class="ico">${catIcon(ex.categoryKey)}</div><div class="main"><div class="t">${esc(ex.title)}</div>${
       ex.categoryKey ? `<div class="s">${esc(ex.categoryKey)}</div>` : ''
     }</div>${amountHtml(ex.amountCents)}</div>`;
   }
@@ -312,32 +363,33 @@ function groupBody(data: SnapshotData): string {
   // settlements 已是最近 10 条；transfersJson 转义后原样展示，不解析、不美化
   const settlements = Array.isArray(data.settlements) ? data.settlements : [];
   if (settlements.length) {
-    html += '<div class="sec">近期结算</div>';
+    inner += '<div class="sec">近期结算</div>';
     for (const st of settlements) {
-      html += `<div class="card"><div class="s">${esc(`第 ${st.roundNo} 轮 · ${st.transfersJson}`)}</div></div>`;
+      inner += `<div class="settle"><div class="ico">🤝</div><div class="txt">${esc(`第 ${st.roundNo} 轮 · ${st.transfersJson}`)}</div></div>`;
     }
   }
-  return html;
+  return `${hero}<main class="wrap"><div class="sheet">${inner}</div></main>`;
 }
 
 function passBody(path: string, error = ''): string {
   // 口令页不得暴露任何内容信息：无行程/账本名称，og 用中性文案
-  return `<section class="pass">
+  return `<main class="narrow"><section class="pass">
+<div class="lock">🔒</div>
 <h1>输入 4 位口令</h1>
 <form method="post" action="${esc(path)}">
 <input type="password" name="pass" inputmode="numeric" maxlength="4" autocomplete="off" autofocus>
 <p class="err-line">${esc(error)}</p>
 <button type="submit">验证</button>
 </form>
-</section>`;
+</section></main>`;
 }
 
-/** 错误 / 锁定页：居中内联 SVG 图标（无外部图片资源）+ 一行文案 */
+/** 错误 / 锁定页：浅绿圆徽章内联 SVG 波浪线（无外部图片资源）+ 一行文案 */
 function noticeBody(text: string): string {
-  return `<section class="err">
-<svg width="52" height="52" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="${COLOR_PRIMARY}" stroke-width="1.6"/><path d="M6.5 12c1.6-2.4 2.9-2.4 4.5 0s2.9 2.4 4.5 0" stroke="${COLOR_PRIMARY}" stroke-width="1.6" stroke-linecap="round"/></svg>
+  return `<main class="notice-wrap"><section class="err">
+<div class="err-ico"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="${COLOR_PRIMARY}" stroke-width="1.6"/><path d="M6.5 12c1.6-2.4 2.9-2.4 4.5 0s2.9 2.4 4.5 0" stroke="${COLOR_PRIMARY}" stroke-width="1.6" stroke-linecap="round"/></svg></div>
 <p>${esc(text)}</p>
-</section>`;
+</section></main>`;
 }
 
 /** 页脚：推广位（品牌行上方）+ 品牌行，所有页面统一 */
@@ -353,33 +405,88 @@ function footerHtml(): string {
 // ============================================================================
 
 const STYLE = `
+:root{--brand:#00A878;--brand-deep:#007F5C;--grad:linear-gradient(135deg,#00B386,#007F5C);
+--bg:#F2F6F4;--card:#fff;--line:#E6EDE9;--ink:#1C2B26;--ink2:#66756E;--ink3:#8A9992;
+--income:#1E9E6A;--err:#D05A4E;--shadow:0 8px 24px rgba(0,60,40,.10)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:#f4f6f5;color:#1f2d28;line-height:1.55}
-.wrap{max-width:640px;margin:0 auto;padding:22px 16px 10px}
-.cover{border-left:4px solid ${COLOR_PRIMARY};padding-left:12px;margin-bottom:6px}
-.cover h1{font-size:21px;font-weight:700;word-break:break-all}
-.cover .dest{color:#6b7a74;font-size:15px;margin-top:2px}
-.cover .group{color:#8a9993;font-size:13px;margin-top:4px}
-.members{color:#7c8a84;font-size:13px;margin:2px 0 0 16px}
-.sec{margin:20px 4px 0;font-size:13px;color:#7c8a84;font-weight:600}
-.card{background:#fff;border:1px solid #e3e9e6;border-radius:12px;padding:12px 14px;margin-top:10px;display:flex;justify-content:space-between;gap:12px;align-items:baseline}
-.card .main{min-width:0}
-.card .t{font-size:15px;font-weight:600;word-break:break-all}
-.card .s{color:#7c8a84;font-size:13px;margin-top:3px;word-break:break-all}
-.cost{font-weight:600;white-space:nowrap;color:#1f2d28}
-.cost.income{color:${COLOR_INCOME}}
-.empty{text-align:center;color:#8a9993;padding:36px 0;font-size:14px}
-.err{text-align:center;padding:64px 0}
-.err p{margin-top:12px;color:#5b6b64;font-size:15px}
-.pass{background:#fff;border:1px solid #e3e9e6;border-radius:12px;padding:24px 18px;margin-top:14px;text-align:center}
+body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
+
+/* ---- Hero 封面（满宽渐变，白卡上浮） ---- */
+.hero{background:var(--grad);padding:40px 20px 72px;text-align:center;color:#fff}
+.hero .badge{width:64px;height:64px;border-radius:999px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 12px}
+.hero h1{font-size:26px;font-weight:700;word-break:break-all;max-width:600px;margin:0 auto}
+.hero .dest{color:rgba(255,255,255,.85);font-size:15px;margin-top:6px}
+.hero .pill{display:inline-block;background:rgba(255,255,255,.2);border-radius:999px;padding:5px 14px;font-size:13px;margin-top:12px}
+.hero .with{color:rgba(255,255,255,.75);font-size:13px;margin-top:10px}
+.hero .avatars{display:flex;justify-content:center;align-items:center;margin-top:14px}
+.hero .ava{width:36px;height:36px;border-radius:999px;color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,.55);margin:0 -4px}
+.hero .ava.more{background:rgba(255,255,255,.25)}
+.hero .ava-names{color:rgba(255,255,255,.85);font-size:13px;margin-top:10px}
+
+/* ---- 内容容器：白卡浮在渐变上 ---- */
+.wrap{max-width:640px;margin:-48px auto 0;padding:0 16px;position:relative}
+.sheet{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:18px 16px 16px}
+.narrow{max-width:400px;margin:12vh auto 0;padding:0 16px}
+.notice-wrap{max-width:640px;margin:14vh auto 0;padding:0 16px;text-align:center}
+
+/* ---- 行程：日分组 + 时间线 ---- */
+.day-chip{display:inline-flex;align-items:center;gap:6px;background:#E6F7F1;color:var(--brand);border-radius:999px;padding:4px 12px;font-size:13px;font-weight:600;margin:14px 0 10px}
+.sheet .day-chip:first-child{margin-top:2px}
+.tl{position:relative;padding-left:18px}
+.tl:before{content:'';position:absolute;left:4px;top:6px;bottom:6px;width:2px;background:#DFE9E4;border-radius:2px}
+.item{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.item:before{content:'';position:absolute;left:-18px;top:16px;width:10px;height:10px;border-radius:999px;background:var(--brand);box-shadow:0 0 0 3px #E6F7F1}
+.item .main,.bill .main{min-width:0}
+.item .t{font-size:15px;font-weight:600;word-break:break-all}
+.item .s{color:var(--ink3);font-size:13px;margin-top:2px;word-break:break-all}
+
+/* ---- 金额 ---- */
+.cost{font-weight:600;white-space:nowrap;color:var(--brand);background:#E6F7F1;border-radius:999px;padding:3px 10px;font-size:14px}
+.cost.income{color:var(--income);background:#E7F6EF}
+.amt{font-weight:600;white-space:nowrap;font-size:15px}
+.amt.income{color:var(--income)}
+
+/* ---- 账本：小节 / 账单 / 结算 ---- */
+.sec{margin:20px 4px 0;font-size:13px;color:var(--ink3);font-weight:600}
+.bill{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-top:10px}
+.bill .ico{width:38px;height:38px;border-radius:12px;background:#F0F7F4;display:flex;align-items:center;justify-content:center;font-size:20px;flex:none}
+.bill .t{font-size:15px;font-weight:600;word-break:break-all}
+.bill .s{color:var(--ink3);font-size:13px;margin-top:2px;word-break:break-all}
+.settle{display:flex;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-top:10px;align-items:flex-start}
+.settle .ico{font-size:18px;flex:none}
+.settle .txt{font-size:12px;font-family:ui-monospace,Consolas,'Courier New',monospace;color:var(--ink2);word-break:break-all;line-height:1.6}
+
+/* ---- 空态 ---- */
+.empty{text-align:center;padding:40px 0}
+.empty .ico{font-size:40px}
+.empty p{color:var(--ink3);font-size:14px;margin-top:8px}
+
+/* ---- 口令页 ---- */
+.pass{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:28px 22px;text-align:center}
+.pass .lock{width:64px;height:64px;border-radius:999px;background:var(--grad);color:#fff;font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
 .pass h1{font-size:18px}
-.pass input{margin:16px auto 4px;display:block;width:150px;text-align:center;font-size:22px;letter-spacing:8px;border:1px solid #d6ded9;border-radius:10px;padding:10px 8px;outline:none;color:#1f2d28}
-.pass input:focus{border-color:${COLOR_PRIMARY}}
-.pass button{margin-top:12px;background:${COLOR_PRIMARY};color:#fff;border:0;border-radius:10px;padding:10px 34px;font-size:15px;cursor:pointer}
-.err-line{color:#d05a4e;font-size:13px;min-height:18px;margin-top:6px}
-footer{max-width:640px;margin:0 auto;padding:6px 16px 28px;text-align:center}
-.promo{display:block;margin-bottom:10px;font-size:14px;color:${COLOR_PRIMARY};text-decoration:none;background:#f0faf6;border:1px solid #cde9df;border-radius:999px;padding:8px 14px}
-.brand{font-size:12px;color:#9aa8a2}
+.pass input{margin:16px auto 4px;display:block;width:160px;text-align:center;font-size:22px;letter-spacing:8px;border:1.5px solid var(--line);border-radius:14px;padding:10px 8px;outline:none;color:var(--ink)}
+.pass input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(0,168,120,.15)}
+.pass button{margin-top:14px;background:var(--grad);color:#fff;border:0;border-radius:14px;padding:11px 40px;font-size:15px;cursor:pointer;box-shadow:0 4px 12px rgba(0,127,92,.30)}
+.err-line{color:var(--err);font-size:13px;min-height:18px;margin-top:6px}
+
+/* ---- 错误 / 锁定页 ---- */
+.err-ico{width:64px;height:64px;border-radius:999px;background:#E6F7F1;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.notice-wrap p{color:#4B5B54;font-size:15px}
+
+/* ---- 页脚 ---- */
+footer{max-width:640px;margin:0 auto;padding:18px 16px 30px;text-align:center}
+.promo{display:inline-block;font-size:14px;font-weight:600;color:var(--brand);text-decoration:none;background:var(--card);border:1px solid rgba(0,168,120,.30);border-radius:999px;padding:9px 18px;box-shadow:0 2px 10px rgba(0,60,40,.08)}
+.brand{font-size:12px;color:var(--ink3);margin-top:10px}
+
+/* ---- 微动画 ---- */
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.hero,.sheet,.narrow>*,.notice-wrap>*{animation:fadeUp .4s ease both}
+.sheet>*:nth-child(2){animation-delay:.06s}
+.sheet>*:nth-child(3){animation-delay:.12s}
+.sheet>*:nth-child(4){animation-delay:.18s}
+.sheet>*:nth-child(n+5){animation-delay:.24s}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 `;
 
 function htmlPage(
@@ -399,9 +506,7 @@ function htmlPage(
 <style>${STYLE}</style>
 </head>
 <body>
-<main class="wrap">
 ${bodyHtml}
-</main>
 ${footerHtml()}
 </body>
 </html>`;
