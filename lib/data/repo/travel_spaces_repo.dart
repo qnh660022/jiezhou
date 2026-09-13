@@ -39,11 +39,21 @@ class TravelSpacesRepository {
 
   // ===== 流（UI 只读本地镜像） =====
 
+  /// 空表自愈标记：历史上 createSpace 曾把空 id 的空间行镜像进本地
+  /// （云端旧版 RPC 返回 ok 但缺 space_id 时），点卡片会 push
+  /// `/companions/space/` → GoException: no routes。每次会话清一次。
+  static bool _emptyRowCleaned = false;
+
   /// 已删除（`deleted_ms` 非空）的空间不进列表：删除后客户端本地也会被
   /// 合流层的墓碑清掉，这里再兜一层，避免残留行闪现在"我的空间"。
   Stream<List<TravelSpace>> watchSpaces({bool includeArchived = false}) {
+    if (!_emptyRowCleaned) {
+      _emptyRowCleaned = true;
+      // fire-and-forget：空 id 行本就不该存在，删失败也不影响展示（下方仍过滤）
+      (db.delete(db.travelSpaces)..where((s) => s.id.equals(''))).go();
+    }
     final q = db.select(db.travelSpaces)
-      ..where((s) => s.deletedMs.isNull())
+      ..where((s) => s.id.equals('').not() & s.deletedMs.isNull())
       ..orderBy([
         (s) => OrderingTerm.desc(s.updatedMs),
       ]);

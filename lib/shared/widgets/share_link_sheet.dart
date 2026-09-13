@@ -56,6 +56,11 @@ class _ShareLinkSheetState extends ConsumerState<_ShareLinkSheet> {
       setState(() => _error = copy('sync.status.signedOut'));
       return;
     }
+    // 未登录时服务端只会回 unauthenticated，此前被折成「操作失败」无法定位
+    if (ref.read(currentUserIdProvider) == null) {
+      setState(() => _error = copy('sync.status.signedOut'));
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -75,9 +80,11 @@ class _ShareLinkSheetState extends ConsumerState<_ShareLinkSheet> {
         _busy = false;
         _error = switch (e.code) {
           'not_found' => '行程/账本尚未上云：请先在 同步中心 开启它的云同步并完成一次同步',
-          'forbidden' || 'owner_only' => copy('share.ownerOnly'),
+          'unauthenticated' => copy('sync.status.signedOut'),
+          'not_owner' || 'forbidden' || 'owner_only' =>
+            '只能分享自己上传的行程/账本：请先用上传它的账号登录（${e.code}）',
           'bad_pass' || 'need_pass' => '口令格式不正确（4 位数字）',
-          _ => copy('cloud.errGeneric'),
+          _ => '${copy('cloud.errGeneric')}（${e.code}）',
         };
       });
     } on PostgrestException catch (e) {

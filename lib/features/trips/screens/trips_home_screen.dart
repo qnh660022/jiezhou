@@ -173,9 +173,6 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
 
     final children = <Widget>[];
     var stagger = 0;
-    // 「今日」智能置顶卡（2026-09-13 调整：从账本页移到行程页；无进行中行程
-    // 时自渲染为 shrink，不占位）。
-    children.add(const TodayCard());
     void group(String title, List<Trip> list) {
       if (list.isEmpty) return;
       children.add(SectionHeader(title: title, trailingLabel: null,
@@ -210,10 +207,12 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
       }
     }
 
-    // ---------- 列表最底部：目的地攻略入口 ----------
-    // 2026-09-12 调整：从列表顶部下移到末尾（首页主体是「我的行程」，
-    // 攻略是次级入口），并去掉一排预览城市 chips，只留一条入口。
-    children.add(const SizedBox(height: Spacing.lg));
+    // ---------- 列表最底部：今日卡 + 目的地攻略入口 ----------
+    // 2026-09-13 调整：今日卡放在攻略卡上方（两卡同规格扁宽行卡），
+    // 均为次级入口，不与「我的行程」主体争位。
+    children.add(const SizedBox(height: Spacing.xl));
+    children.add(const TodayCard());
+    children.add(const SizedBox(height: Spacing.md));
     children.add(const _GuideEntryCard());
 
     return CustomScrollView(
@@ -261,13 +260,13 @@ class _GuideEntryCard extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
       child: SectionCard(
-        padding: EdgeInsets.zero,
+        // 2026-09-13：与「今日」卡统一扁宽规格（上下收窄）
+        padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.lg, vertical: Spacing.md),
         child: InkWell(
           borderRadius: AppRadius.card,
           onTap: () => _openPicker(context, ref),
-          child: Padding(
-            padding: const EdgeInsets.all(Spacing.lg),
-            child: Row(children: [
+          child: Row(children: [
               Container(
                 width: 34,
                 height: 34,
@@ -298,8 +297,7 @@ class _GuideEntryCard extends ConsumerWidget {
               const SizedBox(width: Spacing.sm),
               Icon(Icons.chevron_right_rounded,
                   size: 20, color: scheme.onSurfaceVariant),
-            ]),
-          ),
+          ]),
         ),
       ),
     );

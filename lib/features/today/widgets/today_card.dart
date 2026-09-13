@@ -1,13 +1,12 @@
-// 首页「今日」智能置顶卡（V2.6.6.2 §8.1 / D1）。
+// 「今日」智能置顶卡（V2.6.6.2 §8.1 / D1；2026-09-13 二次调整）。
+//
+// 位置与形态（用户反馈）：行程页列表**最底部**（攻略卡上方），与攻略卡
+// 同一规格（共用 SectionCard）：扁宽单行卡 —— 左语义图标 + 两行文字
+// （行程名·今日徽标 / 天数·安排·花销）+ 右箭头，不再用大卡+统计胶囊。
 //
 // 口径与数据全部来自地基（today_scope / today_providers），本文件只做展示：
 // * 无进行中行程 → **不渲染**（`SizedBox.shrink()`，不是置灰）——§8.1 明确要求；
-// * 摘要 = 行程名 + 第 N 天/共 M 天 + 今日安排（已完成/总数）+ 今日花销；
-// * 多行程同时进行时补一句「另有 N 个行程进行中」；
 // * 点击进全屏驾驶舱 `/today/:tripId`。
-//
-// 视觉：芥舟语言（tokens 大圆角 24 + 表面层色 + 主题色描边柔光），
-// 不自造毛玻璃（玻璃面仅 glass_app_bar / SheetSurface 两条既有路径）。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,12 +14,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../data/db/database.dart';
 import '../../../shared/widgets/money_text.dart';
-import '../../../shared/widgets/stat_chip.dart';
 import '../../../theme/tokens.dart';
+import '../../trips/trip_widgets.dart' show SectionCard;
 import '../today_providers.dart';
 import '../today_scope.dart';
 
-/// 首页顶部智能置顶卡：只在有进行中行程时出现。
+/// 行程页底部「今日」行卡：只在有进行中行程时出现。
 class TodayCard extends ConsumerWidget {
   const TodayCard({super.key});
 
@@ -51,130 +50,74 @@ class TodayCard extends ConsumerWidget {
     final doneIds = ref.watch(todayDoneIdsProvider((trip.id, day)));
     final doneCount = items.where((i) => doneIds.contains(i.id)).length;
     final spend = ref.watch(todaySpendProvider((trip.id, day)));
+    final hasLedger = spend?.hasLedger ?? false;
+    final spendText = hasLedger ? MoneyFormat.display(spend!.totalCents) : '未关联';
 
+    final sub = '第 ${scope.dayIndex} 天 / 共 ${scope.totalDays} 天'
+        ' · 安排 $doneCount/${items.length}'
+        ' · 花销 $spendText'
+        '${pick.othersCount > 0 ? ' · 另有 ${pick.othersCount} 个进行中' : ''}';
+
+    // 形态与攻略入口卡（_GuideEntryCard）完全同规格：扁宽单行 SectionCard。
     return Padding(
-      padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, 0),
-      child: Material(
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+      child: SectionCard(
+        padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.lg, vertical: Spacing.md),
         color: scheme.brightness == Brightness.dark
             ? scheme.surfaceContainerHigh
-            : scheme.surfaceContainerLowest,
-        borderRadius: AppRadius.card,
-        clipBehavior: Clip.antiAlias,
+            : null,
         child: InkWell(
           borderRadius: AppRadius.card,
           onTap: () {
             HapticFeedback.selectionClick();
             context.push('/today/${trip.id}');
           },
-          child: Container(
-            padding: const EdgeInsets.all(Spacing.xl),
-            decoration: BoxDecoration(
-              borderRadius: AppRadius.card,
-              border: Border.all(
-                  color: scheme.primary.withValues(alpha: 0.22), width: 1),
+          child: Row(children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(Spacing.md),
+              ),
+              child:
+                  Icon(Icons.near_me_rounded, size: 19, color: scheme.primary),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: scheme.primary.withValues(alpha: 0.14),
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.inputValue),
-                      ),
-                      child: Icon(Icons.near_me_rounded,
-                          size: 23, color: scheme.primary),
-                    ),
-                    const SizedBox(width: Spacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  trip.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium,
-                                ),
-                              ),
-                              const SizedBox(width: Spacing.sm),
-                              _TodayBadge(scheme: scheme),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '第 ${scope.dayIndex} 天 / 共 ${scope.totalDays} 天'
-                            '${trip.destination.isEmpty ? '' : ' · ${trip.destination}'}',
+            const SizedBox(width: Spacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(trip.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
+                            style: TextStyle(
+                                fontSize: AppFontSizes.bodyLarge,
+                                fontWeight: FontWeight.w700,
+                                color: scheme.onSurface)),
                       ),
-                    ),
-                    Icon(Icons.chevron_right_rounded,
-                        color: scheme.onSurfaceVariant),
-                  ],
-                ),
-                const SizedBox(height: Spacing.lg),
-                // 两个统计胶囊固定一排（用户反馈：合为一排减少占用）：
-                // Expanded 各占一半；FittedBox(scaleDown) 让 360dp 窄屏上
-                // 内容等比微缩，既不换行也不溢出（原 Wrap 会折成两排）。
-                Row(
-                  children: [
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: StatChip(
-                          emoji: '🗓️',
-                          label: '今日安排',
-                          value: items.isEmpty ? '无安排' : '$doneCount/${items.length}',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: Spacing.sm),
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: StatChip(
-                          emoji: '💰',
-                          label: '今日花销',
-                          value: (spend?.hasLedger ?? false)
-                              ? MoneyFormat.display(spend!.totalCents)
-                              : '未关联',
-                          valueColor: (spend?.hasLedger ?? false)
-                              ? scheme.onSurface
-                              : scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (pick.othersCount > 0) ...[
-                  const SizedBox(height: Spacing.sm),
-                  Text(
-                    '另有 ${pick.othersCount} 个行程进行中',
-                    style: TextStyle(
-                      fontSize: AppFontSizes.caption,
-                      color: scheme.onSurfaceVariant,
-                    ),
+                      const SizedBox(width: Spacing.sm),
+                      const _TodayBadge(),
+                    ],
                   ),
+                  const SizedBox(height: 2),
+                  Text(sub,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption - 1,
+                          color: scheme.onSurfaceVariant)),
                 ],
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: Spacing.sm),
+            Icon(Icons.chevron_right_rounded,
+                size: 20, color: scheme.onSurfaceVariant),
+          ]),
         ),
       ),
     );
@@ -183,12 +126,11 @@ class TodayCard extends ConsumerWidget {
 
 /// 「今日」小胶囊：强调这是智能置顶的时间敏感入口。
 class _TodayBadge extends StatelessWidget {
-  const _TodayBadge({required this.scheme});
-
-  final ColorScheme scheme;
+  const _TodayBadge();
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 2),
       decoration: BoxDecoration(

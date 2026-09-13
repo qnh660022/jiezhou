@@ -104,6 +104,9 @@ abstract final class SpaceActions {
         name: name, tripId: tripId, groupId: groupId, note: note));
     if (err.isNotEmpty) return ('', err);
     final spaceId = res?.$1 ?? '';
+    // 守卫：云端旧版 RPC 可能返回 ok 但缺 space_id → 空行进本地镜像后，
+    // 点卡片会 push /companions/space/（空 id）→ GoException（历史 bug）。
+    if (spaceId.isEmpty) return ('', 'server');
     final now = DateTime.now().millisecondsSinceEpoch;
     final uid = ref.read(currentUserIdProvider) ?? '';
     final repo = ref.read(travelSpacesRepoProvider);

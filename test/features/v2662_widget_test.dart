@@ -88,7 +88,7 @@ void main() {
       expect(find.byType(SizedBox), findsWidgets); // 返回的是 shrink 占位
     });
 
-    testWidgets('多行程同时进行 → 副标题提示「另有 N 个行程进行中」', (tester) async {
+    testWidgets('多行程同时进行 → 副标题提示「另有 N 个进行中」', (tester) async {
       final today = todayEpochDay();
       await seedTrip(id: 'a', start: today - 3, end: today + 3, name: '旧行程');
       await seedTrip(id: 'b', start: today, end: today + 1, name: '新行程');
@@ -96,7 +96,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('新行程'), findsOneWidget);
-      expect(find.textContaining('另有 1 个行程进行中'), findsOneWidget);
+      expect(find.textContaining('另有 1 个进行中'), findsOneWidget);
     });
 
     testWidgets('reduced-motion 下不抛异常且内容可见（§8.4 硬约束）', (tester) async {
