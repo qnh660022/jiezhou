@@ -38,8 +38,11 @@ const NEUTRAL_DESC = '来自芥舟 · 旅途助手的分享';
 // ============================================================================
 
 type RpcOutcome =
-  | { kind: 'ok'; shareKind: 'trip' | 'group'; data: SnapshotData }
-  | { kind: 'not_found' | 'need_pass' | 'bad_pass' | 'env_error' | 'rpc_error' };
+    | { kind: 'ok'; shareKind: 'trip' | 'group'; data: SnapshotData }
+    | { kind: 'not_found' | 'need_pass' | 'bad_pass' | 'env_error' }
+    // rpc_error 附带诊断信息（HTTP 状态 / 服务端报错摘要），渲染到错误页，
+    // 便于远程定位（此前一律「加载失败」无法区分 500 / 网络异常 / 结构异常）
+    | { kind: 'rpc_error'; status?: number; detail?: string };
 
 /** RPC 返回数据（宽松可选，渲染函数内部判空兜底） */
 interface SnapshotData {
@@ -75,7 +78,17 @@ async function callSnapshotRpc(token: string, pass: string | null): Promise<RpcO
       },
       body: JSON.stringify({ token, pass }),
     });
-    if (!res.ok) return { kind: 'rpc_error' };
+    if (!res.ok) {
+      // 非 200：把状态码与服务端报错摘要带回（错误页展示 + 日志）
+      let detail = '';
+      try {
+        detail = (await res.text()).replace(/\s+/g, ' ').slice(0, 120);
+      } catch {
+        /* 忽略读取失败 */
+      }
+      console.warn(`share: rpc http ${res.status} ${detail}`);
+      return { kind: 'rpc_error', status: res.status, detail };
+    }
     const body = await res.json();
     if (body && body.ok === true) {
       return {
@@ -88,9 +101,11 @@ async function callSnapshotRpc(token: string, pass: string | null): Promise<RpcO
     if (err === 'not_found') return { kind: 'not_found' };
     if (err === 'need_pass') return { kind: 'need_pass' };
     if (err === 'bad_pass') return { kind: 'bad_pass' };
-    return { kind: 'rpc_error' };
-  } catch {
-    return { kind: 'rpc_error' };
+    console.warn(`share: rpc unexpected body ${JSON.stringify(body).slice(0, 120)}`);
+    return { kind: 'rpc_error', detail: `error:${err || 'malformed'}` };
+  } catch (e) {
+    console.warn(`share: rpc exception ${e instanceof Error ? e.message : e}`);
+    return { kind: 'rpc_error', detail: '网络异常' };
   }
 }
 
@@ -402,10 +417,16 @@ function passBody(path: string, error = ''): string {
 }
 
 /** 错误 / 锁定页：浅绿圆徽章内联 SVG 波浪线（无外部图片资源）+ 一行文案 */
-function noticeBody(text: string): string {
+function noticeBody(text: string, diag?: string): string {
+  const diagLine =
+    diag && diag.trim()
+      ? `<p style="margin:10px 0 0;font-size:12px;line-height:1.5;color:#7d8f84;word-break:break-all">${esc(
+          diag.trim(),
+        )}</p>`
+      : '';
   return `<main class="notice-wrap"><section class="err">
 <div class="err-ico"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="${COLOR_PRIMARY}" stroke-width="1.6"/><path d="M6.5 12c1.6-2.4 2.9-2.4 4.5 0s2.9 2.4 4.5 0" stroke="${COLOR_PRIMARY}" stroke-width="1.6" stroke-linecap="round"/></svg></div>
-<p>${esc(text)}</p>
+<p>${esc(text)}</p>${diagLine}
 </section></main>`;
 }
 
@@ -585,8 +606,19 @@ export default async function handler(request: Request): Promise<Response> {
     if (outcome.kind === 'not_found') {
       return htmlPage(noticeBody('分享不存在或已被撤销'), { title: NEUTRAL_TITLE, desc: NEUTRAL_DESC });
     }
-    // env_error / rpc_error（网络异常 / RPC 非 200）
-    return htmlPage(noticeBody('加载失败，请稍后重试'), { title: NEUTRAL_TITLE, desc: NEUTRAL_DESC });
+    // env_error / rpc_error（网络异常 / RPC 非 200）—— 带诊断信息便于定位
+      const diag =
+        outcome.kind === 'env_error'
+          ? '诊断：服务端环境变量缺失（env）'
+          : outcome.kind === 'rpc_error'
+            ? `诊断：${outcome.status ? `HTTP ${outcome.status}` : '网络异常'}${
+                outcome.detail ? ` · ${outcome.detail.slice(0, 80)}` : ''
+              }`
+            : '';
+      return htmlPage(noticeBody('加载失败，请稍后重试', diag), {
+        title: NEUTRAL_TITLE,
+        desc: NEUTRAL_DESC,
+      });
   }
 
   // ---------- POST（口令表单提交） ----------
@@ -633,7 +665,18 @@ export default async function handler(request: Request): Promise<Response> {
     if (outcome.kind === 'not_found') {
       return htmlPage(noticeBody('分享不存在或已被撤销'), { title: NEUTRAL_TITLE, desc: NEUTRAL_DESC });
     }
-    return htmlPage(noticeBody('加载失败，请稍后重试'), { title: NEUTRAL_TITLE, desc: NEUTRAL_DESC });
+    const diag =
+      outcome.kind === 'env_error'
+        ? '诊断：服务端环境变量缺失（env）'
+        : outcome.kind === 'rpc_error'
+          ? `诊断：${outcome.status ? `HTTP ${outcome.status}` : '网络异常'}${
+              outcome.detail ? ` · ${outcome.detail.slice(0, 80)}` : ''
+            }`
+          : '';
+    return htmlPage(noticeBody('加载失败，请稍后重试', diag), {
+      title: NEUTRAL_TITLE,
+      desc: NEUTRAL_DESC,
+    });
   }
 
   // 其他方法不接受

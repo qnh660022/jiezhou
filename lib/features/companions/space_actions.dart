@@ -107,9 +107,28 @@ abstract final class SpaceActions {
     final (res, err) = await _call(() => svc.createSpace(
         name: name, tripId: tripId, groupId: groupId, note: note));
     if (err.isNotEmpty) return ('', err);
-    final spaceId = res?.$1 ?? '';
-    // 守卫：云端旧版 RPC 可能返回 ok 但缺 space_id → 空行进本地镜像后，
-    // 点卡片会 push /companions/space/（空 id）→ GoException（历史 bug）。
+    var spaceId = res?.$1 ?? '';
+    // 兜底：旧版云端 create_space 返回 ok 但缺 space_id（2026-09-13 实况）。
+    // 用 list_my_spaces 反查：同名且本地尚未镜像的，就是刚创建的这个。
+    if (spaceId.isEmpty) {
+      final (spaces, ferr) = await _call(() => svc.listMySpaces());
+      if (ferr.isEmpty && spaces != null) {
+        final db = ref.read(dbProvider);
+        final known = await db.select(db.travelSpaces).get();
+        final knownIds = known.map((e) => e.id).toSet();
+        for (final m in spaces) {
+          final sid = (m['spaceId'] ?? '') as String;
+          final sname = (m['name'] ?? '') as String? ?? '';
+          if (sid.isEmpty || knownIds.contains(sid)) continue;
+          if (sname == name) {
+            spaceId = sid;
+            break;
+          }
+        }
+      }
+    }
+    // 守卫：实在拿不到真实 id 就报错，绝不把空 id 镜像进本地（点卡片会
+    // push /companions/space/ 空 id → GoException，历史 bug）。
     if (spaceId.isEmpty) return ('', 'server');
     final now = DateTime.now().millisecondsSinceEpoch;
     final uid = ref.read(currentUserIdProvider) ?? '';
