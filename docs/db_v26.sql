@@ -6,7 +6,10 @@
 -- ============================================================
 
 -- pgcrypto（分享口令 bcrypt 校验用；须先建，get_share_snapshot 依赖 crypt/gen_salt）
-create extension if not exists pgcrypto;
+-- Supabase 惯例：扩展装在 extensions schema（2026-09-13 修正）——
+-- 此前未指定 schema，若装进了别处，分享函数的 search_path 只有 public，
+-- 带 crypt/gen_salt 的口令分支会运行时报错（免口令链接不受影响）。
+create extension if not exists pgcrypto with schema extensions;
 
 -- 1 行程镜像
 create table if not exists public.trips_sync (
@@ -462,7 +465,7 @@ $$;
 -- 只读分享快照（匿名可调；函数属主豁免 RLS，权限全部内聚在函数内——表上无任何 anon policy）
 -- 口令：share_links.pass_hash 非空 → 必须传对 4 位口令（bcrypt 校验）
 create or replace function public.get_share_snapshot(token text, pass text)
-returns json language plpgsql security definer set search_path = public, pg_temp as $$
+returns json language plpgsql security definer set search_path = public, extensions, pg_temp as $$
 declare
   link public.share_links%rowtype;
   t public.trips_sync%rowtype;
@@ -560,7 +563,7 @@ $$;
 
 -- 创建只读分享链接（owner；口令 bcrypt 服务端计算，绝不明文存储）
 create or replace function public.create_share_link(entity_type text, entity_id text, pass text)
-returns json language plpgsql security definer set search_path = public, pg_temp as $$
+returns json language plpgsql security definer set search_path = public, extensions, pg_temp as $$
 declare
   uid uuid := auth.uid();
   token text;

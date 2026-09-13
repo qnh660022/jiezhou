@@ -8,12 +8,14 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../../data/sync/sync_account.dart';
 import '../../data/sync/sync_control_providers.dart';
 import '../app_meta.dart';
 import '../copy_tokens.dart';
 import '../../theme/tokens.dart';
+import 'sheet.dart' show SheetSurface;
 
 /// 弹出创建面板。entityType: 'trip' | 'group'。
 Future<void> showShareLinkSheet(BuildContext context,
@@ -78,6 +80,13 @@ class _ShareLinkSheetState extends ConsumerState<_ShareLinkSheet> {
           _ => copy('cloud.errGeneric'),
         };
       });
+    } on PostgrestException catch (e) {
+      // 服务端具体报错直接透出（此前一律「网络失败」，口令相关的
+      // pgcrypto/权限问题全被吞掉，无法定位）
+      setState(() {
+        _busy = false;
+        _error = '服务端错误(${e.code})：${e.message}';
+      });
     } catch (_) {
       setState(() {
         _busy = false;
@@ -89,7 +98,9 @@ class _ShareLinkSheetState extends ConsumerState<_ShareLinkSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SafeArea(
+    // 全局 bottomSheet 主题为透明背景：必须包不透明面板，否则与底层页面文字重叠
+    return SheetSurface(
+      child: SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
           left: Spacing.lg,
@@ -181,6 +192,7 @@ class _ShareLinkSheetState extends ConsumerState<_ShareLinkSheet> {
             ]),
           ],
         ]),
+      ),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/sheet.dart' show SheetSurface;
 import '../../../theme/tokens.dart';
 
 class InviteCompanionSheet extends ConsumerStatefulWidget {
@@ -73,7 +74,9 @@ class _InviteCompanionSheetState extends ConsumerState<InviteCompanionSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SafeArea(
+    // 全局 bottomSheet 主题为透明背景：必须包不透明面板（否则与底层页面重叠）
+    return SheetSurface(
+      child: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(Spacing.xl),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -115,6 +118,7 @@ class _InviteCompanionSheetState extends ConsumerState<InviteCompanionSheet> {
           if (!_busy && _error != null)
             Text(_error!, style: TextStyle(color: scheme.error, fontSize: AppFontSizes.caption)),
         ]),
+      ),
       ),
     );
   }

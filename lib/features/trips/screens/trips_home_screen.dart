@@ -687,6 +687,15 @@ class _TripOpsSheet extends ConsumerWidget {
             },
           ),
           SheetActionTile(
+            icon: Icons.ios_share_rounded,
+            label: '分享行程',
+            subtitle: '海报图片，或生成只读链接（对方无需登录）',
+            onTap: () {
+              Navigator.of(context).pop();
+              pageContext.push('/trips/share', extra: trip.id);
+            },
+          ),
+          SheetActionTile(
             icon: Icons.copy_rounded,
             label: '复制为副本',
             subtitle: '生成全新行程，不关联账本',

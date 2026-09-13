@@ -25,6 +25,11 @@ class SyncMerger {
   /// 我参与的共享团 id 集合（引擎每次 pull 前 via list_my_collabs 刷新）。
   Set<String> collabGroupIds = {};
 
+  /// 我参与的协作空间所关联的行程 id 集合（引擎每次 pull 前 via list_my_spaces 刷新）。
+  ///
+  /// 别人的行程 / 行程项是否落本地镜像，只由这个集合判定（§3.3 读权限放宽后的分流）。
+  Set<String> collabTripIds = {};
+
   /// 协作名单是否**成功加载过**（list_my_collabs 失败时为 false）。
   ///
   /// 名单未知时，任何「非本人」的云端行一律跳过：既不落本地业务表（否则他人
@@ -79,9 +84,13 @@ class SyncMerger {
   /// [known] 传 null 表示沿用上次的「名单是否可靠」结论（引擎在 rpc 前先刷一次
   /// 身份，rpc 后再用真实结果刷新）。
   void refreshContext(
-      {String? userId, required Set<String> collabGroups, bool? known}) {
+      {String? userId,
+      required Set<String> collabGroups,
+      Set<String>? collabTrips,
+      bool? known}) {
     currentUserId = userId;
     collabGroupIds = collabGroups;
+    if (collabTrips != null) collabTripIds = collabTrips;
     if (known != null) collabContextKnown = known;
     _nowHint = DateTime.now().millisecondsSinceEpoch;
   }
@@ -89,13 +98,26 @@ class SyncMerger {
   /// null = 该行对当前账号无意义（不落业务表、不落镜像）。
   ///
   /// 规则：本人的行 → false（落本地业务表）；他人的行 → 仅当协作名单**已成功
-  /// 加载**且该团在名单内才落共享镜像（true），否则一律 null 跳过。
+  /// 加载**且该行归属在名单内才落共享镜像（true），否则一律 null 跳过。
   bool? _routeToShared(SyncEntity entity, Map<String, dynamic> cloud) {
     switch (entity) {
-      case SyncEntity.trips:
-      case SyncEntity.tripItems:
+      // 空间三实体没有镜像表：「我创建的」与「我加入的」共处一张本地表，
+      // 云端 RLS 已把范围限定为我可见的行，直接落本地即可。
+      case SyncEntity.spaces:
+      case SyncEntity.spaceMembers:
+      case SyncEntity.spaceEvents:
       case SyncEntity.categories:
-        return false; // 行程/字典不协作，RLS 也只对 owner 可见
+        return false;
+      case SyncEntity.trips:
+        final owner = cloud['owner_user_id'] as String?;
+        if (owner == null || owner == currentUserId) return false;
+        if (!collabContextKnown) return null;
+        return collabTripIds.contains((cloud['id'] as String?) ?? '') ? true : null;
+      case SyncEntity.tripItems:
+        final owner = cloud['owner_user_id'] as String?;
+        if (owner == null || owner == currentUserId) return false;
+        if (!collabContextKnown) return null;
+        return collabTripIds.contains((cloud['trip_id'] as String?) ?? '') ? true : null;
       case SyncEntity.groups:
         final owner = cloud['owner_user_id'] as String?;
         if (owner == null || owner == currentUserId) return false;
@@ -115,9 +137,26 @@ class SyncMerger {
 
   Future<dynamic> _readLocal(SyncEntity entity, String id, bool shared) async {
     switch (entity) {
+      case SyncEntity.spaces:
+        return (await (db.select(db.travelSpaces)..where((t) => t.id.equals(id))).get())
+            .firstOrNull;
+      case SyncEntity.spaceMembers:
+        return (await (db.select(db.spaceMembers)..where((t) => t.id.equals(id))).get())
+            .firstOrNull;
+      case SyncEntity.spaceEvents:
+        return (await (db.select(db.spaceEvents)..where((t) => t.id.equals(id))).get())
+            .firstOrNull;
       case SyncEntity.trips:
+        if (shared) {
+          return (await (db.select(db.sharedTrips)..where((t) => t.id.equals(id))).get())
+              .firstOrNull;
+        }
         return (await (db.select(db.trips)..where((t) => t.id.equals(id))).get()).firstOrNull;
       case SyncEntity.tripItems:
+        if (shared) {
+          return (await (db.select(db.sharedTripItems)..where((t) => t.id.equals(id))).get())
+              .firstOrNull;
+        }
         return (await (db.select(db.tripItems)..where((t) => t.id.equals(id))).get()).firstOrNull;
       case SyncEntity.categories:
         return (await (db.select(db.categories)..where((c) => c.key.equals(id))).get()).firstOrNull;
@@ -165,10 +204,24 @@ class SyncMerger {
 
   Future<void> _upsertLocal(SyncEntity entity, Map<String, dynamic> cloud, bool shared) async {
     switch (entity) {
+      case SyncEntity.spaces:
+        await db.into(db.travelSpaces).insertOnConflictUpdate(SyncCodec.spaceFromCloud(cloud));
+      case SyncEntity.spaceMembers:
+        await db.into(db.spaceMembers).insertOnConflictUpdate(SyncCodec.spaceMemberFromCloud(cloud));
+      case SyncEntity.spaceEvents:
+        await db.into(db.spaceEvents).insertOnConflictUpdate(SyncCodec.spaceEventFromCloud(cloud));
       case SyncEntity.trips:
-        await db.into(db.trips).insertOnConflictUpdate(SyncCodec.tripFromCloud(cloud));
+        if (shared) {
+          await db.into(db.sharedTrips).insertOnConflictUpdate(SyncCodec.sharedTripFromCloud(cloud));
+        } else {
+          await db.into(db.trips).insertOnConflictUpdate(SyncCodec.tripFromCloud(cloud));
+        }
       case SyncEntity.tripItems:
-        await db.into(db.tripItems).insertOnConflictUpdate(SyncCodec.tripItemFromCloud(cloud));
+        if (shared) {
+          await db.into(db.sharedTripItems).insertOnConflictUpdate(SyncCodec.sharedTripItemFromCloud(cloud));
+        } else {
+          await db.into(db.tripItems).insertOnConflictUpdate(SyncCodec.tripItemFromCloud(cloud));
+        }
       case SyncEntity.categories:
         await db.into(db.categories).insertOnConflictUpdate(SyncCodec.categoryFromCloud(cloud));
       case SyncEntity.groups:
@@ -200,10 +253,21 @@ class SyncMerger {
 
   Future<void> _deleteLocal(SyncEntity entity, String id) async {
     switch (entity) {
+      case SyncEntity.spaces:
+        await (db.delete(db.travelSpaces)..where((t) => t.id.equals(id))).go();
+        // 级联：空间没了，其成员与（仅本机缓存的）动态行一并清掉，避免孤儿行
+        await (db.delete(db.spaceMembers)..where((t) => t.spaceId.equals(id))).go();
+        await (db.delete(db.spaceEvents)..where((t) => t.spaceId.equals(id))).go();
+      case SyncEntity.spaceMembers:
+        await (db.delete(db.spaceMembers)..where((t) => t.id.equals(id))).go();
+      case SyncEntity.spaceEvents:
+        await (db.delete(db.spaceEvents)..where((t) => t.id.equals(id))).go();
       case SyncEntity.trips:
         await (db.delete(db.trips)..where((t) => t.id.equals(id))).go();
+        await (db.delete(db.sharedTrips)..where((t) => t.id.equals(id))).go();
       case SyncEntity.tripItems:
         await (db.delete(db.tripItems)..where((t) => t.id.equals(id))).go();
+        await (db.delete(db.sharedTripItems)..where((t) => t.id.equals(id))).go();
       case SyncEntity.categories:
         await (db.delete(db.categories)..where((c) => c.key.equals(id))).go();
       case SyncEntity.groups:
@@ -227,5 +291,18 @@ class SyncMerger {
     await (db.delete(db.sharedMembers)..where((t) => t.groupId.equals(groupId))).go();
     await (db.delete(db.sharedExpenses)..where((t) => t.groupId.equals(groupId))).go();
     await (db.delete(db.sharedSettlements)..where((t) => t.groupId.equals(groupId))).go();
+  }
+
+  /// 清除某协作行程的全部镜像（退出空间 / 被移出 / 空间删除）。
+  Future<void> clearSharedTrip(String tripId) async {
+    await (db.delete(db.sharedTrips)..where((t) => t.id.equals(tripId))).go();
+    await (db.delete(db.sharedTripItems)..where((t) => t.tripId.equals(tripId))).go();
+  }
+
+  /// 清除某空间的本地行（空间被删除 / 我退出后的本地清理）。
+  Future<void> clearSpace(String spaceId) async {
+    await (db.delete(db.travelSpaces)..where((t) => t.id.equals(spaceId))).go();
+    await (db.delete(db.spaceMembers)..where((t) => t.spaceId.equals(spaceId))).go();
+    await (db.delete(db.spaceEvents)..where((t) => t.spaceId.equals(spaceId))).go();
   }
 }

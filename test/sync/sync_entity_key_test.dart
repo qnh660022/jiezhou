@@ -69,9 +69,16 @@ void main() {
     test('localKey 与 name 的差异被显式建模：tripItems → trip_items', () {
       expect(SyncEntity.tripItems.name, 'tripItems');
       expect(SyncEntity.tripItems.localKey, 'trip_items');
-      // 其余实体两者一致（避免将来新增实体时又踩同一个坑）
+      // V2.6.6.2 起，"枚举名 ≠ 本地表名" 的实体不止 tripItems：
+      // 空间三实体的本地表名均带前缀/复数形态，见 space_entity_key_test.dart。
+      const renamed = {
+        SyncEntity.tripItems,
+        SyncEntity.spaces,
+        SyncEntity.spaceMembers,
+        SyncEntity.spaceEvents,
+      };
       for (final e in SyncEntity.values) {
-        if (e == SyncEntity.tripItems) continue;
+        if (renamed.contains(e)) continue;
         expect(e.localKey, e.name, reason: '${e.name} 的 localKey 应等于 name');
       }
       expect(SyncEntity.byLocalKey('trip_items'), SyncEntity.tripItems);

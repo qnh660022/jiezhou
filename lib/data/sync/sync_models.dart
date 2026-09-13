@@ -8,6 +8,11 @@ library;
 
 /// 同步实体（含受邀端共享镜像）。云表名见 [cloudTable]。
 enum SyncEntity {
+  // ===== V2.6.6.2 旅伴空间（父实体先行：spaces → spaceMembers → spaceEvents） =====
+  spaces('spaces_sync'),
+  spaceMembers('space_members_sync'),
+  spaceEvents('space_events_sync'),
+  // ===== V2.6 账本/行程域 =====
   trips('trips_sync'),
   tripItems('trip_items_sync'),
   groups('groups_sync'),
@@ -19,8 +24,15 @@ enum SyncEntity {
   const SyncEntity(this.cloudTable);
   final String cloudTable;
 
-  /// 固定拉取顺序（父实体先行）：账本域 → 行程域 → 字典。
+  /// 固定拉取顺序（父实体先行）：空间域 → 账本域 → 行程域 → 字典。
+  ///
+  /// 空间域排最前是有意的：`shared_trips` / `shared_trip_items` 的分流判定依赖
+  /// 本轮协作上下文（`list_my_spaces`），先落空间行能让「刚加入就拉行程」的
+  /// 同一轮里 trip/trip_item 有归属可依。
   static const List<SyncEntity> pullOrder = [
+    SyncEntity.spaces,
+    SyncEntity.spaceMembers,
+    SyncEntity.spaceEvents,
     SyncEntity.groups,
     SyncEntity.members,
     SyncEntity.expenses,
@@ -41,7 +53,17 @@ enum SyncEntity {
   /// 计数）都写 `trip_items`。历史 bug H10：上行装配 `_resolveEntity` 按
   /// [name] 匹配 → `trip_items` 匹配失败 → 该行被当作脏数据静默清理，
   /// **行程安排永远上不了云**（且没有任何报错，用户只看到数据不同步）。
-  String get localKey => this == SyncEntity.tripItems ? 'trip_items' : name;
+  ///
+  /// V2.6.6.2 同理：本地表名是 `travel_spaces` / `space_members` /
+  /// `space_events`，而枚举名是 `spaces` / `spaceMembers` / `spaceEvents`，
+  /// 必须在这里显式映射（并由 test/sync/space_entity_key_test.dart 断言钉死）。
+  String get localKey => switch (this) {
+        SyncEntity.tripItems => 'trip_items',
+        SyncEntity.spaces => 'travel_spaces',
+        SyncEntity.spaceMembers => 'space_members',
+        SyncEntity.spaceEvents => 'space_events',
+        _ => name,
+      };
 
   /// 由本地键反查实体；未知键返回 null（脏数据 / 迁移残留）。
   static SyncEntity? byLocalKey(String key) {
@@ -52,6 +74,10 @@ enum SyncEntity {
     }
     return null;
   }
+
+  /// 该实体是否走「受邀协作镜像表」（拉下来的行不属于我，落镜像而非业务表）。
+  bool get isCollabMirror =>
+      this == SyncEntity.trips || this == SyncEntity.tripItems;
 }
 
 /// 上行操作语义：本地行当前存在 → upsert；已被删除 → delete（云端标 deleted=true）。

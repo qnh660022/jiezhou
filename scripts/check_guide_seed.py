@@ -55,17 +55,63 @@ PREMIUM_50 = [
     "weihai", "yanji",
 ]
 
-# 每栏条数下限（契约里的「目标」条数打了折，避免误伤合理取舍）
+# ---- v4 内容等级（docs/攻略种子数据契约.md 第 4 节；等级只影响编写投入与校验线，不对用户展示）----
+LEVEL_A_PLUS_KEYS = {"zhangzhou"}   # 漳州：A+ 特例城，需先在 _gen_guide_seed.py 注册城市记录
+LEVEL_A_KEYS = {
+    "beijing", "shanghai", "tianjin",
+    "hangzhou", "suzhou", "nanjing", "xiamen", "qingdao",
+    "guangzhou", "foshan", "guilin",
+    "chengdu", "chongqing",
+    "xian",
+    "dalian", "harbin",
+    "luoyang",
+    "hongkong",
+}
+LEVEL_C_KEYS = {
+    "yantai", "zhoushan", "liuzhou", "wanning", "libo",
+    "yining", "linzhi", "kashi", "zhongwei", "dandong",
+}   # 均为种子外全新城市（v4），与漳州一样需先在 _gen_guide_seed.py 注册城市记录
+LEVEL_B_KEYS = set(PREMIUM_50) - LEVEL_A_KEYS
+LEVEL_MIN_CHARS = {"A+": 7000, "A": 5500, "B": 3000, "C": 800}
+LEVEL_LABELS = {"A+": "A+（7000 字，精品中的精品）", "A": "A（5500 字，重点城）",
+                "B": "B（3000 字硬线，建议多写）", "C": "C（800 字硬线，建议 1000 左右）"}
+# 漳州 A+ 特例栏目（契约 v4 第 2 节；其他城市出现会告警；客户端按未知栏目忽略）
+EXTRA_SECTIONS = {"routes": ("主题路线", 4, 6), "calendar": ("季节日历", 4, 6)}
+EXTRA_FIELDS = {"title", "detail"}
+
+# 每栏条数下限（契约里的「目标」条数打了折，避免误伤合理取舍；A/A+ 级用）
 MIN_ITEMS = {
     "prep": 6, "spots": 10, "food": 8,
     "transport": 5, "tips": 6, "budget": 5,
 }
+# B 级条数下限（覆盖面优先，单城投入相应减少）
+MIN_ITEMS_BASIC = {
+    "prep": 4, "spots": 6, "food": 4,
+    "transport": 3, "tips": 4, "budget": 3,
+}
+# C 级条数下限（800~1000 字轻量覆盖）
+MIN_ITEMS_C = {
+    "prep": 3, "spots": 4, "food": 3,
+    "transport": 2, "tips": 3, "budget": 3,
+}
 MAX_ITEMS = 24  # 种子结构测试的硬上限，超过会挂测试
 
-MIN_CHARS_PREMIUM = 5500   # 15 分钟阅读
+MIN_CHARS_PREMIUM = 5500   # A 级硬线（保留旧常量名兼容）
 MIN_CHARS_OTHER = 300
 MAX_CITY_BYTES = 64 * 1024
 MAX_PACK_BYTES = 8 * 1024 * 1024
+
+
+def city_level(key):
+    if key in LEVEL_A_PLUS_KEYS:
+        return "A+"
+    if key in LEVEL_A_KEYS:
+        return "A"
+    if key in LEVEL_B_KEYS:
+        return "B"
+    if key in LEVEL_C_KEYS:
+        return "C"
+    return None
 
 
 def cjk_count(s):
@@ -83,11 +129,12 @@ def city_chars(city):
     return total
 
 
-def check_city(city, *, premium=False, strict=False, errors=None, warns=None):
+def check_city(city, *, strict=False, errors=None, warns=None):
     errors = errors if errors is not None else []
     warns = warns if warns is not None else []
     key = city.get("key")
     name = city.get("name")
+    level = city_level(key)
 
     def err(msg):
         errors.append("[%s] %s" % (key or "?", msg))
@@ -104,8 +151,8 @@ def check_city(city, *, premium=False, strict=False, errors=None, warns=None):
     area = city.get("area", "")
     if area and area not in AREAS:
         err("area 非法：%s（允许 %s）" % (area, "/".join(sorted(AREAS))))
-    if premium and not area:
-        warn("精品城市缺 area 字段（攻略页换城市分组会落到「其他」）")
+    if level and not area:
+        warn("计划等级 %s 城缺 area 字段（攻略页换城市分组会落到「其他」）" % level)
 
     sections = city.get("sections")
     if not isinstance(sections, dict):
@@ -122,9 +169,10 @@ def check_city(city, *, premium=False, strict=False, errors=None, warns=None):
             continue
         if len(items) > MAX_ITEMS:
             err("%s 有 %d 条，超过上限 %d" % (k, len(items), MAX_ITEMS))
-        if len(items) < MIN_ITEMS[k]:
-            (err if (premium and strict) else warn)(
-                "%s 只有 %d 条，建议 ≥%d 条" % (k, len(items), MIN_ITEMS[k]))
+        mins = MIN_ITEMS_C if level == "C" else (MIN_ITEMS_BASIC if level == "B" else MIN_ITEMS)
+        if len(items) < mins[k]:
+            (err if (level and strict) else warn)(
+                "%s 只有 %d 条，%s级建议 ≥%d 条" % (k, len(items), level or "?", mins[k]))
         for idx, it in enumerate(items):
             if not isinstance(it, dict):
                 err("%s[%d] 不是对象" % (k, idx))
@@ -152,14 +200,36 @@ def check_city(city, *, premium=False, strict=False, errors=None, warns=None):
                     err("%s[%d].%s 里有占位符 TODO" % (k, idx, f))
 
     chars = city_chars(city)
-    need = MIN_CHARS_PREMIUM if premium else MIN_CHARS_OTHER
+    need = LEVEL_MIN_CHARS[level] if level else MIN_CHARS_OTHER
     if chars < need:
-        (err if (premium and strict) else warn)(
-            "正文 %d 字，低于%s %d 字（约 %d 分钟阅读）"
-            % (chars, "精品线" if premium else "底线", need, chars // 350))
+        (err if (level and strict) else warn)(
+            "正文 %d 字，低于 %s 硬线 %d 字（约 %d 分钟阅读）"
+            % (chars, LEVEL_LABELS.get(level, "底线"), need, chars // 350))
     size = len(json.dumps(city, ensure_ascii=False).encode("utf-8"))
     if size > MAX_CITY_BYTES:
         err("单城 JSON %d 字节，超过 %d" % (size, MAX_CITY_BYTES))
+    # 漳州 A+ 特例栏目（契约 v4 第 2 节）：routes / calendar
+    for ek, (label, lo, hi) in EXTRA_SECTIONS.items():
+        if ek not in sections:
+            if level == "A+":
+                warn("缺特例栏目 %s（%s），A+ 城应包含" % (ek, label))
+            continue
+        if level != "A+":
+            warn("非 A+ 城出现特例栏目 %s（仅漳州允许）" % ek)
+        eitems = sections[ek]
+        if not isinstance(eitems, list):
+            err("%s 不是数组" % ek)
+            continue
+        if not (lo <= len(eitems) <= hi):
+            warn("%s 有 %d 条，建议 %d~%d 条" % (ek, len(eitems), lo, hi))
+        for idx, it in enumerate(eitems):
+            if not isinstance(it, dict):
+                err("%s[%d] 不是对象" % (ek, idx))
+                continue
+            for f in EXTRA_FIELDS:
+                v = it.get(f)
+                if v is None or (isinstance(v, str) and not v.strip()):
+                    warn("%s[%d] 缺字段 %s" % (ek, idx, f))
     return errors, warns
 
 
@@ -180,7 +250,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", help="校验单个城 JSON 文件")
     ap.add_argument("--json-dir", help="批量校验目录下 *.json")
-    ap.add_argument("--strict", action="store_true", help="精品 50 城的条数/字数为硬失败")
+    ap.add_argument("--strict", action="store_true", help="计划城（A+/A/B/C）的条数/字数为硬失败")
     args = ap.parse_args()
 
     all_ok = True
@@ -200,9 +270,10 @@ def main():
             # 允许「单城对象」或「{cities:[...]}」两种形态
             cities = data.get("cities") if isinstance(data, dict) and "cities" in data else [data]
             for c in cities:
-                errors, warns = check_city(
-                    c, premium=c.get("key") in PREMIUM_50, strict=args.strict)
-                all_ok &= report("%s :: %s" % (os.path.basename(path), c.get("name")), errors, warns, args.strict)
+                lv = city_level(c.get("key"))
+                errors, warns = check_city(c, strict=args.strict)
+                all_ok &= report("%s :: %s%s" % (os.path.basename(path), c.get("name"),
+                                                 "〔%s〕" % lv if lv else ""), errors, warns, args.strict)
         return 0 if all_ok else 1
 
     with io.open(SEED, encoding="utf-8") as f:
@@ -217,42 +288,56 @@ def main():
         all_ok = False
 
     total_chars = 0
-    premium_seen = []
-    premium_ready = []   # 已达 5500 字的精品城
-    premium_short = []   # 还差的精品城（内容加厚进度）
+    level_keys = {"A+": LEVEL_A_PLUS_KEYS, "A": LEVEL_A_KEYS,
+                  "B": LEVEL_B_KEYS, "C": LEVEL_C_KEYS}
+    level_seen = {lv: [] for lv in level_keys}
+    level_ready = {lv: [] for lv in level_keys}
+    level_short = {lv: [] for lv in level_keys}
     for c in cities:
-        premium = c.get("key") in PREMIUM_50
-        if premium:
-            premium_seen.append(c.get("key"))
+        lv = city_level(c.get("key"))
+        if lv:
+            level_seen[lv].append(c.get("key"))
             chars = city_chars(c)
-            if chars >= MIN_CHARS_PREMIUM:
-                premium_ready.append(c.get("key"))
+            if chars >= LEVEL_MIN_CHARS[lv]:
+                level_ready[lv].append(c.get("key"))
             else:
-                premium_short.append((c.get("key"), chars))
+                level_short[lv].append((c.get("key"), chars))
         total_chars += city_chars(c)
-        errors, warns = check_city(c, premium=premium, strict=args.strict)
+        errors, warns = check_city(c, strict=args.strict)
         if errors or (args.strict and warns):
             all_ok &= report("%s（%s）" % (c.get("name"), c.get("key")), errors, warns, args.strict)
 
-    missing = [k for k in PREMIUM_50 if k not in premium_seen]
+    missing = {lv: sorted(k for k in keys_ if k not in level_seen[lv])
+               for lv, keys_ in level_keys.items()}
     print("=" * 64)
-    print("种子总览")
+    print("种子总览（v4 分级）")
     print("-" * 64)
-    print("  城市数：%d" % len(cities))
-    print("  精品 50 城：命中 %d / %d" % (len(premium_seen), len(PREMIUM_50)))
-    if missing:
-        print("  缺精品城：%s" % " ".join(missing))
-        all_ok = False
+    print("  城市数：%d（等级计划 %d 城：A+ 1 / A 18 / B 32 / C 10）" % (len(cities), 61))
+    for lv in ("A+", "A", "B", "C"):
+        print("  %s：命中 %d / %d，达标 %d / %d"
+              % (LEVEL_LABELS[lv], len(level_seen[lv]), len(level_keys[lv]),
+                 len(level_ready[lv]), len(level_keys[lv])))
+    for lv in ("A+", "A", "B", "C"):
+        if missing[lv]:
+            tag = "待注册入种子" if lv in ("A+", "C") else "缺城"
+            print("  %s %s：%s" % (lv, tag, " ".join(missing[lv])))
+            if args.strict:
+                all_ok = False
     print("  正文合计：%d 字（平均 %d 字/城）"
           % (total_chars, total_chars // max(1, len(cities))))
-    print("  精品线（≥%d 字/城，约 15 分钟阅读）：达标 %d / %d"
-          % (MIN_CHARS_PREMIUM, len(premium_ready), len(PREMIUM_50)))
-    if premium_short:
-        short = " ".join("%s(%d)" % (k, v) for k, v in
-                         sorted(premium_short, key=lambda x: x[1]))
-        print("  待加厚（字数为当前值）：")
-        for line in _wrap(short, 96):
-            print("    %s" % line)
+    shorts = []
+    for lv in ("A+", "A", "B", "C"):
+        for k, v in level_short[lv]:
+            shorts.append((lv, k, v))
+    if shorts:
+        print("  待加厚（按等级 · 字数为当前值）：")
+        for lv in ("A+", "A", "B", "C"):
+            grp = sorted([s for s in shorts if s[0] == lv], key=lambda x: x[2])
+            if grp:
+                short = " ".join("%s(%d)" % (k, v) for _, k, v in grp)
+                print("    〔%s〕" % lv)
+                for line in _wrap(short, 96):
+                    print("      %s" % line)
     pack = os.path.getsize(SEED)
     print("  种子体积：%.2f MB（上限 %.0f MB）" % (pack / 1048576.0, MAX_PACK_BYTES / 1048576.0))
     if pack > MAX_PACK_BYTES:

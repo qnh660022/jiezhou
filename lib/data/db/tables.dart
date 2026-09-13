@@ -213,3 +213,102 @@ class SharedSettlements extends Table {
   IntColumn get completedAt => integer().nullable()();
   @override Set<Column> get primaryKey => {id};
 }
+
+// ===== V2.6.6.2 旅伴空间（列与云端 spaces_sync / space_members_sync / space_events_sync 同构） =====
+
+/// 空间主表（一程一空间：0~1 行程 + 0~1 账本）。
+/// 我创建与我加入的空间都落这一张表（云端 RLS 已限定只下发我可见的行）。
+class TravelSpaces extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get tripId => text().nullable()();
+  TextColumn get groupId => text().nullable()();
+  TextColumn get createdBy => text()();
+  TextColumn get note => text().nullable()();
+  TextColumn get status => text().withDefault(Constant("active"))();
+  IntColumn get createdMs => integer()();
+  IntColumn get updatedMs => integer()();
+  IntColumn get deletedMs => integer().nullable()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+/// 空间成员（三级权限 owner/editor/viewer）。
+/// [updatedMs] 是合流基准（云端该表无业务 updated 语义，但引擎统一以它判新旧）。
+class SpaceMembers extends Table {
+  TextColumn get id => text()();
+  TextColumn get spaceId => text()();
+  TextColumn get userId => text()();
+  TextColumn get role => text().withDefault(Constant("viewer"))();
+  TextColumn get displayName => text().withDefault(Constant("旅伴"))();
+  IntColumn get joinedMs => integer()();
+  IntColumn get createdMs => integer()();
+  IntColumn get updatedMs => integer()();
+  IntColumn get deletedMs => integer().nullable()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+/// 协作动态流（append-only：本地只插入、只在云端软删时移除）。
+class SpaceEvents extends Table {
+  TextColumn get id => text()();
+  TextColumn get spaceId => text()();
+  TextColumn get actorUser => text()();
+  TextColumn get action => text()();
+  TextColumn get entityKind => text()();
+  TextColumn get entityId => text().nullable()();
+  TextColumn get summary => text().withDefault(Constant(""))();
+  IntColumn get createdMs => integer()();
+  IntColumn get updatedMs => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+// ===== V2.6.6.2 共享行程镜像（受邀编辑者拉的「别人的行程」，与 shared_groups 同构） =====
+//
+// 为什么不直接落业务表 trips/trip_items：受邀者若把他人行程写进「我的行程」Tab，
+// 既污染个人主线（§1.1：个人主数据不迁移），又会在 assemble 时被再次上行——
+// 与历史 bug H7（他人共享账本数据串进本地账本）同构。故一律走镜像表。
+
+class SharedTrips extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get destination => text().withDefault(Constant(""))();
+  TextColumn get emoji => text().withDefault(Constant("✈️"))();
+  TextColumn get cover => text().withDefault(Constant("ocean"))();
+  IntColumn get startEpochDay => integer().withDefault(Constant(0))();
+  IntColumn get endEpochDay => integer().withDefault(Constant(0))();
+  TextColumn get note => text().withDefault(Constant(""))();
+  TextColumn get groupId => text().nullable()();
+  BoolColumn get archived => boolean().withDefault(Constant(false))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+  @override Set<Column> get primaryKey => {id};
+}
+
+class SharedTripItems extends Table {
+  TextColumn get id => text()();
+  TextColumn get tripId => text()();
+  IntColumn get dateEpochDay => integer().withDefault(Constant(0))();
+  TextColumn get type => text().withDefault(Constant("attraction"))();
+  TextColumn get name => text().withDefault(Constant(""))();
+  TextColumn get address => text().withDefault(Constant(""))();
+  RealColumn get lat => real().nullable()();
+  RealColumn get lng => real().nullable()();
+  TextColumn get photoUri => text().nullable()();
+  IntColumn get startTimeMin => integer().nullable()();
+  IntColumn get durationMin => integer().nullable()();
+  IntColumn get costCents => integer().nullable()();
+  TextColumn get costCurrency => text().withDefault(Constant("CNY"))();
+  TextColumn get note => text().withDefault(Constant(""))();
+  TextColumn get fromName => text().withDefault(Constant(""))();
+  TextColumn get fromAddress => text().withDefault(Constant(""))();
+  RealColumn get fromLat => real().nullable()();
+  RealColumn get fromLng => real().nullable()();
+  TextColumn get toName => text().withDefault(Constant(""))();
+  TextColumn get toAddress => text().withDefault(Constant(""))();
+  RealColumn get toLat => real().nullable()();
+  RealColumn get toLng => real().nullable()();
+  TextColumn get flightNo => text().nullable()();
+  IntColumn get sortOrder => integer().withDefault(Constant(0))();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+  @override Set<Column> get primaryKey => {id};
+}

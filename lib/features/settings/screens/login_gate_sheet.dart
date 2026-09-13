@@ -49,6 +49,16 @@ class _LoginGateSheetState extends ConsumerState<_LoginGateSheet> {
   Future<void> _submit() async {
     final svc = ref.read(cloudAccountServiceProvider);
     if (svc == null) return;
+    // 密码强度仅在注册（设置新密码）时强制；登录不拦，避免老密码（6 位）用户被锁死。
+    if (_signup) {
+      final issue = signupPasswordIssue(_password.text);
+      if (issue != null) {
+        setState(() => _error = copy(issue == 'password_short'
+            ? 'cloud.errPasswordShort'
+            : 'cloud.errPasswordWeak'));
+        return;
+      }
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -66,6 +76,7 @@ class _LoginGateSheetState extends ConsumerState<_LoginGateSheet> {
       setState(() => _error = switch (e.code) {
             'email_taken' => copy('cloud.errEmailTaken'),
             'password_short' => copy('cloud.errPasswordShort'),
+            'password_weak' => copy('cloud.errPasswordWeak'),
             'bad_credentials' => copy('cloud.errBadCredentials'),
             _ => copy('cloud.errGeneric'),
           });

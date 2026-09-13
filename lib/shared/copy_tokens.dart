@@ -82,7 +82,7 @@ const Map<String, CopyToken> _tokens = {
   'cloud.tabLogin': CopyToken('cloud.tabLogin', '登录'),
   'cloud.tabSignup': CopyToken('cloud.tabSignup', '注册'),
   'cloud.email': CopyToken('cloud.email', '邮箱'),
-  'cloud.password': CopyToken('cloud.password', '密码（至少 6 位）'),
+  'cloud.password': CopyToken('cloud.password', '密码（至少 8 位，须含字母和数字）'),
   'cloud.submitLogin': CopyToken('cloud.submitLogin', '登录'),
   'cloud.submitSignup': CopyToken('cloud.submitSignup', '注册并登录'),
   'cloud.signedInAs': CopyToken('cloud.signedInAs', '当前账号'),
@@ -99,7 +99,8 @@ const Map<String, CopyToken> _tokens = {
   'cloud.aiModel': CopyToken('cloud.aiModel', '模型 model'),
   'cloud.aiKeyLocal': CopyToken('cloud.aiKeyLocal', 'API Key 仅存本机'),
   'cloud.errEmailTaken': CopyToken('cloud.errEmailTaken', '该邮箱已注册，请直接登录'),
-  'cloud.errPasswordShort': CopyToken('cloud.errPasswordShort', '密码至少 6 位'),
+  'cloud.errPasswordShort': CopyToken('cloud.errPasswordShort', '密码至少 8 位'),
+  'cloud.errPasswordWeak': CopyToken('cloud.errPasswordWeak', '密码须同时包含字母和数字'),
   'cloud.errBadCredentials': CopyToken('cloud.errBadCredentials', '账号或密码错误'),
   'cloud.errNetwork': CopyToken('cloud.errNetwork', '网络失败，请稍后重试'),
   'cloud.errGeneric': CopyToken('cloud.errGeneric', '操作失败，请稍后重试'),
@@ -156,6 +157,12 @@ const Map<String, CopyToken> _tokens = {
       CopyToken('share.readonlyNote', '任何人不登录即可查看，只能看不能改，可随时撤销'),
   'share.createReadonlyEmpty':
       CopyToken('share.createReadonlyEmpty', '还没有可分享的行程或账本'),
+  'share.tripLinkTitle': CopyToken('share.tripLinkTitle', '分享行程（只读链接）'),
+  'share.tripLinkNote':
+      CopyToken('share.tripLinkNote', '任何人不登录即可查看行程安排，只能看不能改'),
+  'share.groupLinkTitle': CopyToken('share.groupLinkTitle', '分享账本（只读链接）'),
+  'share.groupLinkNote':
+      CopyToken('share.groupLinkNote', '任何人不登录即可查看成员与账单，只能看不能改'),
 
   // ===== 通知 =====
   'notify.syncFailTitle': CopyToken('notify.syncFailTitle', '云端失联'),

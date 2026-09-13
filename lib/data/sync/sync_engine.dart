@@ -129,6 +129,11 @@ class SyncEngine {
   Set<String> _collabGroupIds = {};
   bool _collabContextKnown = false;
   final Map<String, String> _sharedOwners = {}; // groupId -> ownerUserId（在线直写保 owner 用）
+  // ===== V2.6.6.2 旅伴空间协作上下文 =====
+  Set<String> _collabSpaceIds = {};
+  Set<String> _collabSpaceTripIds = {};
+  final Map<String, String> _spaceOwners = {}; // spaceId -> createdBy（行程项直写保 owner 用）
+  final Map<String, String> _spaceRoles = {}; // spaceId -> 我的角色（UI 权限三态兜底）
   String? _userId;
 
   // ===== 通知/状态回调（由 UI 层挂接） =====
@@ -212,6 +217,18 @@ class SyncEngine {
     // 上云开关闸门（§3.9）：行程/团关闭时其行不推云
     engine.pusher.isEntityEnabled = (entity, rowId, row) {
       switch (entity) {
+        case 'travel_spaces':
+          // 空间行只由 owner 上行（成员端通过 update_space RPC 改，云端已落库）。
+          // 非 owner 直接丢弃 outbox 行，避免必被 RLS 拒绝 → 8 次后变死信。
+          return row['created_by'] == engine._userId;
+        case 'space_members':
+          // 成员行由 RPC（security definer）维护；只有我自己的空间才允许直推。
+          final sid = row['space_id'];
+          return sid is String && engine._spaceOwners[sid] == engine._userId;
+        case 'space_events':
+          // 动态流按 §4.2 走「尽力而为的直插」，不进 outbox 重试；此处只是兜底闸门。
+          final sid = row['space_id'];
+          return sid is String && engine._collabSpaceIds.contains(sid);
         case 'trips':
           return engine.tripSyncEnabled(rowId);
         case 'trip_items':
@@ -288,6 +305,10 @@ class SyncEngine {
     _collabGroupIds = {};
     _collabContextKnown = false;
     _sharedOwners.clear();
+    _collabSpaceIds = {};
+    _collabSpaceTripIds = {};
+    _spaceOwners.clear();
+    _spaceRoles.clear();
     _userId = null;
     _updateStatus();
   }
@@ -303,6 +324,9 @@ class SyncEngine {
   }
 
   SyncFreq get freq => SyncFreqX.fromKey(prefs.getString('sync.freq'));
+
+  /// 引擎使用的定时器抽象（页面级短轮询复用同一实例，便于单测注入假定时器）。
+  SyncScheduler get scheduler => _sched;
 
   Future<void> setFreq(SyncFreq f) async {
     await prefs.setString('sync.freq', f.key);
@@ -371,6 +395,9 @@ class SyncEngine {
     for (final entity in const [
       'groups', 'members', 'expenses', 'settlements',
       'trips', 'trip_items', 'categories',
+      // 空间：只有「我创建的」会上行（space_members / space_events 由 RPC 维护，
+      // 不入引导全量上传，避免成员端把必被 RLS 拒绝的行塞进 outbox）
+      'travel_spaces',
     ]) {
       if (!_entitySyncEnabled(entity)) continue;
       await outbox.enqueueEntityAll(entity, now, filter: _rowSyncEnabled(entity));
@@ -490,6 +517,10 @@ class SyncEngine {
       _updateStatus(kind: SyncStatusKind.signedOut);
       return;
     }
+    // 身份缓存必须在闸门判定之前刷新：`isEntityEnabled` 对空间/成员行要按
+    // 「这一行是不是我的」放行，`_userId` 还是 null 时会把它们当非本人丢弃
+    // （首次登录后的第一次 push 就会踩到）。
+    _userId = transport.currentUserId;
     await _refreshCollabContext();
     if (!manual && _wifiBlocked) {
       // 自动同步被「仅 Wi-Fi」拦下：不动状态机 kind（这是策略生效，不是故障），
@@ -571,6 +602,8 @@ class SyncEngine {
       _pushPending = true;
       return;
     }
+    // 同 _syncBody：闸门判定前先确认身份（空间/成员行的放行依赖它）
+    _userId = transport.currentUserId;
     await _run(_SyncRequest.push, () async {
       final r = await pusher.drain();
       if (r.ok) _pushPending = false;
@@ -703,7 +736,8 @@ class SyncEngine {
     merger.refreshContext(userId: uid, collabGroups: _collabGroupIds);
     if (uid == null) {
       _collabContextKnown = false;
-      merger.refreshContext(userId: null, collabGroups: const {}, known: false);
+      merger.refreshContext(
+          userId: null, collabGroups: const {}, collabTrips: const {}, known: false);
       return;
     }
     try {
@@ -739,8 +773,62 @@ class SyncEngine {
       // 名单查询失败：沿用旧集合，但标记为「未知」，避免他人数据串进本地账本
       _collabContextKnown = false;
     }
+    // 空间域上下文（V2.6.6.2）：决定「别人的行程/行程项」是否落共享镜像
+    try {
+      final sres = await transport.rpc('list_my_spaces', {});
+      if (sres['ok'] == true && sres['spaces'] is List) {
+        final list = (sres['spaces'] as List?) ?? const [];
+        final nextSpaces = <String>{};
+        final nextTrips = <String>{};
+        _spaceOwners.clear();
+        _spaceRoles.clear();
+        for (final e in list) {
+          final m = e as Map;
+          final sid = m['spaceId'] as String?;
+          if (sid == null) continue;
+          nextSpaces.add(sid);
+          final tripId = m['tripId'] as String?;
+          if (tripId != null && tripId.isNotEmpty) nextTrips.add(tripId);
+          if (m['createdBy'] != null) {
+            _spaceOwners[sid] = m['createdBy'] as String;
+          }
+          if (m['role'] != null) _spaceRoles[sid] = m['role'] as String;
+        }
+        // 名单收缩：退出/被移出的空间 → 清本地空间行与对应行程镜像
+        for (final gone in _collabSpaceIds.difference(nextSpaces)) {
+          for (final tid in _collabSpaceTripIds) {
+            await merger.clearSharedTrip(tid);
+          }
+          await merger.clearSpace(gone);
+        }
+        // 名单扩张（新加入空间）→ 重置空间域与行程域游标全量重拉
+        final addedSpaces = nextSpaces.difference(_collabSpaceIds);
+        if (addedSpaces.isNotEmpty) {
+          for (final e in const ['travel_spaces', 'space_members', 'space_events']) {
+            await metaService.reset(e);
+          }
+          // 只有「新关联到行程」时才需要重拉行程域（代价较大）
+          if (nextTrips.difference(_collabSpaceTripIds).isNotEmpty) {
+            await metaService.reset('trips');
+            await metaService.reset('trip_items');
+          }
+        }
+        _collabSpaceIds = nextSpaces;
+        _collabSpaceTripIds = nextTrips;
+      } else {
+        // 空间名单取不到：清空协作行程集合（fail-safe：不落他人行程镜像）
+        _collabSpaceIds = {};
+        _collabSpaceTripIds = {};
+      }
+    } catch (_) {
+      _collabSpaceIds = {};
+      _collabSpaceTripIds = {};
+    }
     merger.refreshContext(
-        userId: uid, collabGroups: _collabGroupIds, known: _collabContextKnown);
+        userId: uid,
+        collabGroups: _collabGroupIds,
+        collabTrips: _collabSpaceTripIds,
+        known: _collabContextKnown);
   }
 
   /// 在线直写前确保协作上下文可用（受邀端写入需要团 owner id 兜底）。
@@ -828,6 +916,53 @@ class SyncEngine {
     await merger.clearSharedGroup(groupId);
     await _refreshCollabContext();
   }
+
+  // ===== V2.6.6.2 旅伴空间协作（§4.2 / §6） =====
+
+  /// 加入空间成功后：重置空间域 + 行程域游标 → 立即全量拉取该空间内容。
+  ///
+  /// 行程域必须一起重置：空间可能带一个我从未同步过的行程（别人的行程），
+  /// 只重置空间域的话增量游标会直接跳过它。
+  Future<void> onJoinedSharedSpace(String spaceId) async {
+    for (final e in const [
+      'travel_spaces', 'space_members', 'space_events', 'trips', 'trip_items',
+    ]) {
+      await metaService.reset(e);
+    }
+    await _refreshCollabContext();
+    await syncNow(push: false, manual: true);
+  }
+
+  /// 退出 / 被移出空间后：清本地空间与行程镜像 + 刷新名单。
+  Future<void> onLeftSharedSpace(String spaceId) async {
+    await merger.clearSpace(spaceId);
+    await _refreshCollabContext();
+  }
+
+  /// 空间被 owner 删除后（成员端）：本地清掉空间与其行程镜像。
+  Future<void> onSpaceDeleted(String spaceId) => onLeftSharedSpace(spaceId);
+
+  /// 协作写 RPC 成功后调用：立即 pull + drain（写后读，§4.2）。
+  ///
+  /// 先拉后推是引擎既有语义（§3.5.4）：拉取会把云端刚写入的结果合流到本地，
+  /// 推送则把本地 pending（例如刚改的账单）补齐，两端都不会被旧值覆盖。
+  Future<void> afterCollabWrite() => syncNow(push: true, manual: true);
+
+  /// 当前参与的空间 id 集合。
+  Set<String> get collabSpaceIds => _collabSpaceIds;
+
+  /// 当前参与空间所关联的行程 id 集合（他人行程镜像的分流依据）。
+  Set<String> get collabSpaceTripIds => _collabSpaceTripIds;
+
+  /// 空间 owner 的 auth uid（行程项直写保持 owner_user_id 用；未知返回 null）。
+  String? spaceOwnerUserIdOf(String spaceId) => _spaceOwners[spaceId];
+
+  /// 我在该空间的角色（owner/editor/viewer）；未知返回 null。
+  String? mySpaceRoleOf(String spaceId) => _spaceRoles[spaceId];
+
+  /// 我是不是该空间的 owner。
+  bool isSpaceOwner(String spaceId) =>
+      _userId != null && _spaceOwners[spaceId] == _userId;
 
   /// 当前参与的共享团 id 集合（首页「共享账本」分组数据源判断用）。
   Set<String> get collabGroupIds => _collabGroupIds;

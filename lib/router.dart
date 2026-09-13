@@ -24,8 +24,13 @@ import 'features/ledger/screens/ledger_home_screen.dart';
 
 import 'features/ledger/screens/members_screen.dart';
 import 'features/ledger/screens/settle_screen.dart';
-import 'features/ledger/screens/shared_ledger_screen.dart' show SharedGroupScreen;
 import 'features/ledger/screens/stats_screen.dart';
+import 'features/companions/screens/companions_list_screen.dart';
+import 'features/companions/screens/legacy_shared_redirect_screen.dart';
+import 'features/companions/screens/space_detail_screen.dart';
+import 'features/today/screens/today_cockpit_screen.dart';
+import 'features/today/screens/today_plan_screen.dart';
+import 'features/today/screens/today_spend_screen.dart';
 import 'features/settings/screens/about_screen.dart';
 import 'features/settings/screens/cloud_account_screen.dart';
 import 'features/settings/screens/share_center_screen.dart';
@@ -200,13 +205,14 @@ List<RouteBase> buildAppRoutes() => [
                 name: 'members',
                 builder: (context, state) => const MembersScreen(),
               ),
-              // 共享团详情（受邀端镜像）：账本首页「共享账本」卡片跳这里。
-              // 此前 SharedLedgerSection 已 push(/ledger/shared/:id) 但路由未注册，
-              // 点击直接死路（bug：分享/协作「根本不知道从哪进」的根因之一）。
+              // 共享团详情（受邀端镜像）：**V2.6.6.2 §7.2 起已退役**。
+              // 旧四 Tab 页不再渲染，改为解析出对应旅伴空间后重定向到
+              // `/companions/space/:spaceId?tab=ledger`（能力已抽成组件嵌进空间账本区）。
+              // 保留 path 是为了让老客户端分享出去的深链继续可用。
               GoRoute(
                 path: 'shared/:id',
                 name: 'shared-group',
-                builder: (context, state) => SharedGroupScreen(
+                builder: (context, state) => LegacySharedRedirectScreen(
                     groupId: state.pathParameters['id'] ?? ''),
               ),
             ],
@@ -263,6 +269,44 @@ List<RouteBase> buildAppRoutes() => [
       name: 'invite',
       builder: (context, state) =>
           InviteScreen(code: state.uri.queryParameters['c']),
+    ),
+    // ============ 旅伴空间（V2.6.6.2 §11，顶层全屏：从首页/旅伴中心打开都不切 Tab） ============
+    GoRoute(
+      path: '/companions',
+      name: 'companions',
+      builder: (context, state) => const CompanionsListScreen(),
+      routes: [
+        GoRoute(
+          path: 'space/:id',
+          name: 'companion-space',
+          // ?tab=trip|ledger|members|events（缺省 trip）
+          builder: (context, state) => SpaceDetailScreen(
+            spaceId: state.pathParameters['id'] ?? '',
+            initialTab: state.uri.queryParameters['tab'],
+          ),
+        ),
+      ],
+    ),
+    // ============ 今日驾驶舱（V2.6.6.2 §11 / D2~D3，顶层全屏） ============
+    GoRoute(
+      path: '/today/:tripId',
+      name: 'today',
+      builder: (context, state) =>
+          TodayCockpitScreen(tripId: state.pathParameters['tripId'] ?? ''),
+      routes: [
+        GoRoute(
+          path: 'plan',
+          name: 'today-plan',
+          builder: (context, state) =>
+              TodayPlanScreen(tripId: state.pathParameters['tripId'] ?? ''),
+        ),
+        GoRoute(
+          path: 'spend',
+          name: 'today-spend',
+          builder: (context, state) =>
+              TodaySpendScreen(tripId: state.pathParameters['tripId'] ?? ''),
+        ),
+      ],
     ),
     // ============ 目的地攻略（2026-09 需求 3：多入口） ============
     //

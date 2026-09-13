@@ -60,6 +60,11 @@ AREA = {
     "wutaishan": "华北", "yanan": "西北", "kaifeng": "华中",
     "zhengzhou": "华中", "hefei": "华东", "nanchang": "华东", "fuzhou": "华东",
     "nanning": "华南", "taibei": "港澳台",
+    # v4 分级计划新增（A+ 漳州 / C 级 10 城，2026-09-13）
+    "zhangzhou": "华东",
+    "yantai": "华东", "zhoushan": "华东", "liuzhou": "华南", "wanning": "华南",
+    "libo": "西南", "yining": "西北", "linzhi": "西南", "kashi": "西北",
+    "zhongwei": "西北", "dandong": "东北",
 }
 
 # 精品 50 城：内容加厚与字数校验以这份清单为准（与 docs/攻略生成提示词模板.md 一致）
@@ -2500,6 +2505,20 @@ city("tengchong", "腾冲",
   B("交通","包车 300-400/天（参考）、机场-市区 20-30 元"),
   B("体验","热气球 200-300/人（参考）")])
 
+# ---- v4 分级计划新增城市（A+ 漳州 / C 级 10 城，2026-09-13）----
+# 先以空六栏注册（通用池会兜底 prep/transport/tips 三栏），内容按等级逐城生成后经覆盖层整栏导入。
+city("zhangzhou", "漳州", [], [], [], [], [], [])
+city("yantai", "烟台", [], [], [], [], [], [])
+city("zhoushan", "舟山", [], [], [], [], [], [])
+city("liuzhou", "柳州", [], [], [], [], [], [])
+city("wanning", "万宁", [], [], [], [], [], [])
+city("libo", "荔波", [], [], [], [], [], [])
+city("yining", "伊宁", [], [], [], [], [], [])
+city("linzhi", "林芝", [], [], [], [], [], [])
+city("kashi", "喀什", [], [], [], [], [], [])
+city("zhongwei", "中卫", [], [], [], [], [], [])
+city("dandong", "丹东", [], [], [], [], [], [])
+
 GEN_PREP = [
     P("查询天气","出发前查目的地天气与温差，山区/海滨城市天气多变"),
     P("紧急电话","110/120/119 全国通用；记下目的地 12345 政务热线"),
@@ -2553,7 +2572,8 @@ for _p in sorted(_glob.glob(_os.path.join(_ov_dir, '*.json'))):
     if not isinstance(_sections, dict) or _d.get('key') not in C:
         print('!! 覆盖包结构或 key 不合法，已跳过：%s' % _p)
         continue
-    for _k in ('prep', 'spots', 'food', 'transport', 'tips', 'budget'):
+    for _k in ('prep', 'spots', 'food', 'transport', 'tips', 'budget', 'routes', 'calendar'):
+        # v4：routes / calendar 为漳州 A+ 特例栏目（契约第 2 节），覆盖包里非空则整栏应用
         if isinstance(_sections.get(_k), list) and _sections[_k]:
             C[_d['key']]['sections'][_k] = _sections[_k]
     if _d.get('area'):

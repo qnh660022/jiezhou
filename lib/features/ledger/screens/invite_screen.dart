@@ -9,6 +9,7 @@ import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../theme/tokens.dart';
+import '../../companions/space_actions.dart';
 
 class InviteScreen extends ConsumerStatefulWidget {
   const InviteScreen({super.key, this.code});
@@ -42,18 +43,23 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       _message = null;
     });
     try {
-      final (groupId, err) = await svc.joinByCode(_code.text);
+      // V2.6.6.2 §7.4：加入逻辑统一切到 join_space（服务端内置旧账本码回退，
+      // 客户端另有一层 add_collab_member 兜底，见 data/sync/join_flow.dart）。
+      final (spaceId, legacy, err) = await SpaceActions.join(ref, _code.text);
       if (!mounted) return;
       if (err.isEmpty) {
-        // 加入成功：重置账本域游标触发全量拉取 → 首页出现共享账本卡
-        final engine = ref.read(syncEngineProvider);
-        await engine?.onJoinedSharedGroup(groupId);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(copy('share.joinOk'))));
+        // 加入成功：重置空间域 + 行程域游标并全量拉取（引擎内部处理）
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(legacy
+                ? '已加入（旧共享账本已自动升级为旅伴空间）'
+                : copy('share.joinOk'))));
+        if (spaceId.isNotEmpty) {
+          context.go('/companions/space/$spaceId');
+        } else {
           context.go('/ledger');
         }
       } else {
-        setState(() => _message = copy('share.joinInvalid'));
+        setState(() => _message = spaceErrorText(err));
       }
     } finally {
       if (mounted) setState(() => _busy = false);

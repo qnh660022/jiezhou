@@ -234,6 +234,8 @@ class SyncOutboxService {
 
   Future<List<String>> _allRowIds(String entity) async {
     switch (entity) {
+      case 'travel_spaces':
+        return (await db.select(db.travelSpaces).get()).map((r) => r.id).toList();
       case 'trips':
         return (await db.select(db.trips).get()).map((r) => r.id).toList();
       case 'trip_items':

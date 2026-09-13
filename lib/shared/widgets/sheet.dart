@@ -106,6 +106,31 @@ class SheetContainer extends StatelessWidget {
   }
 }
 
+/// 无滚动的底部面板表面：圆角 24 + 表面色（近不透明）。
+///
+/// 全局 bottomSheetTheme 是透明的（玻璃拟态），直接用 showModalBottomSheet
+/// 弹自制内容时必须包一层 [SheetSurface]，否则内容与底层页面文字重叠
+/// （2026-09-13 用户反馈「字与底面重叠」的根因）。
+/// 内容需要拖拽/滚动时改用 [SheetContainer] + showDraggableSheet。
+class SheetSurface extends StatelessWidget {
+  const SheetSurface({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ClipRRect(
+      borderRadius:
+          const BorderRadius.vertical(top: Radius.circular(AppRadius.cardValue)),
+      child: ColoredBox(
+        color: scheme.surfaceContainerLow.withValues(alpha: 0.98),
+        child: child,
+      ),
+    );
+  }
+}
+
 /// 独立拖拽把手（32x4 胶囊）
 class SheetHandle extends StatelessWidget {
   const SheetHandle({super.key, this.color});

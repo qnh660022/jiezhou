@@ -18,10 +18,26 @@ import 'item_edit_screen.dart';
 
 /// 安排详情页（按 itemId 流式定位，编辑后自动刷新）。
 class ItemDetailScreen extends ConsumerStatefulWidget {
-  const ItemDetailScreen({super.key, required this.tripId, required this.itemId});
+  const ItemDetailScreen({
+    super.key,
+    required this.tripId,
+    required this.itemId,
+    this.itemOverride,
+    this.tripOverride,
+    this.readOnly = false,
+  });
 
   final String tripId;
   final String itemId;
+
+  /// 协作空间场景：直接给定行快照（该行只存在于共享镜像表，本地业务表查不到）。
+  final TripItem? itemOverride;
+
+  /// 协作场景的行程快照（用于头图配色/名称）。
+  final Trip? tripOverride;
+
+  /// 只读模式：不渲染编辑入口。
+  final bool readOnly;
 
   @override
   ConsumerState<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -38,6 +54,17 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 协作空间场景（V2.6.6.2 §6.1）：他人行程项只存在于共享镜像表，本地业务表里
+    // 查不到，故由调用方直接传入快照并置为只读 —— 复用同一个详情页外观，
+    // 但编辑入口整体隐藏（写路径必须走 upsert_trip_item_collab RPC）。
+    final override = widget.itemOverride;
+    if (override != null) {
+      return _DetailView(
+        item: override,
+        trip: widget.tripOverride,
+        onEdit: widget.readOnly ? null : () => _openEdit(override),
+      );
+    }
     final repo = ref.read(tripsRepoProvider);
     return StreamBuilder<List<TripItem>>(
       stream: repo.watchItems(widget.tripId),
@@ -63,8 +90,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
         final item = found; // 提升为非空，闭包内可直接引用
         return StreamBuilder<Trip?>(
           stream: repo.watchTrip(widget.tripId),
-          builder: (context, tripSnap) =>
-              _DetailView(item: item, trip: tripSnap.data, onEdit: () => _openEdit(item)),
+          builder: (context, tripSnap) => _DetailView(
+            item: item,
+            trip: tripSnap.data,
+            onEdit: widget.readOnly ? null : () => _openEdit(item),
+          ),
         );
       },
     );
@@ -77,7 +107,9 @@ class _DetailView extends StatelessWidget {
 
   final TripItem item;
   final Trip? trip;
-  final VoidCallback onEdit;
+
+  /// null = 只读模式（不渲染任何编辑入口）。
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -118,12 +150,14 @@ class _DetailView extends StatelessWidget {
                       _NoteCard(item: item),
                   ],
                   const SizedBox(height: Spacing.xl),
-                  PrimaryButton(
-                    label: '编辑安排',
-                    icon: Icons.edit_rounded,
-                    expanded: true,
-                    onPressed: onEdit,
-                  ),
+                  // 只读模式（协作空间的他人行程项）：编辑入口整体不渲染。
+                  if (onEdit != null)
+                    PrimaryButton(
+                      label: '编辑安排',
+                      icon: Icons.edit_rounded,
+                      expanded: true,
+                      onPressed: onEdit,
+                    ),
                   const SizedBox(height: Spacing.huge),
                 ],
               ),

@@ -11,6 +11,15 @@ class SyncDbAccessor {
   /// 返回云端列格式的行 map（不含 updated_ms/deleted/id，由信封补齐）；不存在 → null。
   Future<Map<String, dynamic>?> readBusinessRow(String entity, String rowId) async {
     switch (entity) {
+      case 'travel_spaces':
+        final rows = await (db.select(db.travelSpaces)..where((t) => t.id.equals(rowId))).get();
+        return rows.isEmpty ? null : SyncCodec.spaceToCloud(rows.first);
+      case 'space_members':
+        final rows = await (db.select(db.spaceMembers)..where((t) => t.id.equals(rowId))).get();
+        return rows.isEmpty ? null : SyncCodec.spaceMemberToCloud(rows.first);
+      case 'space_events':
+        final rows = await (db.select(db.spaceEvents)..where((t) => t.id.equals(rowId))).get();
+        return rows.isEmpty ? null : SyncCodec.spaceEventToCloud(rows.first);
       case 'trips':
         final rows = await (db.select(db.trips)..where((t) => t.id.equals(rowId))).get();
         return rows.isEmpty ? null : SyncCodec.tripToCloud(rows.first);

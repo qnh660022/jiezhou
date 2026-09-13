@@ -1,4 +1,4 @@
-/// AppDatabase：Drift 单例，schemaVersion=3（V2.6 新增同步层 6 表）。
+/// AppDatabase：Drift 单例，schemaVersion=4（V2.6.6.2 新增旅伴空间 5 表）。
 library;
 
 import 'package:drift/drift.dart';
@@ -21,6 +21,8 @@ part 'database.g.dart';
   // V2.6 同步层：上行 outbox + 拉取游标 + 受邀端共享镜像（groups/members/expenses/settlements）
   SyncOutbox, SyncMeta,
   SharedGroups, SharedMembers, SharedExpenses, SharedSettlements,
+  // V2.6.6.2 旅伴空间：空间/成员/动态 + 受邀协作行程镜像
+  TravelSpaces, SpaceMembers, SpaceEvents, SharedTrips, SharedTripItems,
 ], daos: [
   TripsDao, GroupsDao, ExpensesDao,
   ChecklistDao, AlbumDao, CategoriesDao,
@@ -29,7 +31,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? openDbConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -48,6 +50,15 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(sharedMembers);
             await m.createTable(sharedExpenses);
             await m.createTable(sharedSettlements);
+          }
+          // v3 -> v4：V2.6.6.2 旅伴空间 5 表
+          // （travel_spaces / space_members / space_events / shared_trips / shared_trip_items）
+          if (from < 4) {
+            await m.createTable(travelSpaces);
+            await m.createTable(spaceMembers);
+            await m.createTable(spaceEvents);
+            await m.createTable(sharedTrips);
+            await m.createTable(sharedTripItems);
           }
         },
         beforeOpen: (details) async {

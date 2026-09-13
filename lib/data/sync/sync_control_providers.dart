@@ -17,6 +17,7 @@ import 'sync_account.dart';
 import 'sync_engine.dart';
 import 'sync_models.dart';
 import 'sync_transport_supabase.dart';
+import 'sync_visibility_poller.dart';
 
 /// 云功能就绪标记（有可用 client）。
 final cloudReadyProvider = StateProvider<bool>((_) => false);
@@ -124,6 +125,26 @@ final collabServiceProvider = Provider<CollabService?>((ref) {
 final shareServiceProvider = Provider<ShareService?>((ref) {
   final client = ref.watch(cloudClientProvider);
   return client == null ? null : ShareService(client);
+});
+
+/// V2.6.6.2 旅伴空间 RPC 客户端。
+final spaceServiceProvider = Provider<SpaceService?>((ref) {
+  final client = ref.watch(cloudClientProvider);
+  return client == null ? null : SpaceService(client);
+});
+
+/// 协作页面短轮询工厂（§4.2）：返回一个「传入 onTick 即得到 poller」的函数。
+///
+/// 复用引擎的 scheduler，单测里引擎注入了假定时器时页面轮询也一并可控。
+final collabPollerFactoryProvider =
+    Provider<SyncVisibilityPoller Function(void Function() onTick, {bool Function()? isActive})>(
+        (ref) {
+  final engine = ref.watch(syncEngineProvider);
+  return (onTick, {isActive}) => SyncVisibilityPoller(
+        scheduler: engine?.scheduler ?? const RealSyncScheduler(),
+        onTick: onTick,
+        isActive: isActive,
+      );
 });
 
 /// 同步状态流（同步中心 + 首页胶囊）。引擎未建时给静态态。

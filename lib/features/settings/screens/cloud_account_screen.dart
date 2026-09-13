@@ -71,9 +71,13 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
       setState(() => _error = copy('cloud.errGeneric'));
       return;
     }
-    if (pass.length < 6) {
-      setState(() => _error = copy('cloud.errPasswordShort'));
-      return;
+    // 密码强度仅在注册（设置新密码）时强制；登录不拦，避免老密码（6 位）用户被锁死。
+    if (_tabSignup) {
+      final issue = signupPasswordIssue(pass);
+      if (issue != null) {
+        setState(() => _error = _mapErr(issue));
+        return;
+      }
     }
     setState(() {
       _busy = true;
@@ -100,6 +104,7 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
   String _mapErr(String code) => switch (code) {
         'email_taken' => copy('cloud.errEmailTaken'),
         'password_short' => copy('cloud.errPasswordShort'),
+        'password_weak' => copy('cloud.errPasswordWeak'),
         'bad_credentials' => copy('cloud.errBadCredentials'),
         'rate_limited' => copy('cloud.errNetwork'),
         _ => copy('cloud.errGeneric'),

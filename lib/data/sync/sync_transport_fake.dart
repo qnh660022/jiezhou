@@ -34,15 +34,21 @@ class SyncTransportFake implements SyncTransport {
   Future<List<Map<String, dynamic>>> fetch(String entity,
       {required int updatedMsAfter, required String idAfter, required int limit}) async {
     fetchCalls++;
-    final all = (tables[entity]?.values.toList() ?? const [])
-      ..sort((a, b) {
-        final am = (a['updated_ms'] as num).toInt();
-        final bm = (b['updated_ms'] as num).toInt();
-        if (am != bm) return am.compareTo(bm);
-        final aid = a[_idCol(entity)] as String;
-        final bid = b[_idCol(entity)] as String;
-        return aid.compareTo(bid);
-      });
+    // ⚠️ 必须 toList() 成一个**可变的**新列表再排序：
+    // `tables[entity]?.values.toList() ?? const []` 在表为空时拿到的是 const 空表，
+    // `..sort()` 会抛 `Unsupported operation: Cannot modify an unmodifiable list`，
+    // 而该异常会被 SyncPuller 的整轮 try 吞成「本轮拉取失败」——结果是**空表实体
+    // 永远拉不动**，且 drain 也因 pull 失败被跳过（写后读整条链路失效）。
+    final all =
+        (tables[entity]?.values ?? const <Map<String, dynamic>>[]).toList()
+          ..sort((a, b) {
+            final am = (a['updated_ms'] as num).toInt();
+            final bm = (b['updated_ms'] as num).toInt();
+            if (am != bm) return am.compareTo(bm);
+            final aid = a[_idCol(entity)] as String;
+            final bid = b[_idCol(entity)] as String;
+            return aid.compareTo(bid);
+          });
     final filtered = all.where((r) {
       final ms = (r['updated_ms'] as num).toInt();
       final id = r[_idCol(entity)] as String;
@@ -63,6 +69,20 @@ class SyncTransportFake implements SyncTransport {
   /// 未列入的列均有默认值或有默认表达式（owner_user_id default auth.uid()），
   /// id/key 为主键、deleted/updated_ms 由信封恒带。
   static const Map<String, Set<String>> requiredColumns = {
+    // ===== V2.6.6.2 旅伴空间三表 =====
+    // spaces_sync：name / status / created_by 均 not null 且无默认值（§3.1）；
+    // created_ms 由 §0.3.1 硬性边界约束（not null 无默认值）。
+    'spaces_sync': {'name', 'status', 'created_by', 'created_ms'},
+    // space_members_sync：display_name / role / joined_ms / created_ms 全部
+    // not null 无默认值；space_id / user_id 同。
+    'space_members_sync': {
+      'space_id', 'user_id', 'role', 'display_name', 'joined_ms', 'created_ms',
+    },
+    // space_events_sync：append-only，但 created_ms 必带（updated_ms 由信封恒带）。
+    'space_events_sync': {
+      'space_id', 'actor_user', 'action', 'entity_kind', 'summary', 'created_ms',
+    },
+    // ===== V2.6 既有表 =====
     'trips_sync': {'created_ms'},
     'trip_items_sync': {'trip_id', 'created_ms'},
     'groups_sync': {'created_ms'},

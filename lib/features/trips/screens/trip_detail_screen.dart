@@ -1955,8 +1955,8 @@ void _openMoreSheet(BuildContext context, String tripId) {
   HapticFeedback.selectionClick();
   showDraggableSheet(
     context: context,
-    initialChildSize: 0.34,
-    minChildSize: 0.26,
+    initialChildSize: 0.38,
+    minChildSize: 0.28,
     builder: (ctx, _) => Padding(
       padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xl),
       child: Column(
@@ -1986,8 +1986,9 @@ void _openMoreSheet(BuildContext context, String tripId) {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.share_rounded),
-            title: const Text('生成海报'),
+            leading: const Icon(Icons.ios_share_rounded),
+            title: const Text('分享行程'),
+            subtitle: const Text('海报图片，或生成只读链接（对方无需登录）'),
             contentPadding: EdgeInsets.zero,
             onTap: () {
               Navigator.of(ctx).pop();

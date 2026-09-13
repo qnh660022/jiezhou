@@ -56,10 +56,14 @@ class _ShareViewScreenState extends ConsumerState<ShareViewScreen> {
     final shareSvc = ShareService(client);
     try {
       final res = await shareSvc.getShareSnapshot(widget.token, pass);
-      _st.needPass = res['error'] == 'need_pass';
-      _st.error = switch (res['error']) {
+      final err = res['error'] as String?;
+      // need_pass / bad_pass 都停留在口令输入页（bad_pass 显示错误后可重试，
+      // 此前误落到错误页且无输入框 → 口令只有一次机会、输错就卡死）。
+      _st.needPass = err == 'need_pass' || err == 'bad_pass';
+      _st.error = switch (err) {
         'not_found' => copy('share.notFound'),
         'bad_pass' => copy('share.passBad'),
+        'need_pass' => null,
         _ => res['ok'] == true ? null : copy('share.notFound'),
       };
       _st.data = res['ok'] == true ? (res['data'] as Map).cast<String, dynamic>() : null;
@@ -118,7 +122,7 @@ class _ShareViewScreenState extends ConsumerState<ShareViewScreen> {
               Text(_st.error!, style: TextStyle(color: scheme.error, fontSize: AppFontSizes.caption)),
             ],
             const SizedBox(height: Spacing.lg),
-            FilledButton(onPressed: () => _load(_passCtl.text), child: Text(copy('svc.retry'))),
+            FilledButton(onPressed: () => _load(_passCtl.text), child: const Text('验证')),
           ]),
         ),
       );

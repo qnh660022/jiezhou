@@ -1,0 +1,73 @@
+================================================================
+芥舟 V2.6.6.2 构建实测日志（Release arm64 APK）
+================================================================
+执行时间：2026-09-13
+执行方式：前台 PowerShell（§0.3.9），命令如下
+
+  cd D:\AI\money2.0
+  . .\scripts\env.local.ps1
+  .\scripts\build_apk.ps1 -Release -Arch arm64
+
+----------------------------------------------------------------
+脚本输出（逐行摘录）
+----------------------------------------------------------------
+==> Loading toolchain environment (scripts/env.local.ps1)
+==> Checking gradle wrapper distribution mirror (Tencent, idempotent)
+    Already on mirror source, or no distributionUrl found. Skipped.
+==> Checking project build.gradle repositories (Aliyun on top, idempotent)
+    Already contains Aliyun mirrors. Skipped.
+==> Checking settings.gradle repositories (Aliyun on top, idempotent)
+    Already contains Aliyun mirrors. Skipped.
+==> flutter pub get
+==> dart run build_runner build --delete-conflicting-outputs
+==> flutter analyze (requirement: 0 error)
+    flutter analyze: 0 errors, 274 warnings/infos (historical)
+==> flutter test (requirement: all green)
+    01:18 +345: All tests passed!
+==> Supabase endpoint injection: ENABLED (from env.local.ps1)
+==> flutter build apk --release (arch: arm64)
+    Font asset "CupertinoIcons.ttf" was tree-shaken, reducing it from 257628 to 848 bytes (99.7% reduction).
+    Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 28204 bytes (98.3% reduction).
+    Running Gradle task 'assembleRelease'...  309.0s
+    Built build\app\outputs\flutter-apk\app-release.apk (32.3MB)
+
+[OK] Build finished: D:\AI\money2.0\build\app\outputs\flutter-apk\app-release.apk
+EXITCODE=0
+
+----------------------------------------------------------------
+产物与签名校验
+----------------------------------------------------------------
+文件    ： build\app\outputs\flutter-apk\app-release.apk
+大小    ： 32.28 MB
+构建时间： 2026/9/13 11:42:11
+
+签名（android-sdk build-tools 36.0.0 / apksigner verify --print-certs）：
+  Signer #1 certificate DN: CN=Travel Assistant, OU=Dev, O=Travel, L=Shanghai, ST=Shanghai, C=CN
+  Signer #1 certificate SHA-256 digest:
+    4469f25aa6a9402f12aaf0cfa4cd4f9cc9c77cf8be37408b24833e4e0a85ea28
+  Signer #1 certificate SHA-1 digest:
+    45b2663bde5170960de256bc49c0a8834f9d1362
+  Signer #1 certificate MD5 digest:
+    f60a6f705276b377ad4d629fa36f303e
+
+结论：release 包已用 android/key.properties 指定的 release 密钥签名
+     （keyAlias=release，storeFile=release-key.jks），可直接分发安装。
+
+----------------------------------------------------------------
+Supabase 端点注入（§0.3.10 / §12）
+----------------------------------------------------------------
+脚本检测到 scripts/env.local.ps1 中的 SUPABASE_URL / SUPABASE_ANON_KEY 后自动追加：
+  --dart-define=SUPABASE_URL=...
+  --dart-define=SUPABASE_ANON_KEY=...
+→ 线上云端功能可用（否则 App 内会显示「未配置」）。
+
+----------------------------------------------------------------
+Web 构建（需求方手动执行）
+----------------------------------------------------------------
+  powershell -File scripts\build_web.ps1
+或
+  bash scripts/build_web.sh
+两个脚本内部均已带 --dart-define 注入（§0.3.10）。
+部署后抽查：
+  curl -s https://purser.22006.dpdns.org/main.dart.js | grep -o supabase.co
+================================================================

@@ -97,9 +97,10 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     }
     if (editId == null || editId.isEmpty) {
       _categoryKey = 'food';
+      // 新建模式支持 query `date`（epochDay）：今日驾驶舱「记一笔」直达当日。
+      _applyQueryDate();
       return;
-    }
-    final expenses = ref.read(expensesProvider).value ?? const <ExpenseRecord>[];
+    }    final expenses = ref.read(expensesProvider).value ?? const <ExpenseRecord>[];
     for (final e in expenses) {
       if (e.id == editId) {
         _editingId = e.id;
@@ -140,6 +141,24 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
         break;
       }
     }
+  }
+
+  /// 新建模式：读路由 query `date`（epochDay）作为初始记账日期。
+  ///
+  /// 用途：今日驾驶舱「记一笔」直达「行程今日」（可能是目的地当地日期，
+  /// 与设备日期不同），因此不能在驾驶舱侧改本地状态，只能把日期传进来。
+  /// 解析失败/缺省时保持 [initState] 里的 `todayEpochDay()`。
+  void _applyQueryDate() {
+    String? raw;
+    try {
+      raw = GoRouterState.of(context).uri.queryParameters['date'];
+    } catch (_) {
+      raw = null; // 桌面工作台以 Dialog 打开，无 GoRouterState
+    }
+    if (raw == null || raw.isEmpty) return;
+    final day = int.tryParse(raw);
+    if (day == null || day <= 0) return;
+    _dateEpochDay = day;
   }
 
   @override

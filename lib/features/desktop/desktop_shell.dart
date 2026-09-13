@@ -11,6 +11,7 @@ import '../../shared/widgets/floating_capsule_nav_bar.dart' show CapsuleTabItem;
 import '../../theme/theme_provider.dart';
 import '../../theme/tokens.dart';
 import '../ledger/screens/expense_edit_screen.dart';
+import '../today/today_providers.dart';
 import '../trips/screens/trip_edit_screen.dart';
 import 'command_palette.dart';
 import 'desktop_utils.dart';
@@ -321,6 +322,22 @@ class _Sidebar extends StatelessWidget {
                 onTap: () =>
                     shell.goBranch(i, initialLocation: i == shell.currentIndex),
               ),
+            // 「今日」：**仅在进行中行程存在时**出现（§8.1，无进行中行程不渲染，
+            // 不是置灰）；点击进全屏驾驶舱 `/today/:tripId`，内容复用
+            // 与移动端同一个 TodayCockpitScreen。
+            Consumer(
+              builder: (context, ref, _) {
+                final pick = ref.watch(activeTripPickProvider);
+                if (pick == null) return const SizedBox.shrink();
+                return _NavItem(
+                  emoji: '📍',
+                  label: '今日',
+                  // 全屏路由在根导航栈上，侧栏此刻不可见，故不做选中态。
+                  selected: false,
+                  onTap: () => context.push('/today/${pick.trip.id}'),
+                );
+              },
+            ),
             const Spacer(),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: Spacing.xs),
