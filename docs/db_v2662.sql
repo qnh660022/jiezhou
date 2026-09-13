@@ -198,6 +198,10 @@ $$;
 
 -- ---------- 3.1 trips_sync：读放宽（owner 或任一关联空间成员），写不放宽 ----------
 drop policy if exists "trips_sync_owner_all" on public.trips_sync;
+drop policy if exists "trips_sync_select" on public.trips_sync;
+drop policy if exists "trips_sync_insert" on public.trips_sync;
+drop policy if exists "trips_sync_update" on public.trips_sync;
+drop policy if exists "trips_sync_delete" on public.trips_sync;
 create policy "trips_sync_select" on public.trips_sync for select
   using (auth.uid() = owner_user_id
          or (deleted = false and public._can_read_trip(id, auth.uid())));
@@ -211,6 +215,10 @@ create policy "trips_sync_delete" on public.trips_sync for delete
 
 -- ---------- 3.2 trip_items_sync：读放宽 + 空间编辑者可写（强制 owner_user_id 保行程 owner） ----------
 drop policy if exists "trip_items_sync_owner_all" on public.trip_items_sync;
+drop policy if exists "trip_items_sync_select" on public.trip_items_sync;
+drop policy if exists "trip_items_sync_insert" on public.trip_items_sync;
+drop policy if exists "trip_items_sync_update" on public.trip_items_sync;
+drop policy if exists "trip_items_sync_delete" on public.trip_items_sync;
 create policy "trip_items_sync_select" on public.trip_items_sync for select
   using (auth.uid() = owner_user_id
          or (deleted = false and public._can_read_trip(trip_id, auth.uid())));
@@ -234,6 +242,10 @@ create policy "trip_items_sync_delete" on public.trip_items_sync for delete
 
 -- ---------- 3.3 categories_sync：不变（逐条列出四策略，避免「其余同理」） ----------
 drop policy if exists "categories_sync_owner_all" on public.categories_sync;
+drop policy if exists "categories_sync_select" on public.categories_sync;
+drop policy if exists "categories_sync_insert" on public.categories_sync;
+drop policy if exists "categories_sync_update" on public.categories_sync;
+drop policy if exists "categories_sync_delete" on public.categories_sync;
 create policy "categories_sync_select" on public.categories_sync for select
   using (auth.uid() = owner_user_id);
 create policy "categories_sync_insert" on public.categories_sync for insert
@@ -246,6 +258,10 @@ create policy "categories_sync_delete" on public.categories_sync for delete
 -- ---------- 3.4 groups_sync：owner 全权；协作成员按角色（viewer 只读） ----------
 drop policy if exists "groups_sync_owner_all" on public.groups_sync;
 drop policy if exists "groups_sync_collab_rw" on public.groups_sync;
+drop policy if exists "groups_sync_select" on public.groups_sync;
+drop policy if exists "groups_sync_insert" on public.groups_sync;
+drop policy if exists "groups_sync_update" on public.groups_sync;
+drop policy if exists "groups_sync_delete" on public.groups_sync;
 create policy "groups_sync_select" on public.groups_sync for select
   using (auth.uid() = owner_user_id
          or public._group_role(id, auth.uid()) is not null);
@@ -262,6 +278,10 @@ create policy "groups_sync_delete" on public.groups_sync for delete
 -- ---------- 3.5 members_sync：viewer 仅 select ----------
 drop policy if exists "members_sync_owner_all" on public.members_sync;
 drop policy if exists "members_sync_collab_rw" on public.members_sync;
+drop policy if exists "members_sync_select" on public.members_sync;
+drop policy if exists "members_sync_insert" on public.members_sync;
+drop policy if exists "members_sync_update" on public.members_sync;
+drop policy if exists "members_sync_delete" on public.members_sync;
 create policy "members_sync_select" on public.members_sync for select
   using (auth.uid() = owner_user_id
          or public._group_role(group_id, auth.uid()) is not null);
@@ -280,6 +300,10 @@ create policy "members_sync_delete" on public.members_sync for delete
 -- ---------- 3.6 expenses_sync：viewer 仅 select ----------
 drop policy if exists "expenses_sync_owner_all" on public.expenses_sync;
 drop policy if exists "expenses_sync_collab_rw" on public.expenses_sync;
+drop policy if exists "expenses_sync_select" on public.expenses_sync;
+drop policy if exists "expenses_sync_insert" on public.expenses_sync;
+drop policy if exists "expenses_sync_update" on public.expenses_sync;
+drop policy if exists "expenses_sync_delete" on public.expenses_sync;
 create policy "expenses_sync_select" on public.expenses_sync for select
   using (auth.uid() = owner_user_id
          or public._group_role(group_id, auth.uid()) is not null);
@@ -298,6 +322,10 @@ create policy "expenses_sync_delete" on public.expenses_sync for delete
 -- ---------- 3.7 settlements_sync：viewer 仅 select ----------
 drop policy if exists "settlements_sync_owner_all" on public.settlements_sync;
 drop policy if exists "settlements_sync_collab_rw" on public.settlements_sync;
+drop policy if exists "settlements_sync_select" on public.settlements_sync;
+drop policy if exists "settlements_sync_insert" on public.settlements_sync;
+drop policy if exists "settlements_sync_update" on public.settlements_sync;
+drop policy if exists "settlements_sync_delete" on public.settlements_sync;
 create policy "settlements_sync_select" on public.settlements_sync for select
   using (auth.uid() = owner_user_id
          or public._group_role(group_id, auth.uid()) is not null);
@@ -315,6 +343,10 @@ create policy "settlements_sync_delete" on public.settlements_sync for delete
 
 -- ---------- 3.8 group_collab：owner 全权（投影由 RPC 以 definer 身份维护） ----------
 drop policy if exists "group_collab_owner_all" on public.group_collab;
+drop policy if exists "group_collab_select" on public.group_collab;
+drop policy if exists "group_collab_insert" on public.group_collab;
+drop policy if exists "group_collab_update" on public.group_collab;
+drop policy if exists "group_collab_delete" on public.group_collab;
 create policy "group_collab_select" on public.group_collab for select
   using (auth.uid() = owner_user_id);
 create policy "group_collab_insert" on public.group_collab for insert
@@ -326,6 +358,10 @@ create policy "group_collab_delete" on public.group_collab for delete
 
 -- ---------- 3.9 spaces_sync ----------
 alter table public.spaces_sync enable row level security;
+drop policy if exists "spaces_sync_select" on public.spaces_sync;
+drop policy if exists "spaces_sync_insert" on public.spaces_sync;
+drop policy if exists "spaces_sync_update" on public.spaces_sync;
+drop policy if exists "spaces_sync_delete" on public.spaces_sync;
 create policy "spaces_sync_select" on public.spaces_sync for select
   using (auth.uid() = created_by
          or (deleted = false and public._can_read_space(id, auth.uid())));
@@ -338,6 +374,10 @@ create policy "spaces_sync_delete" on public.spaces_sync for delete
 
 -- ---------- 3.10 space_members_sync ----------
 alter table public.space_members_sync enable row level security;
+drop policy if exists "space_members_sync_select" on public.space_members_sync;
+drop policy if exists "space_members_sync_insert" on public.space_members_sync;
+drop policy if exists "space_members_sync_update" on public.space_members_sync;
+drop policy if exists "space_members_sync_delete" on public.space_members_sync;
 create policy "space_members_sync_select" on public.space_members_sync for select
   using (auth.uid() = user_id
          or (deleted = false and public._can_read_space(space_id, auth.uid())));
@@ -351,6 +391,10 @@ create policy "space_members_sync_delete" on public.space_members_sync for delet
 
 -- ---------- 3.11 space_events_sync（append-only） ----------
 alter table public.space_events_sync enable row level security;
+drop policy if exists "space_events_sync_select" on public.space_events_sync;
+drop policy if exists "space_events_sync_insert" on public.space_events_sync;
+drop policy if exists "space_events_sync_update" on public.space_events_sync;
+drop policy if exists "space_events_sync_delete" on public.space_events_sync;
 create policy "space_events_sync_select" on public.space_events_sync for select
   using (public._can_read_space(space_id, auth.uid()));
 create policy "space_events_sync_insert" on public.space_events_sync for insert
@@ -364,6 +408,10 @@ create policy "space_events_sync_delete" on public.space_events_sync for delete
 
 -- ---------- 3.12 space_invites（仅空间 owner 可管理） ----------
 alter table public.space_invites enable row level security;
+drop policy if exists "space_invites_select" on public.space_invites;
+drop policy if exists "space_invites_insert" on public.space_invites;
+drop policy if exists "space_invites_update" on public.space_invites;
+drop policy if exists "space_invites_delete" on public.space_invites;
 create policy "space_invites_select" on public.space_invites for select
   using (auth.uid() = created_by or public._is_space_owner(space_id, auth.uid()));
 create policy "space_invites_insert" on public.space_invites for insert
