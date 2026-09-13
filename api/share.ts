@@ -360,12 +360,29 @@ function groupBody(data: SnapshotData): string {
     }</div>${amountHtml(ex.amountCents)}</div>`;
   }
 
-  // settlements 已是最近 10 条；transfersJson 转义后原样展示，不解析、不美化
+  // settlements 已是最近 10 条；transfersJson 美化为「A → B ¥xx.xx」转账行，
+  // 解析失败 / 结构异常时回退转义原文（不丢兜底）；from/to 均为用户输入，全部转义
   const settlements = Array.isArray(data.settlements) ? data.settlements : [];
   if (settlements.length) {
     inner += '<div class="sec">近期结算</div>';
     for (const st of settlements) {
-      inner += `<div class="settle"><div class="ico">🤝</div><div class="txt">${esc(`第 ${st.roundNo} 轮 · ${st.transfersJson}`)}</div></div>`;
+      let rows = '';
+      try {
+        const v = JSON.parse(String(st.transfersJson ?? ''));
+        if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === 'object')) {
+          rows = v
+            .map((tr) => {
+              const cents = typeof tr.amountCents === 'number' ? tr.amountCents : 0;
+              return `<div class="tr-row"><span class="tr-people">${esc(tr.from)} <i>→</i> ${esc(tr.to)}</span><span class="tr-amt">¥${(cents / 100).toFixed(2)}</span></div>`;
+            })
+            .join('');
+        }
+      } catch {
+        rows = '';
+      }
+      inner += `<div class="settle"><div class="ico">🤝</div><div class="main"><div class="round">${esc(`第 ${st.roundNo} 轮`)}</div>${
+        rows || `<div class="txt">${esc(st.transfersJson)}</div>`
+      }</div></div>`;
     }
   }
   return `${hero}<main class="wrap"><div class="sheet">${inner}</div></main>`;
@@ -454,6 +471,13 @@ body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;backgr
 .bill .s{color:var(--ink3);font-size:13px;margin-top:2px;word-break:break-all}
 .settle{display:flex;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-top:10px;align-items:flex-start}
 .settle .ico{font-size:18px;flex:none}
+.settle .main{min-width:0;flex:1}
+.settle .round{font-size:13px;font-weight:600;color:var(--ink2)}
+.tr-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px dashed #EDF3F0;font-size:14px}
+.tr-row:last-child{border-bottom:0;padding-bottom:0}
+.tr-people{word-break:break-all}
+.tr-people i{font-style:normal;color:var(--brand);font-weight:600;margin:0 2px}
+.tr-amt{font-weight:600;white-space:nowrap}
 .settle .txt{font-size:12px;font-family:ui-monospace,Consolas,'Courier New',monospace;color:var(--ink2);word-break:break-all;line-height:1.6}
 
 /* ---- 空态 ---- */
