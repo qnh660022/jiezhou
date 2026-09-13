@@ -5,10 +5,18 @@ import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CloudAccountException implements Exception {
-  CloudAccountException(this.code);
+  CloudAccountException(this.code, {this.detail});
+
+  /// 机器错误码（UI 按此映射文案）。
   final String code;
+
+  /// 服务端原始报错（用于未知错误码时透出根因，避免只见「操作失败」）。
+  final String? detail;
+
   @override
-  String toString() => code;
+  String toString() => detail == null || detail!.isEmpty
+      ? code
+      : '$code: $detail';
 }
 
 /// 密码强度策略（V2.6.2 升级）：至少 8 位，且必须同时包含字母与数字。
@@ -41,7 +49,7 @@ class CloudAccountService {
         throw CloudAccountException('signup_failed');
       }
     } on AuthException catch (e) {
-      throw CloudAccountException(_mapAuthError(e, signup: true));
+      throw CloudAccountException(_mapAuthError(e, signup: true), detail: e.message);
     }
   }
 
@@ -49,7 +57,7 @@ class CloudAccountService {
     try {
       await _client.auth.signInWithPassword(email: email, password: password);
     } on AuthException catch (e) {
-      throw CloudAccountException(_mapAuthError(e));
+      throw CloudAccountException(_mapAuthError(e), detail: e.message);
     }
   }
 
@@ -62,6 +70,11 @@ class CloudAccountService {
     final m = e.message.toLowerCase();
     if (m.contains('already registered') || m.contains('already been registered')) {
       return 'email_taken';
+    }
+    // 注册 500：邮箱确认开启但内置 SMTP 发信失败（Supabase 免费版通病），
+    // curl 实测报 "Error sending confirmation email"。根因在服务端配置。
+    if (m.contains('confirmation email')) {
+      return 'email_send_failed';
     }
     // 先判字符种类要求（消息含 "contain at least one character of each..."，
     // 也带 "at least" 字样，必须排在长度规则之前）。

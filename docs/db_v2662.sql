@@ -597,6 +597,17 @@ begin
   if v_status not in ('active', 'archived') then
     return jsonb_build_object('ok', false, 'error', 'bad_status');
   end if;
+  -- 关联账本唯一性预检：目标账本已被其它未删除空间占用 → 返回明确错误码，
+  -- 而不是让 uq_spaces_sync_group_active 唯一索引裸抛 23505（客户端只见 500，
+  -- 表现为「保存中…」永久转圈）。
+  if p_group_id is not null and p_group_id <> coalesce(v_old.group_id, '') then
+    if exists (
+      select 1 from public.spaces_sync s
+       where s.group_id = p_group_id and s.deleted = false and s.id <> p_space_id
+    ) then
+      return jsonb_build_object('ok', false, 'error', 'group_already_in_space');
+    end if;
+  end if;
   update public.spaces_sync
      set name = v_name,
          status = v_status,

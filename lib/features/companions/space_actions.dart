@@ -7,6 +7,7 @@
 library;
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../../data/db/database.dart';
 import '../../data/providers.dart';
@@ -59,6 +60,7 @@ String spaceErrorText(String code) => switch (code) {
       'item_not_found' => '这条安排已不存在',
       'not_found' => '内容不存在或已删除',
       'bad_role' => '角色不合法',
+      'network' => '网络不稳定，请稍后重试',
       'PGRST202' => '云端还没升级：请先执行 docs/db_v2662.sql',
       _ => code.startsWith('PGRST') || code.contains('Postgrest')
           ? '云端还没升级：请先执行 docs/db_v2662.sql'
@@ -73,6 +75,20 @@ abstract final class SpaceActions {
 
   static String get _notSignedIn => 'unauthenticated';
 
+  /// RPC 异常兜底：把 PostgrestException / 网络异常折成错误码字符串，
+  /// 绝不让异常穿透到 UI（历史 bug：空间设置保存遇到 500 时异常未捕获，
+  /// 「保存中…」永远转圈）。
+  static Future<(T?, String)> _call<T>(Future<T> Function() body) async {
+    try {
+      return (await body(), '');
+    } on PostgrestException catch (e) {
+      final c = e.code;
+      return (null, (c == null || c.isEmpty) ? 'server' : c);
+    } catch (_) {
+      return (null, 'network');
+    }
+  }
+
   /// 新建空间（RPC 成功后本地镜像 + 写后读）。
   static Future<(String spaceId, String error)> createSpace(
     WidgetRef ref, {
@@ -84,9 +100,10 @@ abstract final class SpaceActions {
     if (!_ready(ref)) return ('', _notSignedIn);
     final svc = ref.read(spaceServiceProvider);
     if (svc == null) return ('', _notSignedIn);
-    final (spaceId, err) = await svc.createSpace(
-        name: name, tripId: tripId, groupId: groupId, note: note);
+    final (res, err) = await _call(() => svc.createSpace(
+        name: name, tripId: tripId, groupId: groupId, note: note));
     if (err.isNotEmpty) return ('', err);
+    final spaceId = res?.$1 ?? '';
     final now = DateTime.now().millisecondsSinceEpoch;
     final uid = ref.read(currentUserIdProvider) ?? '';
     final repo = ref.read(travelSpacesRepoProvider);
@@ -132,12 +149,12 @@ abstract final class SpaceActions {
     if (!_ready(ref)) return _notSignedIn;
     final svc = ref.read(spaceServiceProvider);
     if (svc == null) return _notSignedIn;
-    final err = await svc.updateSpace(
+    final (_, err) = await _call(() => svc.updateSpace(
         spaceId: spaceId,
         name: name,
         status: status,
         tripId: tripId,
-        groupId: groupId);
+        groupId: groupId));
     if (err.isNotEmpty) return err;
     await ref.read(syncEngineProvider)?.afterCollabWrite();
     return '';
@@ -156,9 +173,11 @@ abstract final class SpaceActions {
     final collab = ref.read(collabServiceProvider);
     if (space == null || collab == null) return ('', false, _notSignedIn);
 
-    final outcome =
-        await joinByCodeWithLegacyFallback(_SupabaseJoinRpc(space, collab), code);
-    if (!outcome.ok) return ('', false, outcome.error);
+    final (res, callErr) =
+        await _call(() => joinByCodeWithLegacyFallback(_SupabaseJoinRpc(space, collab), code));
+    if (callErr.isNotEmpty) return ('', false, callErr);
+    final outcome = res;
+    if (outcome == null || !outcome.ok) return ('', false, outcome?.error ?? 'invalid_code');
 
     final engine = ref.read(syncEngineProvider);
     await engine?.onJoinedSharedSpace(outcome.spaceId);
@@ -192,9 +211,10 @@ abstract final class SpaceActions {
     if (!_ready(ref)) return ('', _notSignedIn);
     final svc = ref.read(spaceServiceProvider);
     if (svc == null) return ('', _notSignedIn);
-    final (code, _, err) =
-        await svc.createInvite(spaceId: spaceId, role: role, ttlHours: ttlHours);
-    return (code, err);
+    final (res, err) =
+        await _call(() => svc.createInvite(spaceId: spaceId, role: role, ttlHours: ttlHours));
+    if (err.isNotEmpty) return ('', err);
+    return (res?.$1 ?? '', '');
   }
 
   /// 改成员角色（仅 owner）。
@@ -207,8 +227,8 @@ abstract final class SpaceActions {
     if (!_ready(ref)) return _notSignedIn;
     final svc = ref.read(spaceServiceProvider);
     if (svc == null) return _notSignedIn;
-    final err = await svc.setMemberRole(
-        spaceId: spaceId, targetUserId: targetUserId, role: role);
+    final (_, err) = await _call(() => svc.setMemberRole(
+        spaceId: spaceId, targetUserId: targetUserId, role: role));
     if (err.isNotEmpty) return err;
     await ref.read(syncEngineProvider)?.afterCollabWrite();
     return '';
@@ -223,8 +243,8 @@ abstract final class SpaceActions {
     if (!_ready(ref)) return _notSignedIn;
     final svc = ref.read(spaceServiceProvider);
     if (svc == null) return _notSignedIn;
-    final err =
-        await svc.removeMember(spaceId: spaceId, targetUserId: targetUserId);
+    final (_, err) =
+        await _call(() => svc.removeMember(spaceId: spaceId, targetUserId: targetUserId));
     if (err.isNotEmpty) return err;
     await ref.read(travelSpacesRepoProvider)
         .markMemberRemoved(spaceId, targetUserId,
@@ -238,7 +258,7 @@ abstract final class SpaceActions {
     if (!_ready(ref)) return _notSignedIn;
     final svc = ref.read(spaceServiceProvider);
     if (svc == null) return _notSignedIn;
-    final err = await svc.leaveSpace(spaceId);
+    final (_, err) = await _call(() => svc.leaveSpace(spaceId));
     if (err.isNotEmpty) return err;
     await ref.read(syncEngineProvider)?.onLeftSharedSpace(spaceId);
     return '';
@@ -249,7 +269,7 @@ abstract final class SpaceActions {
     if (!_ready(ref)) return _notSignedIn;
     final svc = ref.read(spaceServiceProvider);
     if (svc == null) return _notSignedIn;
-    final err = await svc.deleteSpace(spaceId);
+    final (_, err) = await _call(() => svc.deleteSpace(spaceId));
     if (err.isNotEmpty) return err;
     await ref.read(syncEngineProvider)?.onSpaceDeleted(spaceId);
     return '';
@@ -266,8 +286,9 @@ abstract final class SpaceActions {
     if (!_ready(ref)) return _notSignedIn;
     final svc = ref.read(spaceServiceProvider);
     if (svc == null) return _notSignedIn;
-    final (row, err) = await svc.upsertTripItem(spaceId: spaceId, item: item);
+    final (res, err) = await _call(() => svc.upsertTripItem(spaceId: spaceId, item: item));
     if (err.isNotEmpty) return err;
+    final row = res?.$1;
     final repo = ref.read(travelSpacesRepoProvider);
     if (row != null) {
       await repo.mirrorCollabTripItem(row);
@@ -290,7 +311,8 @@ abstract final class SpaceActions {
     if (!_ready(ref)) return _notSignedIn;
     final svc = ref.read(spaceServiceProvider);
     if (svc == null) return _notSignedIn;
-    final err = await svc.deleteTripItem(spaceId: spaceId, itemId: itemId);
+    final (_, err) =
+        await _call(() => svc.deleteTripItem(spaceId: spaceId, itemId: itemId));
     if (err.isNotEmpty) return err;
     await ref.read(travelSpacesRepoProvider).removeCollabTripItem(itemId);
     await _appendEvent(

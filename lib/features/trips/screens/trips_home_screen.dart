@@ -20,6 +20,7 @@ import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/screens/qr_scan_screen.dart';
+import '../../today/widgets/today_card.dart';
 import '../guide_city_picker.dart' show showGuideCityPicker;
 import '../guide_widgets.dart' show GuideRouteArgs;
 import '../trip_utils.dart';
@@ -172,6 +173,9 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
 
     final children = <Widget>[];
     var stagger = 0;
+    // 「今日」智能置顶卡（2026-09-13 调整：从账本页移到行程页；无进行中行程
+    // 时自渲染为 shrink，不占位）。
+    children.add(const TodayCard());
     void group(String title, List<Trip> list) {
       if (list.isEmpty) return;
       children.add(SectionHeader(title: title, trailingLabel: null,

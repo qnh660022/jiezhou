@@ -24,8 +24,6 @@ import '../widgets/member_avatar.dart';
 import '../widgets/stagger_in.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/sync_status_capsule.dart';
-import '../../companions/widgets/my_spaces_section.dart';
-import '../../today/widgets/today_card.dart';
 
 /// 💰 记账 Tab 主页：当前团总览 + 余额榜 + 预算 + 最近账单流。
 class LedgerHomeScreen extends ConsumerWidget {
@@ -77,10 +75,6 @@ class LedgerHomeScreen extends ConsumerWidget {
             ),
           ],
         ),
-        // 今日智能置顶卡：仅在有进行中行程时渲染（内部自判，无行程返回 shrink）。
-        const TodayCard(),
-        // V2.6.6.2 §7.3：原「共享账本」分组卡下线，替换为「我的空间」置顶卡。
-        const MySpacesSection(),
         Expanded(
           child: groupAsync.when(
             loading: () => const _HomeSkeleton(),

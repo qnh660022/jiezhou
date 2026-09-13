@@ -96,7 +96,12 @@ class SpaceAvatarStack extends StatelessWidget {
     if (names.isEmpty) return const SizedBox.shrink();
     final shown = names.take(max).toList();
     final extra = names.length - shown.length;
+    // Stack 只含 Positioned 子级时按约束最大值取尺寸：在 Row（无界宽）里会
+    // 崩溃/乱版（历史 bug：我的空间卡整卡布局崩坏）。必须给出显式宽度。
+    final count = shown.length + (extra > 0 ? 1 : 0);
+    final stackWidth = (count - 1) * (size - 9) + size;
     return SizedBox(
+      width: stackWidth,
       height: size,
       child: Stack(
         children: [

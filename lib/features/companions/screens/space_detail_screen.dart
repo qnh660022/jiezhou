@@ -32,6 +32,7 @@ import '../../../shared/widgets/secondary_button.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
+import '../../ledger/ledger_providers.dart' show activateGroup;
 import '../../ledger/widgets/shared_ledger_sections.dart';
 import '../../today/today_providers.dart';
 import '../../trips/screens/item_detail_screen.dart';
@@ -287,7 +288,7 @@ class _Hero extends ConsumerWidget {
   }
 }
 
-class _HeroBadges extends StatelessWidget {
+class _HeroBadges extends ConsumerWidget {
   const _HeroBadges({required this.space, required this.myRole, required this.db});
 
   final TravelSpace space;
@@ -295,8 +296,8 @@ class _HeroBadges extends StatelessWidget {
   final AppDatabase db;
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<({String? trip, String? group})>(
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<({String? trip, String? group, bool tripMine, bool groupMine})>(
       future: _names(),
       builder: (context, snap) {
         final names = snap.data;
@@ -308,11 +309,20 @@ class _HeroBadges extends StatelessWidget {
               _Capsule(
                 emoji: '🧳',
                 label: names?.trip ?? '关联行程',
+                // 自己的行程 → 进行程详情；旅伴的行程没有全屏详情页（能力
+                // 已在下方行程区），点了没反应的假入口不能给。
+                onTap: (names?.tripMine ?? false)
+                    ? () => context.pushNamed('trip-detail', extra: space.tripId)
+                    : null,
               ),
             if (space.groupId != null)
               _Capsule(
                 emoji: '💰',
                 label: names?.group ?? '关联账本',
+                // 自己的账本 → 切激活团并进账本主页；旅伴的账本只在本页账本区看。
+                onTap: (names?.groupMine ?? false)
+                    ? () => _openFullLedger(context, ref, space.groupId!)
+                    : null,
               ),
             _Capsule(
               emoji: '👤',
@@ -325,12 +335,21 @@ class _HeroBadges extends StatelessWidget {
     );
   }
 
-  Future<({String? trip, String? group})> _names() async {
+  /// 切激活团并跳账本 Tab（用户反馈：空间内无法跳转具体账本页面）。
+  Future<void> _openFullLedger(BuildContext context, WidgetRef ref, String groupId) async {
+    await activateGroup(ref, groupId);
+    if (context.mounted) context.go('/ledger');
+  }
+
+  Future<({String? trip, String? group, bool tripMine, bool groupMine})> _names() async {
     String? trip;
     String? group;
+    var tripMine = false;
+    var groupMine = false;
     if (space.tripId != null) {
       final rows =
           await (db.select(db.trips)..where((t) => t.id.equals(space.tripId!))).get();
+      tripMine = rows.isNotEmpty;
       if (rows.isEmpty) {
         final shared = await (db.select(db.sharedTrips)
               ..where((t) => t.id.equals(space.tripId!)))
@@ -343,6 +362,7 @@ class _HeroBadges extends StatelessWidget {
     if (space.groupId != null) {
       final rows =
           await (db.select(db.groups)..where((g) => g.id.equals(space.groupId!))).get();
+      groupMine = rows.isNotEmpty;
       if (rows.isEmpty) {
         final shared = await (db.select(db.sharedGroups)
               ..where((g) => g.id.equals(space.groupId!)))
@@ -352,25 +372,28 @@ class _HeroBadges extends StatelessWidget {
         group = rows.first.name;
       }
     }
-    return (trip: trip, group: group);
+    return (trip: trip, group: group, tripMine: tripMine, groupMine: groupMine);
   }
 }
 
 class _Capsule extends StatelessWidget {
-  const _Capsule({required this.emoji, required this.label});
+  const _Capsule({required this.emoji, required this.label, this.onTap});
 
   final String emoji;
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
+    final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: 5),
       decoration: BoxDecoration(
         color: scheme.primary.withValues(alpha: 0.10),
         borderRadius: AppRadius.capsule,
-        border: Border.all(color: scheme.primary.withValues(alpha: 0.22)),
+        border: Border.all(
+            color: scheme.primary.withValues(
+                alpha: onTap == null ? 0.22 : 0.45)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -390,8 +413,19 @@ class _Capsule extends StatelessWidget {
               ),
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right_rounded,
+                size: 14, color: scheme.primary),
+          ],
         ],
       ),
+    );
+    if (onTap == null) return pill;
+    return InkWell(
+      borderRadius: AppRadius.capsule,
+      onTap: onTap,
+      child: pill,
     );
   }
 }
@@ -1004,6 +1038,37 @@ class _LedgerSectionState extends ConsumerState<_LedgerSection>
     with SingleTickerProviderStateMixin {
   late final TabController _sub = TabController(length: 4, vsync: this);
 
+  /// 关联账本是否是我自己的本地团（业务表里有行）。
+  /// * 是 → 数据走本地业务表（自己团的完整数据：自己记的 + 拉下来的旅伴改动），
+  ///   只读展示 + 提供完整账本跳转（历史 bug：一律读镜像表，自己团在镜像里
+  ///   没有行 → 空间内账本永远"不同步"）；
+  /// * 否 → 走共享镜像表（受邀端既有路径，写通道 directUpsert + 镜像回写）。
+  bool? _mineGroup;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMine();
+  }
+
+  @override
+  void didUpdateWidget(_LedgerSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.space.groupId != widget.space.groupId) {
+      _mineGroup = null;
+      _loadMine();
+    }
+  }
+
+  Future<void> _loadMine() async {
+    final gid = widget.space.groupId;
+    if (gid == null) return;
+    final rows = await (ref.read(dbProvider).select(ref.read(dbProvider).groups)
+          ..where((g) => g.id.equals(gid)))
+        .get();
+    if (mounted) setState(() => _mineGroup = rows.isNotEmpty);
+  }
+
   @override
   void dispose() {
     _sub.dispose();
@@ -1025,19 +1090,59 @@ class _LedgerSectionState extends ConsumerState<_LedgerSection>
         ],
       );
     }
-    final data = MirrorLedgerSectionData(
-      db: ref.read(dbProvider),
-      groupId: groupId,
-      cloudClient: ref.read(cloudClientProvider),
-      syncEngine: ref.read(syncEngineProvider),
-    );
     final isOwner = widget.myRole == SpaceRole.owner;
-    final canWrite = SpaceRole.canEdit(widget.myRole);
+    final mine = _mineGroup;
+    if (mine == null) {
+      return Column(
+        children: [
+          TabBar(
+            controller: _sub,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: const [
+              Tab(text: '账单'),
+              Tab(text: '成员'),
+              Tab(text: '统计'),
+              Tab(text: '结算'),
+            ],
+          ),
+          const Expanded(
+            child: Padding(
+              padding: EdgeInsets.all(Spacing.xl),
+              child: SkeletonBox(height: 160, radius: AppRadius.cardValue),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final db = ref.read(dbProvider);
+    // 自己的本地团：空间内只读（记账/结算在完整账本做，避免绕过 outbox 直写
+    // 云端后本地业务表迟迟看不到）；旅伴的团：维持镜像 + 直写既有路径。
+    final canWrite = !mine && SpaceRole.canEdit(widget.myRole);
+    final data = mine
+        ? LocalLedgerSectionData(db: db, groupId: groupId)
+        : MirrorLedgerSectionData(
+            db: db,
+            groupId: groupId,
+            cloudClient: ref.read(cloudClientProvider),
+            syncEngine: ref.read(syncEngineProvider),
+          );
 
     // 账本区协作写成功后补空间动态（§4.2）：四能力组件内部写的是 *_sync 表，
     // 这里用 listener 捕获写完成事件，把「谁记了一笔账」记进动态流。
     return Column(
       children: [
+        if (mine)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.xs, Spacing.xl, 0),
+            child: _OpenLedgerRow(
+              onTap: () async {
+                await activateGroup(ref, groupId);
+                if (context.mounted) context.go('/ledger');
+              },
+            ),
+          ),
         TabBar(
           controller: _sub,
           isScrollable: true,
@@ -1055,20 +1160,20 @@ class _LedgerSectionState extends ConsumerState<_LedgerSection>
             children: [
               SharedBillsSection(
                 data: data,
-                online: widget.online,
+                online: ref.watch(cloudClientProvider) != null,
                 canWrite: canWrite,
                 onAddBill: () async => _log('expense_added', '记账'),
               ),
               SharedMembersSection(
                 data: data,
-                online: widget.online,
+                online: ref.watch(cloudClientProvider) != null,
                 isOwner: isOwner,
                 canWrite: canWrite,
               ),
               SharedStatsSection(data: data),
               SharedSettleSection(
                 data: data,
-                online: widget.online,
+                online: ref.watch(cloudClientProvider) != null,
                 isOwner: isOwner,
                 canWrite: canWrite,
               ),
@@ -1094,6 +1199,50 @@ class _LedgerSectionState extends ConsumerState<_LedgerSection>
 // ============================================================
 // 3 成员区
 // ============================================================
+
+/// 「这是你的账本」跳转条：自己的本地团在空间内只读，记账/结算去完整账本。
+class _OpenLedgerRow extends StatelessWidget {
+  const _OpenLedgerRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.primary.withValues(alpha: 0.08),
+      borderRadius: AppRadius.input,
+      child: InkWell(
+        borderRadius: AppRadius.input,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: Spacing.sm + 2),
+          child: Row(
+            children: [
+              Icon(Icons.account_balance_wallet_rounded,
+                  size: 16, color: scheme.primary),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: Text('这是你的账本：记账与结算在完整账本里进行',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: AppFontSizes.caption,
+                        color: scheme.onSurfaceVariant)),
+              ),
+              Text('打开',
+                  style: TextStyle(
+                      fontSize: AppFontSizes.caption,
+                      fontWeight: FontWeight.w700,
+                      color: scheme.primary)),
+              Icon(Icons.chevron_right_rounded, size: 15, color: scheme.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _MembersSection extends ConsumerStatefulWidget {
   const _MembersSection({
@@ -1474,12 +1623,18 @@ class _SpaceSettingsSheetState extends ConsumerState<_SpaceSettingsSheet> {
 
   Future<void> _update({String? name, String? status, String? tripId, String? groupId}) async {
     setState(() => _busy = true);
-    final err = await SpaceActions.updateSpace(ref,
-        spaceId: widget.space.id,
-        name: name,
-        status: status,
-        tripId: tripId,
-        groupId: groupId);
+    String err;
+    try {
+      err = await SpaceActions.updateSpace(ref,
+          spaceId: widget.space.id,
+          name: name,
+          status: status,
+          tripId: tripId,
+          groupId: groupId);
+    } catch (_) {
+      // 双保险：动作层已兜异常，这里保证「保存中…」绝不会永久卡住
+      err = 'network';
+    }
     if (!mounted) return;
     setState(() => _busy = false);
     ScaffoldMessenger.of(context)

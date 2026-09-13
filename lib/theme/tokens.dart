@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 「旅途助手」设计令牌：唯一颜色/圆角/间距/字体来源，禁止业务代码硬编码色值。
+/// 「芥舟」设计令牌：唯一颜色/圆角/间距/字体来源，禁止业务代码硬编码色值。
 
 /// 圆角令牌：卡片 24 / 输入框 16 / 按钮 14
 abstract final class AppRadius {

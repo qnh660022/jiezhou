@@ -102,6 +102,9 @@ const Map<String, CopyToken> _tokens = {
   'cloud.errPasswordShort': CopyToken('cloud.errPasswordShort', '密码至少 8 位'),
   'cloud.errPasswordWeak': CopyToken('cloud.errPasswordWeak', '密码须同时包含字母和数字'),
   'cloud.errBadCredentials': CopyToken('cloud.errBadCredentials', '账号或密码错误'),
+  'cloud.errEmailSendFailed': CopyToken(
+      'cloud.errEmailSendFailed',
+      '注册邮件发送失败：请到 Supabase 控制台关闭「Confirm email」（邮箱确认）后重试'),
   'cloud.errNetwork': CopyToken('cloud.errNetwork', '网络失败，请稍后重试'),
   'cloud.errGeneric': CopyToken('cloud.errGeneric', '操作失败，请稍后重试'),
   'cloud.uploadAskTitle': CopyToken('cloud.uploadAskTitle', '首次接入该账号'),
@@ -129,7 +132,7 @@ const Map<String, CopyToken> _tokens = {
   'share.readonlyLink': CopyToken('share.readonlyLink', '只读分享'),
   'share.readonlyPass': CopyToken('share.readonlyPass', '设置查看口令（4 位数字，可空）'),
   'share.readonlyCreated': CopyToken('share.readonlyCreated', '链接已生成'),
-  'share.pageFooter': CopyToken('share.pageFooter', '由芥舟 · 旅途助手生成，内容来自分享者'),
+  'share.pageFooter': CopyToken('share.pageFooter', '由芥舟生成，内容来自分享者'),
   'share.passTitle': CopyToken('share.passTitle', '输入 4 位口令'),
   'share.passBad': CopyToken('share.passBad', '口令不正确'),
   'share.notFound': CopyToken('share.notFound', '分享不存在或已被撤销'),

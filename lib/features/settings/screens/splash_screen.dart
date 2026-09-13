@@ -172,7 +172,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   end: Offset.zero,
                 ).animate(_titleAnimation),
                 child:
-                    Text('旅途助手', style: Theme.of(context).textTheme.titleLarge),
+                    Text('芥舟', style: Theme.of(context).textTheme.titleLarge),
               ),
             ),
             const SizedBox(height: Spacing.sm),

@@ -127,26 +127,38 @@ class TodayCard extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: Spacing.lg),
-                // 用 Wrap 而不是 Row：窄屏（360dp）下两个 StatChip 会横向溢出
-                // （golden 测试实测 RenderFlex overflow），Wrap 会自动换行。
-                Wrap(
-                  spacing: Spacing.sm,
-                  runSpacing: Spacing.sm,
+                // 两个统计胶囊固定一排（用户反馈：合为一排减少占用）：
+                // Expanded 各占一半；FittedBox(scaleDown) 让 360dp 窄屏上
+                // 内容等比微缩，既不换行也不溢出（原 Wrap 会折成两排）。
+                Row(
                   children: [
-                    StatChip(
-                      emoji: '🗓️',
-                      label: '今日安排',
-                      value: items.isEmpty ? '无安排' : '$doneCount/${items.length}',
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: StatChip(
+                          emoji: '🗓️',
+                          label: '今日安排',
+                          value: items.isEmpty ? '无安排' : '$doneCount/${items.length}',
+                        ),
+                      ),
                     ),
-                    StatChip(
-                      emoji: '💰',
-                      label: '今日花销',
-                      value: (spend?.hasLedger ?? false)
-                          ? MoneyFormat.display(spend!.totalCents)
-                          : '未关联',
-                      valueColor: (spend?.hasLedger ?? false)
-                          ? scheme.onSurface
-                          : scheme.onSurfaceVariant,
+                    const SizedBox(width: Spacing.sm),
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: StatChip(
+                          emoji: '💰',
+                          label: '今日花销',
+                          value: (spend?.hasLedger ?? false)
+                              ? MoneyFormat.display(spend!.totalCents)
+                              : '未关联',
+                          valueColor: (spend?.hasLedger ?? false)
+                              ? scheme.onSurface
+                              : scheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   ],
                 ),

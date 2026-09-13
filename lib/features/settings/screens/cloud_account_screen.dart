@@ -93,7 +93,7 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
       await _maybeBootstrapUpload();
       if (mounted) setState(() {});
     } on CloudAccountException catch (e) {
-      setState(() => _error = _mapErr(e.code));
+      setState(() => _error = _mapErr(e.code, detail: e.detail));
     } catch (_) {
       setState(() => _error = copy('cloud.errNetwork'));
     } finally {
@@ -101,14 +101,21 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
     }
   }
 
-  String _mapErr(String code) => switch (code) {
-        'email_taken' => copy('cloud.errEmailTaken'),
-        'password_short' => copy('cloud.errPasswordShort'),
-        'password_weak' => copy('cloud.errPasswordWeak'),
-        'bad_credentials' => copy('cloud.errBadCredentials'),
-        'rate_limited' => copy('cloud.errNetwork'),
-        _ => copy('cloud.errGeneric'),
-      };
+  String _mapErr(String code, {String? detail}) {
+    // 未知错误码透出服务端原文（此前一律「操作失败」把根因吞掉，无法定位）。
+    final fallback = (detail == null || detail.isEmpty)
+        ? copy('cloud.errGeneric')
+        : '${copy('cloud.errGeneric')}（${detail.trim()}）';
+    return switch (code) {
+      'email_taken' => copy('cloud.errEmailTaken'),
+      'password_short' => copy('cloud.errPasswordShort'),
+      'password_weak' => copy('cloud.errPasswordWeak'),
+      'bad_credentials' => copy('cloud.errBadCredentials'),
+      'email_send_failed' => copy('cloud.errEmailSendFailed'),
+      'rate_limited' => copy('cloud.errNetwork'),
+      _ => fallback,
+    };
+  }
 
   /// 首次引导（§3.10）：未引导账号询问「上传本地数据？」。
   Future<void> _maybeBootstrapUpload() async {
