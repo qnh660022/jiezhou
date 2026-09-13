@@ -497,7 +497,9 @@ begin
     if t.group_id is not null then
       select gs.name into group_name from public.groups_sync gs where gs.id = t.group_id;
     end if;
-    select coalesce(json_agg(row_to_json(x) order by x.date_epoch_day, x.sort_order), '[]'::json)
+    -- The projected fields use camelCase aliases; quote them in the outer
+    -- query so PostgreSQL does not fold them back to snake_case.
+    select coalesce(json_agg(row_to_json(x) order by x."dateEpochDay", x."sortOrder"), '[]'::json)
       into items
       from (
         select ti.date_epoch_day as "dateEpochDay", ti.type, ti.name, ti.address,

@@ -106,6 +106,37 @@ create table if not exists public.space_invites (
 );
 create index if not exists idx_space_invites_space on public.space_invites(space_id);
 
+-- 1.5 兼容已执行过旧版增量脚本的数据库
+--
+-- `create table if not exists` 不会给已有表补列。若旧版脚本曾执行到一半，
+-- 建空间会在 `_project_group_collab` / `_space_event` 写入阶段因缺列回滚，
+-- 客户端只能看到一个笼统的 500。这里把同步引擎依赖的补列做成幂等升级。
+alter table public.spaces_sync
+  add column if not exists deleted_ms bigint;
+alter table public.space_members_sync
+  add column if not exists created_ms bigint;
+update public.space_members_sync
+   set created_ms = coalesce(created_ms, joined_ms, 0)
+ where created_ms is null;
+alter table public.space_members_sync
+  alter column created_ms set not null;
+alter table public.space_events_sync
+  add column if not exists updated_ms bigint;
+update public.space_events_sync
+   set updated_ms = coalesce(updated_ms, created_ms, 0)
+ where updated_ms is null;
+alter table public.space_events_sync
+  alter column updated_ms set not null;
+alter table public.space_events_sync
+  add column if not exists deleted boolean not null default false;
+update public.space_events_sync
+   set deleted = false
+ where deleted is null;
+alter table public.space_events_sync
+  alter column deleted set default false;
+alter table public.space_events_sync
+  alter column deleted set not null;
+
 -- ============================================================
 -- 2. 权限判定辅助函数
 --    全部 security definer：策略内部引用其它 RLS 表时不触发对方策略（否则自引用

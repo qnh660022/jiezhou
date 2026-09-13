@@ -117,8 +117,10 @@ abstract final class SpaceActions {
         final known = await db.select(db.travelSpaces).get();
         final knownIds = known.map((e) => e.id).toSet();
         for (final m in spaces) {
-          final sid = (m['spaceId'] ?? '') as String;
-          final sname = (m['name'] ?? '') as String? ?? '';
+          final rawSid = m['spaceId'] ?? m['space_id'] ?? m['id'];
+          final sid = rawSid is String ? rawSid : '';
+          final rawName = m['name'];
+          final sname = rawName is String ? rawName : '';
           if (sid.isEmpty || knownIds.contains(sid)) continue;
           if (sname == name) {
             spaceId = sid;

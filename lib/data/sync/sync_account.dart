@@ -320,7 +320,13 @@ class SpaceService {
       'p_note': note,
     });
     final m = _asMap(res);
-    if (m['ok'] == true) return ((m['space_id'] as String?) ?? '', '');
+    if (m['ok'] == true) {
+      // Accept both the documented snake_case key and the camelCase key
+      // returned by a few older deployments. The action layer still has a
+      // list_my_spaces fallback when the server omits the id entirely.
+      final id = m['space_id'] ?? m['spaceId'] ?? m['id'];
+      return (id is String ? id : '', '');
+    }
     return ('', _errOf(m));
   }
 
