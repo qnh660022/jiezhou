@@ -505,6 +505,9 @@ class _CreateSpaceSheetState extends ConsumerState<_CreateSpaceSheet> {
   final _nameCtl = TextEditingController();
   String? _tripId;
   String? _groupId;
+
+  /// 所选账本已被某个空间占用（本地镜像即可判断，无需等服务端拒）。
+  String? _groupHint;
   int _step = 0;
   bool _busy = false;
   String _error = '';
@@ -513,6 +516,25 @@ class _CreateSpaceSheetState extends ConsumerState<_CreateSpaceSheet> {
   void dispose() {
     _nameCtl.dispose();
     super.dispose();
+  }
+
+  /// 查所选账本被哪个空间占用（一账本一空间；历史自动升级空间最易撞上）。
+  Future<void> _refreshGroupHint(String? groupId) async {
+    if (groupId == null) {
+      if (mounted) setState(() => _groupHint = null);
+      return;
+    }
+    final db = ref.read(dbProvider);
+    final rows = await (db.select(db.travelSpaces)
+          ..where((s) =>
+              s.groupId.equals(groupId) &
+              s.id.equals('').not() &
+              s.deletedMs.isNull()))
+        .get();
+    if (!mounted) return;
+    setState(() => _groupHint = rows.isEmpty
+        ? null
+        : '「${rows.first.name}」空间已占用这个账本：可直接使用那个空间，或在它的设置里删除后再建。');
   }
 
   Future<void> _submit() async {
@@ -618,13 +640,22 @@ class _CreateSpaceSheetState extends ConsumerState<_CreateSpaceSheet> {
                   ChoiceChip(
                     label: Text('${g.icon} ${g.name}'),
                     selected: _groupId == g.id,
-                    onSelected: (_) => setState(
-                        () => _groupId = _groupId == g.id ? null : g.id),
+                    onSelected: (_) async {
+                      final next = _groupId == g.id ? null : g.id;
+                      setState(() => _groupId = next);
+                      await _refreshGroupHint(next);
+                    },
                   ),
               ],
             );
           },
         ),
+        if (_groupHint != null) ...[
+          const SizedBox(height: Spacing.sm),
+          Text(_groupHint!,
+              style: TextStyle(
+                  fontSize: AppFontSizes.caption, color: scheme.primary)),
+        ],
 
         if (_error.isNotEmpty) ...[
           const SizedBox(height: Spacing.lg),

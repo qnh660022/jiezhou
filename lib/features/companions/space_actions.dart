@@ -61,10 +61,14 @@ String spaceErrorText(String code) => switch (code) {
       'not_found' => '内容不存在或已删除',
       'bad_role' => '角色不合法',
       'network' => '网络不稳定，请稍后重试',
+      'server' => '云端返回异常，请稍后重试',
+      // 建空间/关联账本时的唯一约束冲突：该账本已被其它空间占用
+      '23505' => '该账本已经在一个空间里了：打开旧空间改用即可，或删除后重试',
       'PGRST202' => '云端还没升级：请先执行 docs/db_v2662.sql',
       _ => code.startsWith('PGRST') || code.contains('Postgrest')
           ? '云端还没升级：请先执行 docs/db_v2662.sql'
-          : '操作失败，请稍后重试',
+          // 未知错误码透出原始码，便于远程定位（此前一律「操作失败」无法排查）
+          : '操作失败（$code），请稍后重试',
     };
 
 abstract final class SpaceActions {
