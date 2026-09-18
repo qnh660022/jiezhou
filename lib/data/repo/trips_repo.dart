@@ -4,9 +4,12 @@ import "dart:typed_data";
 import "package:drift/drift.dart";
 import "../db/database.dart";
 import "../../core/uid.dart";
+import "../../domain/day_shift_engine.dart";
 import "../../domain/trip_backup.dart";
+import "../../domain/records.dart";
 import "../../export/backup_format.dart";
 import "../sync/sync_outbox_service.dart";
+import "wishlist_repo.dart";
 
 class TripsRepository {
   TripsRepository(this.db);
@@ -26,6 +29,42 @@ class TripsRepository {
   Future<Trip?> getById(String id) async { final l = await (db.select(db.trips)..where((t)=>t.id.equals(id))).get(); return l.firstOrNull; }
   Future<TripItem?> getItem(String id) async { final l = await (db.select(db.tripItems)..where((t)=>t.id.equals(id))).get(); return l.firstOrNull; }
   Future<List<TripItem>> getItems(String tid) => (db.select(db.tripItems)..where((t)=>t.tripId.equals(tid))).get();
+
+  /// drift 行 → 领域镜像（纯算法引擎 S2/S7 的入参映射）。
+  static TripItemRecord tripItemToRecord(TripItem r) => TripItemRecord(
+        id: r.id,
+        tripId: r.tripId,
+        dateEpochDay: r.dateEpochDay,
+        type: r.type,
+        name: r.name,
+        address: r.address,
+        lat: r.lat,
+        lng: r.lng,
+        photoUri: r.photoUri,
+        startTimeMin: r.startTimeMin,
+        durationMin: r.durationMin,
+        costCents: r.costCents,
+        costCurrency: r.costCurrency,
+        note: r.note,
+        fromName: r.fromName,
+        fromAddress: r.fromAddress,
+        fromLat: r.fromLat,
+        fromLng: r.fromLng,
+        toName: r.toName,
+        toAddress: r.toAddress,
+        toLat: r.toLat,
+        toLng: r.toLng,
+        flightNo: r.flightNo,
+        sortOrder: r.sortOrder,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        guideRef: r.guideRef,
+        backupOf: r.backupOf,
+      );
+
+  /// 全部安排卡转领域镜像。
+  Future<List<TripItemRecord>> getItemRecords(String tid) async =>
+      [for (final r in await getItems(tid)) tripItemToRecord(r)];
 
   // ===== Trip CRUD =====
   Future<String> createTrip({required String name, required String dest, String emoji="✈️", String cover="ocean", required int start, required int end, String note="", String? groupId}) async {
@@ -55,6 +94,11 @@ class TripsRepository {
   Future<void> deleteTrip(String id) async {
     // 先收集子行 id：删除/摘链后就读不到了，无法再补墓碑或重上行（bug B8）。
     final itemIds = (await getItems(id)).map((i) => i.id).toList();
+    final wishlistIds = (await (db.select(db.wishlistItems)
+              ..where((w) => w.tripId.equals(id)))
+            .get())
+        .map((w) => w.id)
+        .toList();
     final linkedExpenseIds = (await (db.select(db.expenses)
               ..where((e) => e.tripId.equals(id)))
             .get())
@@ -62,6 +106,9 @@ class TripsRepository {
         .toList();
     await (db.update(db.expenses)..where((e)=>e.tripId.equals(id))).write(ExpensesCompanion(tripId:Value(null),tripItemId:Value(null)));
     await (db.delete(db.tripItems)..where((t)=>t.tripId.equals(id))).go();
+    // V2.7.2：想去池随行程级联清空（含受邀端镜像行）
+    await (db.delete(db.wishlistItems)..where((w)=>w.tripId.equals(id))).go();
+    await (db.delete(db.sharedWishlistItems)..where((w)=>w.tripId.equals(id))).go();
     await (db.delete(db.checklistItems)..where((c)=>c.tripId.equals(id))).go();
     await (db.delete(db.albumPhotos)..where((a)=>a.tripId.equals(id))).go();
     await (db.delete(db.trips)..where((t)=>t.id.equals(id))).go();
@@ -69,6 +116,10 @@ class TripsRepository {
     SyncOutboxService.notifyWrite("trips", id, op: "delete");
     for (final iid in itemIds) {
       SyncOutboxService.notifyWrite("trip_items", iid, op: "delete");
+    }
+    // 想去池行逐行发墓碑（登记 9：删行程级联清池）
+    for (final wid in wishlistIds) {
+      SyncOutboxService.notifyWrite("wishlist_items", wid, op: "delete");
     }
     for (final eid in linkedExpenseIds) {
       SyncOutboxService.notifyWrite("expenses", eid);
@@ -126,6 +177,291 @@ class TripsRepository {
     SyncOutboxService.notifyWrite("trips", tid);
   }
 
+  // ===== 增减天数顺延（V2.7.2 S2） =====
+
+  /// 执行顺延引擎输出的变更动作：单事务内先改行后改 Trips，提交后逐行
+  /// notifyWrite（discard 的 OpDeleteItem 发墓碑 op:'delete'）。
+  Future<void> applyDayOps(String tripId, List<DayOp> ops) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.transaction(() async {
+      for (final op in ops) {
+        switch (op) {
+          case OpShiftItem(:final itemId, :final newEpochDay, :final newSortOrder):
+            await (db.update(db.tripItems)..where((t) => t.id.equals(itemId))).write(
+                TripItemsCompanion(
+                    dateEpochDay: Value(newEpochDay),
+                    sortOrder: Value(newSortOrder),
+                    updatedAt: Value(now)));
+          case OpDeleteItem(:final itemId):
+            // 关联账单先摘链（与 deleteItem 同口径），再物理删
+            await (db.update(db.expenses)..where((e) => e.tripItemId.equals(itemId)))
+                .write(ExpensesCompanion(tripItemId: Value(null)));
+            await (db.delete(db.tripItems)..where((t) => t.id.equals(itemId))).go();
+          case OpSetEnd(:final newEndEpochDay):
+            await (db.update(db.trips)..where((t) => t.id.equals(tripId))).write(
+                TripsCompanion(endEpochDay: Value(newEndEpochDay), updatedAt: Value(now)));
+        }
+      }
+    });
+    // 事务提交成功后再逐行补发（批量操作在事务外逐行 notifyWrite）
+    for (final op in ops) {
+      switch (op) {
+        case OpShiftItem(:final itemId):
+          SyncOutboxService.notifyWrite("trip_items", itemId);
+        case OpDeleteItem(:final itemId):
+          SyncOutboxService.notifyWrite("trip_items", itemId, op: "delete");
+        case OpSetEnd():
+          SyncOutboxService.notifyWrite("trips", tripId);
+      }
+    }
+  }
+
+  // ===== 拖拽排序与跨天批量（V2.7.2 S4） =====
+
+  /// 当天重排：[orderedIds] 为该天全部卡的最终顺序；当天 sortOrder 整体重编
+  /// 10,20,30…（单事务；提交后仅对**变更行**逐行 notifyWrite）。
+  Future<void> reorderDay(String tripId, int day, List<String> orderedIds) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final before = <String, int>{};
+    for (final it in await getItems(tripId)) {
+      if (it.dateEpochDay == day) before[it.id] = it.sortOrder;
+    }
+    await db.transaction(() async {
+      for (var i = 0; i < orderedIds.length; i++) {
+        final newOrder = (i + 1) * 10;
+        final old = before[orderedIds[i]];
+        if (old == null || old == newOrder) continue;
+        await (db.update(db.tripItems)..where((t) => t.id.equals(orderedIds[i])))
+            .write(TripItemsCompanion(sortOrder: Value(newOrder), updatedAt: Value(now)));
+      }
+    });
+    for (final id in orderedIds) {
+      final old = before[id];
+      if (old == null) continue;
+      final newOrder = (orderedIds.indexOf(id) + 1) * 10;
+      if (old == newOrder) continue;
+      SyncOutboxService.notifyWrite("trip_items", id);
+    }
+  }
+
+  /// 单卡跨天移动：写 dateEpochDay + sortOrder 追加目标天末尾。
+  Future<void> moveItemToDay(String tripId, String itemId, int targetDay) =>
+      batchMove(tripId, [itemId], targetDay);
+
+  /// 批量跨天移动：单事务逐行移动（sortOrder 依次追加目标天末尾，步长 10）；
+  /// 提交后逐行 notifyWrite。
+  Future<void> batchMove(String tripId, List<String> itemIds, int targetDay) async {
+    if (itemIds.isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.transaction(() async {
+      final target = await (db.select(db.tripItems)
+            ..where((t) => t.tripId.equals(tripId) & t.dateEpochDay.equals(targetDay)))
+          .get();
+      var order = 0;
+      for (final r in target) {
+        if (r.sortOrder > order) order = r.sortOrder;
+      }
+      for (final id in itemIds) {
+        order += 10;
+        await (db.update(db.tripItems)..where((t) => t.id.equals(id))).write(
+            TripItemsCompanion(
+                dateEpochDay: Value(targetDay),
+                sortOrder: Value(order),
+                updatedAt: Value(now)));
+      }
+    });
+    for (final id in itemIds) {
+      SyncOutboxService.notifyWrite("trip_items", id);
+    }
+  }
+
+  /// 批量删除：单事务逐行摘链（关联账单）+ 物理删；提交后逐行墓碑。
+  Future<void> batchDelete(String tripId, List<String> itemIds) async {
+    if (itemIds.isEmpty) return;
+    await db.transaction(() async {
+      for (final id in itemIds) {
+        await (db.update(db.expenses)..where((e) => e.tripItemId.equals(id)))
+            .write(const ExpensesCompanion(tripItemId: Value(null)));
+        await (db.delete(db.tripItems)..where((t) => t.id.equals(id))).go();
+      }
+    });
+    for (final id in itemIds) {
+      SyncOutboxService.notifyWrite("trip_items", id, op: "delete");
+    }
+  }
+
+  /// S5 攻略「直接排」：按 §8.3 字段映射建正式卡（guideRef 弱关联，
+  /// 不复制种子长文）。sortOrder 追加该天末尾（步长 10）。
+  Future<String> addItemWithGuideRef({
+    required String tripId,
+    required int dateEpochDay,
+    required String name,
+    required String type, // spots→attraction / food→food（调用方映射）
+    required String guideRef,
+    String address = '',
+    int? durationMin,
+    int? startTimeMin,
+  }) async {
+    final id = newId("item");
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final dayItems = await (db.select(db.tripItems)
+          ..where((t) =>
+              t.tripId.equals(tripId) & t.dateEpochDay.equals(dateEpochDay)))
+        .get();
+    var maxSort = 0;
+    for (final it in dayItems) {
+      if (it.sortOrder > maxSort) maxSort = it.sortOrder;
+    }
+    await db.into(db.tripItems).insert(TripItemsCompanion.insert(
+          id: id,
+          tripId: tripId,
+          dateEpochDay: Value(dateEpochDay),
+          type: Value(type),
+          name: Value(name),
+          address: Value(address),
+          startTimeMin: Value(startTimeMin),
+          durationMin: Value(durationMin),
+          sortOrder: Value(maxSort + 10),
+          guideRef: Value(guideRef),
+          createdAt: now,
+          updatedAt: now,
+        ));
+    SyncOutboxService.notifyWrite("trip_items", id);
+    return id;
+  }
+
+  /// S5 互链反查：按 guideRef 前缀（cityKey#栏#）取同行程全部命中卡。
+  /// 前缀匹配 + 内存过滤；顺延引擎改天后 dateEpochDay 联动正确。
+  Future<List<TripItem>> findByGuideRefPrefix(String tripId, String prefix) =>
+      (db.select(db.tripItems)
+            ..where((t) =>
+                t.tripId.equals(tripId) & t.guideRef.like('$prefix%'))
+            ..orderBy([
+              (t) => OrderingTerm.asc(t.dateEpochDay),
+              (t) => OrderingTerm.asc(t.sortOrder),
+            ]))
+          .get();
+
+  /// S7 装配台落点：同事务建卡 + 删池行（委托 wishlist_repo.placeToDay，
+  /// 收口规则 1）。
+  Future<String> assemblePlace({
+    required String tripId,
+    required String wishlistId,
+    required int dateEpochDay,
+    int? startTimeMin,
+    int? durationMin,
+  }) =>
+      WishlistRepository(db).placeToDay(
+        tripId: tripId,
+        wishlistId: wishlistId,
+        dateEpochDay: dateEpochDay,
+        startTimeMin: startTimeMin,
+        durationMin: durationMin,
+      );
+
+  // ===== Plan B 备选项（V2.7.2 S8） =====
+  //
+  // backupOf 语义：null=正式卡；''=无主备胎；非空=有主备胎（指向同行程
+  // 正式卡 id）。一层约束：backupOf 指向的卡自身必须是正式卡，违反抛 StateError。
+
+  /// 正式卡「转为备选」：挂到该天首个正式卡；当天无正式卡 → ''（无主）。
+  Future<void> convertToBackup(String tripId, String itemId) async {
+    final item = await getItem(itemId);
+    if (item == null || item.tripId != tripId) return;
+    if (item.backupOf != null) {
+      throw StateError('备胎不能再转为备胎（至多一层）');
+    }
+    final dayFormal = await (db.select(db.tripItems)
+          ..where((t) =>
+              t.tripId.equals(tripId) &
+              t.dateEpochDay.equals(item.dateEpochDay) &
+              t.backupOf.isNull())
+          ..orderBy([(t) => OrderingTerm.asc(t.sortOrder)]))
+        .get();
+    final main = dayFormal.where((e) => e.id != itemId).firstOrNull;
+    await updateItem(
+        itemId, TripItemsCompanion(backupOf: Value(main?.id ?? '')));
+  }
+
+  /// 一键替换（互换身份）：同事务两行更新——正式卡 backupOf=备胎id、
+  /// 备胎转正（null）。时间与日期字段不互换（转正卡沿用自身 startTimeMin）。
+  Future<void> swapBackup(String mainId, String backupId) async {
+    final main = await getItem(mainId);
+    final backup = await getItem(backupId);
+    if (main == null || backup == null) {
+      throw StateError('替换的卡不存在');
+    }
+    if (main.backupOf != null) {
+      throw StateError('目标不是正式卡（backupOf 非空）');
+    }
+    if (backup.backupOf == null) {
+      throw StateError('备胎卡 backupOf 为空，无法参与替换');
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.transaction(() async {
+      await (db.update(db.tripItems)..where((t) => t.id.equals(mainId))).write(
+          TripItemsCompanion(backupOf: Value(backupId), updatedAt: Value(now)));
+      await (db.update(db.tripItems)..where((t) => t.id.equals(backupId)))
+          .write(TripItemsCompanion(
+              backupOf: Value(null), updatedAt: Value(now)));
+    });
+    SyncOutboxService.notifyWrite("trip_items", mainId);
+    SyncOutboxService.notifyWrite("trip_items", backupId);
+  }
+
+  /// 备胎「转正（独立）」：backupOf = null。
+  Future<void> promoteBackup(String tripId, String itemId) async {
+    final item = await getItem(itemId);
+    if (item == null || item.tripId != tripId) return;
+    if (item.backupOf == null) throw StateError('该卡已是正式卡');
+    await updateItem(
+        itemId, TripItemsCompanion(backupOf: Value(null)));
+  }
+
+  /// 备胎「退回想去」：同事务删卡 + 建池行（继承
+  /// name/address/type/durationMin/guideRef/tag→无/notes），提交后双行 notify。
+  Future<String> returnBackupToWishlist(String tripId, String itemId) async {
+    final item = await getItem(itemId);
+    if (item == null || item.tripId != tripId) {
+      throw StateError('备胎卡不存在');
+    }
+    final wishId = newId('wish');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.transaction(() async {
+      await db.into(db.wishlistItems).insert(WishlistItemsCompanion.insert(
+            id: wishId,
+            tripId: tripId,
+            cityKey: const Value(''),
+            name: Value(item.name),
+            address: Value(item.address),
+            type: Value(item.type),
+            durationMin: Value(item.durationMin),
+            guideRef: Value(item.guideRef),
+            sortOrder: const Value(0),
+            createdAt: now,
+            updatedAt: now,
+          ));
+      await (db.delete(db.tripItems)..where((t) => t.id.equals(itemId))).go();
+    });
+    SyncOutboxService.notifyWrite('wishlist_items', wishId);
+    SyncOutboxService.notifyWrite('trip_items', itemId, op: 'delete');
+    return wishId;
+  }
+
+  /// 装配台「转为备胎」：池条目 → 无主备胎卡（backupOf=''、日期=当前天），
+  /// 同事务删池行（收口规则 1）。
+  Future<String> assemblePlaceAsBackup({
+    required String tripId,
+    required String wishlistId,
+    required int dateEpochDay,
+  }) =>
+      WishlistRepository(db).placeToDay(
+        tripId: tripId,
+        wishlistId: wishlistId,
+        dateEpochDay: dateEpochDay,
+        asBackup: true,
+      );
+
   // ===== Album =====
   Future<void> addPhoto(String uri, int dayEpochDay) async {
     final id = newId("photo");
@@ -146,18 +482,20 @@ class TripsRepository {
   }
 
   // === 专有格式备份（.tat） ===
-  /// 导出单行程完整备份（行程+安排+相册uri+清单）为二进制 .tat。
+  /// 导出单行程完整备份（行程+安排+相册uri+清单+想去池）为二进制 .tat。
   Future<Uint8List> exportTripBackupBytes(String tid) async {
     final t = await getById(tid);
     if (t == null) throw StateError('行程不存在');
     final items = await getItems(tid);
     final photos = await (db.select(db.albumPhotos)..where((a) => a.tripId.equals(tid))).get();
     final checklist = await (db.select(db.checklistItems)..where((c) => c.tripId.equals(tid))).get();
+    final wishlist = await (db.select(db.wishlistItems)..where((w) => w.tripId.equals(tid))).get();
     final backup = buildTripBackup(
       trip: t.toJson(),
       items: [for (final i in items) i.toJson()],
       photos: [for (final p in photos) p.toJson()],
       checklist: [for (final c in checklist) c.toJson()],
+      wishlist: [for (final w in wishlist) w.toJson()],
     );
     return encodeBackup(kTripBackupMagic, backup);
   }
@@ -196,6 +534,10 @@ class TripsRepository {
       for (final it in result.items) {
         final iid = it['id'];
         if (iid is String) SyncOutboxService.notifyWrite("trip_items", iid);
+      }
+      for (final w in result.wishlist) {
+        final wid = w['id'];
+        if (wid is String) SyncOutboxService.notifyWrite("wishlist_items", wid);
       }
     }
     return report;
@@ -240,6 +582,27 @@ class TripsRepository {
         sortOrder: Value(c['sortOrder'] is int ? c['sortOrder'] as int : 0),
       ));
     }
+    for (final w in r.wishlist) {
+      await db.into(db.wishlistItems).insert(_wishlistBackupCompanion(w, now, r.trip['id'] as String));
+    }
+  }
+
+  WishlistItemsCompanion _wishlistBackupCompanion(Map<String, dynamic> w, int now, String tripId) {
+    return WishlistItemsCompanion(
+      id: Value(w['id'] as String),
+      tripId: Value(tripId),
+      cityKey: Value(w['cityKey'] as String? ?? ''),
+      name: Value(_nonEmptyTrip(w['name'] as String?, '想去的地方')),
+      address: Value(w['address'] as String? ?? ''),
+      type: Value(_nonEmptyTrip(w['type'] as String?, 'attraction')),
+      durationMin: Value(w['durationMin'] is int ? w['durationMin'] as int? : null),
+      tag: Value(w['tag'] as String?),
+      guideRef: Value(w['guideRef'] as String?),
+      note: Value(w['note'] as String? ?? ''),
+      sortOrder: Value(w['sortOrder'] is int ? w['sortOrder'] as int : 0),
+      createdAt: Value(w['createdAt'] is int ? w['createdAt'] as int : now),
+      updatedAt: Value(now),
+    );
   }
 
   TripItemsCompanion _tripBackupItemCompanion(Map<String, dynamic> it, int now, String tripId) {

@@ -32,9 +32,12 @@ import 'trip_widgets.dart' show SectionCard;
 /// - `cityKey` 有值 → 城市入口（选择器/行程列表卡片），无行程上下文，
 ///   「加入安排」时先弹行程选择。
 class GuideRouteArgs {
-  const GuideRouteArgs({this.tripId, this.cityKey});
+  const GuideRouteArgs({this.tripId, this.cityKey, this.focusRef});
   final String? tripId;
   final String? cityKey;
+
+  /// 深链定位（V2.7.2 S5）：行程卡「攻略」角标带来的 guideRef。
+  final String? focusRef;
 }
 
 // ---------------------------------------------------------------------------
@@ -424,6 +427,7 @@ class GuideSectionBody extends StatefulWidget {
     this.onToggle,
     this.itemActionBuilder,
     this.tagFilterEnabled = true,
+    this.itemAnchorKey,
   });
 
   final String sectionKey;
@@ -433,11 +437,14 @@ class GuideSectionBody extends StatefulWidget {
   final bool expanded;
   final VoidCallback? onToggle;
 
-  /// 条目右侧动作（「加入安排」）；返回 null 表示不显示。
+  /// 条目右侧动作（「直接排 / 先想去」）；返回 null 表示不显示。
   final Widget? Function(Map<String, dynamic> item)? itemActionBuilder;
 
   /// 是否给 spots/food 提供标签筛选（必去/经典/小众…）。
   final bool tagFilterEnabled;
+
+  /// 条目滚动锚点 key（行程卡「攻略」角标深链定位用）；null 表示不需要。
+  final Key? Function(Map<String, dynamic> item)? itemAnchorKey;
 
   @override
   State<GuideSectionBody> createState() => _GuideSectionBodyState();
@@ -558,10 +565,13 @@ class _GuideSectionBodyState extends State<GuideSectionBody> {
               )
             else
               for (final item in _visible)
-                GuideItemRow(
-                  sectionKey: widget.sectionKey,
-                  item: item,
-                  action: widget.itemActionBuilder?.call(item),
+                KeyedSubtree(
+                  key: widget.itemAnchorKey?.call(item),
+                  child: GuideItemRow(
+                    sectionKey: widget.sectionKey,
+                    item: item,
+                    action: widget.itemActionBuilder?.call(item),
+                  ),
                 ),
           ],
         ],

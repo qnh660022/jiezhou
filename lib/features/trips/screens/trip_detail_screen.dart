@@ -10,10 +10,15 @@ import '../../../core/date_utils.dart';
 import '../../../core/uid.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
+import '../../../data/repo/trips_repo.dart';
 import '../../../data/services/weather_service.dart';
 import '../../../domain/trip_bill_linker.dart';
+import '../../../domain/day_shift_engine.dart';
+import '../../../domain/outline_parser.dart';
 import '../../ledger/ledger_providers.dart';
 import '../trip_template_store.dart';
+import '../widgets/assemble_panel.dart';
+import '../widgets/trip_tab_panels.dart';
 
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
@@ -25,6 +30,7 @@ import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../widgets/day_ops_sheet.dart';
 import '../guide_widgets.dart' show GuideRouteArgs;
 import 'item_detail_screen.dart';
 import 'item_edit_screen.dart';
@@ -37,7 +43,8 @@ class TripDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<TripDetailScreen> createState() => _TripDetailScreenState();
 }
 
-class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
+class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
+    with SingleTickerProviderStateMixin {
   final ScrollController _scroll = ScrollController();
   String? _tripId;
   Future<List<WeatherDay>?>? _weatherFuture;
@@ -50,9 +57,17 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
   /// 当前行程缓存：长按操作单/一键入账需要 groupId 等上下文（仅引用赋值）
   Trip? _currentTrip;
 
+  // 多选批量（V2.7.2 S4）：状态在宿主层
+  bool _multiSelect = false;
+  final Set<String> _selectedIds = {};
+
+  /// 页签容器（V2.7.2 总纲 §2.5）：时间轴 / 大纲 / 装配 / 锦囊
+  TabController? _tabCtrl;
+
   @override
   void dispose() {
     _scroll.dispose();
+    _tabCtrl?.dispose();
     super.dispose();
   }
 
@@ -103,8 +118,29 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
       );
     }
     return Scaffold(
-      appBar: GlassAppBar(title: '行程详情', scrollController: _scroll),
-      body: StreamBuilder<Trip?>(
+      appBar: GlassAppBar(
+        title: '行程详情',
+        scrollController: _scroll,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(44),
+          child: TabBar(
+            controller: _tabCtrl ??= TabController(length: 4, vsync: this),
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: const [
+              Tab(text: '时间轴'),
+              Tab(text: '大纲'),
+              Tab(text: '装配'),
+              Tab(text: '锦囊'),
+            ],
+          ),
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabCtrl,
+        children: [
+          // ---- 页签 1：时间轴（既有流链原样保留） ----
+          StreamBuilder<Trip?>(
         stream: _tripStream ??= ref.read(tripsRepoProvider).watchTrip(id),
         builder: (context, tripSnap) {
           if (tripSnap.connectionState == ConnectionState.waiting) {
@@ -130,10 +166,66 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                 onBind: () => _bindLedgerSheet(context, trip),
                 onShowExpenses: () => _showExpensesSheet(context, trip),
                 onQuickBill: (ctx, it) => _quickBillSheet(ctx, trip, it),
+                multiSelect: _multiSelect,
+                selectedIds: _selectedIds,
+                onToggleSelect: (it) {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    if (!_selectedIds.add(it.id)) _selectedIds.remove(it.id);
+                  });
+                },
+                onEnterMultiSelect: (it) => setState(() {
+                  _multiSelect = true;
+                  _selectedIds
+                    ..clear()
+                    ..add(it.id);
+                }),
+                onExitMultiSelect: () => setState(() {
+                  _multiSelect = false;
+                  _selectedIds.clear();
+                }),
+                onBatchMove: (ids, dayIndex) async {
+                  final target = trip.startEpochDay + dayIndex - 1;
+                  await ref
+                      .read(tripsRepoProvider)
+                      .batchMove(trip.id, ids, target);
+                  if (mounted) {
+                    setState(() {
+                      _multiSelect = false;
+                      _selectedIds.clear();
+                    });
+                    _toast('已移动 ${ids.length} 项到第 $dayIndex 天');
+                  }
+                },
+                onBatchDelete: (ids) async {
+                  showDangerConfirmSheet(
+                    context,
+                    title: '删除 ${ids.length} 项安排？',
+                    message: '关联账单会保留，但解除与本安排的绑定。该操作不可恢复。',
+                    onConfirm: () async {
+                      await ref.read(tripsRepoProvider).batchDelete(trip.id, ids);
+                      if (mounted) {
+                        setState(() {
+                          _multiSelect = false;
+                          _selectedIds.clear();
+                        });
+                        _toast('已删除 ${ids.length} 项');
+                      }
+                    },
+                  );
+                },
               );
             },
           );
         },
+      ),
+          // ---- 页签 2：大纲（S3 面板 + S6 想去池侧栏） ----
+          OutlineTab(tripId: id),
+          // ---- 页签 3：装配（S7 装配台） ----
+          AssemblePanel(tripId: id, canEdit: true),
+          // ---- 页签 4：锦囊（S9） ----
+          KitTab(tripId: id),
+        ],
       ),
     );
   }
@@ -166,6 +258,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: Spacing.sm),
+            SheetActionTile(
+              icon: Icons.checklist_rounded,
+              label: '多选',
+              subtitle: '勾选多项后批量移动或删除',
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                if (mounted) {
+                  setState(() {
+                    _multiSelect = true;
+                    _selectedIds
+                      ..clear()
+                      ..add(item.id);
+                  });
+                }
+              },
+            ),
             SheetActionTile(
               icon: Icons.arrow_upward_rounded,
               label: '上移',
@@ -610,6 +718,13 @@ class _DetailBody extends ConsumerStatefulWidget {
     required this.onBind,
     required this.onShowExpenses,
     required this.onQuickBill,
+    this.multiSelect = false,
+    this.selectedIds = const {},
+    this.onToggleSelect,
+    this.onEnterMultiSelect,
+    this.onExitMultiSelect,
+    this.onBatchMove,
+    this.onBatchDelete,
   });
 
   final Trip trip;
@@ -624,6 +739,21 @@ class _DetailBody extends ConsumerStatefulWidget {
   /// 一键入账（未入账徽章 / 长按菜单入口）
   final void Function(BuildContext, TripItem) onQuickBill;
 
+  // ===== 多选批量（V2.7.2 S4；状态在宿主层，长按菜单可直达） =====
+
+  /// 多选模式开关；false 时以下回调可不传
+  final bool multiSelect;
+  final Set<String> selectedIds;
+  final void Function(TripItem)? onToggleSelect;
+  final void Function(TripItem)? onEnterMultiSelect;
+  final VoidCallback? onExitMultiSelect;
+
+  /// 批量移动到第 N 天（宿主执行 + toast）
+  final Future<void> Function(List<String> ids, int dayIndex)? onBatchMove;
+
+  /// 批量删除（宿主强确认 + 执行 + toast）
+  final Future<void> Function(List<String> ids)? onBatchDelete;
+
   @override
   ConsumerState<_DetailBody> createState() => _DetailBodyState();
 }
@@ -634,6 +764,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   /// 行程概览卡是否展开：默认缩略（一行要点），点开才是天气/清单/费用全貌
   bool _overviewExpanded = false;
+
+  /// 已展开「备选 ×N」的天（V2.7.2 S8）
+  final Set<int> _expandedBackupDays = {};
 
   Trip get trip => widget.trip;
   List<TripItem> get items => widget.items;  
@@ -763,6 +896,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         ),
         ],
       ),
+      if (!widget.multiSelect)
       Positioned(
           right: Spacing.xl,
           bottom: AppBottomLayout.withSafeArea(
@@ -779,6 +913,32 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             label: const Text('添加安排'),
           ),
         ),
+        if (widget.multiSelect)
+          Positioned(
+            left: Spacing.xl,
+            right: Spacing.xl,
+            bottom: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.actionButtonOffset,
+            ),
+            child: _MultiSelectBar(
+              count: widget.selectedIds.length,
+              onSelectDayAll: () {
+                for (final d in visibleDays) {
+                  for (final it in (byDay[d] ?? const <TripItem>[])) {
+                    widget.onToggleSelect?.call(it);
+                  }
+                }
+              },
+              onMove: widget.selectedIds.isEmpty || widget.onBatchMove == null
+                  ? null
+                  : () => _pickBatchMoveDay(context),
+              onDelete: widget.selectedIds.isEmpty || widget.onBatchDelete == null
+                  ? null
+                  : () => widget.onBatchDelete!(widget.selectedIds.toList()),
+              onExit: widget.onExitMultiSelect,
+            ),
+          ),
       ],
     );
   }
@@ -802,35 +962,129 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       ));
     }
     for (final day in visibleDays) {
-      final list = byDay[day]!;
+      // S8 口径：备胎（backupOf != null）默认隐藏，天头计数展开灰显；
+      // 不参与重排/多选/「有安排」计数
+      final list = byDay[day]!.where((e) => e.backupOf == null).toList();
+      final backups =
+          byDay[day]!.where((e) => e.backupOf != null).toList();
       widgets.add(KeyedSubtree(
         key: dayKeys[day],
         child: _DayHeader(
           dayIndex: day - trip.startEpochDay + 1,
           day: day,
           count: list.length,
+          onInsertDay: () => _onInsertDay(context),
+          onRemoveDay: () =>
+              _onRemoveDay(context, day - trip.startEpochDay + 1, list.length),
+          canRemoveDay: tripDays(trip.startEpochDay, trip.endEpochDay) >= 2,
+          onMultiSelect: widget.onEnterMultiSelect == null
+              ? null
+              : () => widget.onEnterMultiSelect!(list.first),
+          backupCount: backups.length,
+          backupsExpanded: _expandedBackupDays.contains(day),
+          onToggleBackups: backups.isEmpty
+              ? null
+              : () => setState(() {
+                    if (!_expandedBackupDays.remove(day)) {
+                      _expandedBackupDays.add(day);
+                    }
+                  }),
         ),
       ));
-      for (var i = 0; i < list.length; i++) {
-        final it = list[i];
-        widgets.add(Padding(
-          padding:
-              const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
-          child: StaggerIn(
-            index: i,
-            child: GestureDetector(
-              onTap: () => _openDetail(context, it),
-              onLongPress: () => widget.onItemLongPress(context, it, list),
+      if (widget.multiSelect) {
+        for (var i = 0; i < list.length; i++) {
+          final it = list[i];
+          widgets.add(Padding(
+            padding:
+                const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
+            child: _SelectableTile(
+              selected: widget.selectedIds.contains(it.id),
+              onTap: () => widget.onToggleSelect?.call(it),
               child: _ItemTile(
                 item: it,
                 isFirst: i == 0,
                 isLast: i == list.length - 1,
                 linkedBillCents: latestUnsettledByItem[it.id]?.amountCents,
                 onQuickBill: widget.onQuickBill,
+                onOpenGuide: kIsWeb
+                    ? null
+                    : (it.guideRef == null || it.guideRef!.isEmpty)
+                        ? null
+                        : () => _openGuide(context, it),
               ),
             ),
-          ),
-        ));
+          ));
+        }
+        continue;
+      }
+      // 当天重排（V2.7.2 S4）：拖拽手柄即卡片本体（按住拖动），onReorder 终态写库
+      widgets.add(Padding(
+        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
+        child: ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: list.length,
+          onReorder: (oldIndex, newIndex) async {
+            setState(() {
+              if (newIndex > oldIndex) newIndex -= 1;
+              final moved = list.removeAt(oldIndex);
+              list.insert(newIndex, moved);
+            });
+            final repo = ref.read(tripsRepoProvider);
+            final ids = list.map((e) => e.id).toList();
+            await repo.reorderDay(trip.id, day, ids);
+          },
+          itemBuilder: (context, i) {
+            final it = list[i];
+            return ReorderableDragStartListener(
+              key: ValueKey(it.id),
+              index: i,
+              child: Padding(
+                padding: const EdgeInsets.only(top: Spacing.sm),
+                child: GestureDetector(
+                  onTap: () => _openDetail(context, it),
+                  onLongPress: () => widget.onItemLongPress(context, it, list),
+                  child: _ItemTile(
+                    item: it,
+                    isFirst: i == 0,
+                    isLast: i == list.length - 1,
+                    linkedBillCents: latestUnsettledByItem[it.id]?.amountCents,
+                    onQuickBill: widget.onQuickBill,
+                    onOpenGuide: kIsWeb
+                        ? null
+                        : (it.guideRef == null || it.guideRef!.isEmpty)
+                            ? null
+                            : () => _openGuide(context, it),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ));
+      // S8：备胎展开区（灰显，长按操作单）
+      if (backups.isNotEmpty && _expandedBackupDays.contains(day)) {
+        for (var i = 0; i < backups.length; i++) {
+          final it = backups[i];
+          widgets.add(Padding(
+            padding:
+                const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
+            child: Opacity(
+              opacity: 0.55,
+              child: GestureDetector(
+                onTap: () => _openDetail(context, it),
+                onLongPress: () => _showBackupOps(context, it, list),
+                child: _ItemTile(
+                  item: it,
+                  isFirst: false,
+                  isLast: i == backups.length - 1,
+                  linkedBillCents: null,
+                ),
+              ),
+            ),
+          ));
+        }
       }
     }
     if (visibleDays.isEmpty) {
@@ -846,12 +1100,163 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     return widgets;
   }
 
+  /// 备胎操作单（V2.7.2 S8）：一键替换 / 转正 / 退回想去 / 删除。
+  Future<void> _showBackupOps(
+      BuildContext context, TripItem backup, List<TripItem> formalOfDay) async {
+    final repo = ref.read(tripsRepoProvider);
+    final main = formalOfDay.firstOrNull;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useRootNavigator: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.all(Spacing.lg),
+            child: Text('备选 · ${backup.name}',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          if (main != null)
+            ListTile(
+              leading: const Icon(Icons.swap_horiz_rounded),
+              title: Text('一键替换「${main.name}」'),
+              subtitle: const Text('互换正式/备选身份，时间字段不互换'),
+              onTap: () => Navigator.pop(ctx, 'swap'),
+            ),
+          ListTile(
+            leading: const Icon(Icons.vertical_align_top_rounded),
+            title: const Text('转正（独立安排）'),
+            onTap: () => Navigator.pop(ctx, 'promote'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.undo_rounded),
+            title: const Text('退回想去'),
+            onTap: () => Navigator.pop(ctx, 'wishlist'),
+          ),
+          ListTile(
+            leading: Icon(Icons.delete_outline_rounded,
+                color: Theme.of(ctx).colorScheme.error),
+            title: Text('删除备选',
+                style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+            onTap: () => Navigator.pop(ctx, 'delete'),
+          ),
+        ]),
+      ),
+    );
+    if (action == null || !mounted) return;
+    switch (action) {
+      case 'swap':
+        if (main == null) return;
+        await repo.swapBackup(main.id, backup.id);
+        HapticFeedback.mediumImpact();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('已替换')));
+        break;
+      case 'promote':
+        await repo.promoteBackup(trip.id, backup.id);
+        break;
+      case 'wishlist':
+        await repo.returnBackupToWishlist(trip.id, backup.id);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('已退回想去池')));
+        break;
+      case 'delete':
+        await repo.deleteItem(backup.id);
+        break;
+    }
+  }
+
   /// 打开安排详情页（详情页内可再进入编辑页）。
   void _openDetail(BuildContext context, TripItem item) {
     HapticFeedback.lightImpact();
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => ItemDetailScreen(tripId: trip.id, itemId: item.id),
     ));
+  }
+
+  /// 「攻略」角标（V2.7.2 S5 互链）：跳攻略页对应城并定位到条目。
+  /// Web 端 /guide 路由未注册（角标不渲染，见调用点），此处不再判断。
+  void _openGuide(BuildContext context, TripItem item) {
+    final ref = item.guideRef;
+    if (ref == null || ref.isEmpty) return;
+    context.push('/guide',
+        extra: GuideRouteArgs(tripId: trip.id, focusRef: ref));
+  }
+
+  // ===== 增减天数顺延（V2.7.2 S2） =====
+
+  /// 批量移动：天序选择（含目标天信息），交给宿主回调执行
+  Future<void> _pickBatchMoveDay(BuildContext context) async {
+    final n = tripDays(trip.startEpochDay, trip.endEpochDay);
+    if (n < 1) return;
+    final k = await showDayInsertPicker(context, n: n);
+    if (k == null || !context.mounted) return;
+    // k=0（最前）对「移动」无意义：clamp 到 1..N
+    final dayIndex = k < 1 ? 1 : k;
+    await widget.onBatchMove?.call(widget.selectedIds.toList(), dayIndex);
+  }
+
+  Future<void> _onInsertDay(BuildContext context) async {
+    final n = tripDays(trip.startEpochDay, trip.endEpochDay);
+    if (n < 1) return;
+    final k = await showDayInsertPicker(context, n: n);
+    if (k == null || !context.mounted) return;
+    HapticFeedback.mediumImpact();
+    final repo = ref.read(tripsRepoProvider);
+    final ops = insertDay(
+      startEpochDay: trip.startEpochDay,
+      endEpochDay: trip.endEpochDay,
+      items: [for (final r in items) TripsRepository.tripItemToRecord(r)],
+      k: k,
+    );
+    await repo.applyDayOps(trip.id, ops);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('已插入一天，后续安排自动顺延')));
+    }
+  }
+
+  Future<void> _onRemoveDay(BuildContext context, int k, int affected) async {
+    final n = tripDays(trip.startEpochDay, trip.endEpochDay);
+    if (n < 2 || k < 1 || k > n) return;
+    final mode = await showDayRemovePicker(
+      context,
+      k: k,
+      n: n,
+      affectedCount: affected,
+    );
+    if (mode == null || !context.mounted) return;
+    final repo = ref.read(tripsRepoProvider);
+    try {
+      final ops = removeDay(
+        startEpochDay: trip.startEpochDay,
+        endEpochDay: trip.endEpochDay,
+        items: [for (final r in items) TripsRepository.tripItemToRecord(r)],
+        k: k,
+        mode: mode,
+      );
+      await repo.applyDayOps(trip.id, ops);
+      if (context.mounted) {
+        final text = switch (mode) {
+          RemoveMode.shift => '已删除第 $k 天，安排顺延到次日',
+          RemoveMode.merge => '已删除第 $k 天，安排并入前一日',
+          RemoveMode.discard => '已删除第 $k 天及其安排',
+        };
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(text)));
+      }
+    } on StateError catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
   }
 
   /// 头部渐变延伸区
@@ -1102,21 +1507,139 @@ class _ChecklistEntryCardState extends ConsumerState<_ChecklistEntryCard> {
 }
 
 
+/// 多选模式的可勾选卡容器（V2.7.2 S4）：左侧勾选圈 + 原卡面
+class _SelectableTile extends StatelessWidget {
+  const _SelectableTile({
+    required this.selected,
+    required this.onTap,
+    required this.child,
+  });
+
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: Spacing.lg),
+            child: Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              size: 22,
+              color: selected ? scheme.primary : scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: Spacing.sm),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+/// 多选批量条（V2.7.2 S4）：全选本天 / 移动到第 N 天 / 删除 / 退出
+class _MultiSelectBar extends StatelessWidget {
+  const _MultiSelectBar({
+    required this.count,
+    required this.onSelectDayAll,
+    required this.onMove,
+    required this.onDelete,
+    required this.onExit,
+  });
+
+  final int count;
+  final VoidCallback onSelectDayAll;
+  final VoidCallback? onMove;
+  final VoidCallback? onDelete;
+  final VoidCallback? onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      elevation: 6,
+      borderRadius: AppRadius.button,
+      color: scheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: Spacing.xs),
+        child: Row(
+          children: [
+            TextButton.icon(
+              onPressed: onExit,
+              icon: const Icon(Icons.close_rounded, size: 18),
+              label: const Text('退出'),
+            ),
+            Expanded(
+              child: Text('已选 $count 项',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            TextButton(
+              onPressed: onSelectDayAll,
+              child: const Text('全选本天'),
+            ),
+            IconButton(
+              tooltip: '移动到第 N 天',
+              onPressed: onMove,
+              icon: const Icon(Icons.drive_file_move_rounded),
+            ),
+            IconButton(
+              tooltip: '删除',
+              onPressed: onDelete,
+              icon: Icon(Icons.delete_outline_rounded, color: scheme.error),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 天区块头：Day N 徽章 + 中文日期 + 条数
 class _DayHeader extends StatelessWidget {
   const _DayHeader({
     required this.dayIndex,
     required this.day,
     required this.count,
+    this.onInsertDay,
+    this.onRemoveDay,
+    this.canRemoveDay = true,
+    this.onMultiSelect,
+    this.backupCount = 0,
+    this.backupsExpanded = false,
+    this.onToggleBackups,
   });
 
   final int dayIndex;
   final int day;
   final int count;
 
+  /// 增减天数入口（V2.7.2 S2）：null = 不渲染（viewer 隐藏不置灰）
+  final VoidCallback? onInsertDay;
+  final VoidCallback? onRemoveDay;
+  final bool canRemoveDay;
+
+  /// 多选模式入口（V2.7.2 S4）：null = 不渲染
+  final VoidCallback? onMultiSelect;
+
+  /// 备选计数与展开开关（V2.7.2 S8）
+  final int backupCount;
+  final bool backupsExpanded;
+  final VoidCallback? onToggleBackups;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final hasMenu = onInsertDay != null || onMultiSelect != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.xl, Spacing.xl, 0),
       child: Row(
@@ -1144,6 +1667,79 @@ class _DayHeader extends StatelessWidget {
               style: TextStyle(
                   fontSize: AppFontSizes.caption,
                   color: scheme.onSurfaceVariant)),
+          if (backupCount > 0) ...[
+            const SizedBox(width: Spacing.sm),
+            InkWell(
+              borderRadius: AppRadius.capsule,
+              onTap: onToggleBackups,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHigh,
+                  borderRadius: AppRadius.capsule,
+                  border: Border.all(
+                      color: scheme.outlineVariant.withValues(alpha: 0.6)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(
+                      backupsExpanded
+                          ? Icons.expand_less_rounded
+                          : Icons.bookmark_rounded,
+                      size: 12,
+                      color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 3),
+                  Text('备选 ×$backupCount',
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption - 2,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurfaceVariant)),
+                ]),
+              ),
+            ),
+          ],
+          const Spacer(),
+          if (hasMenu)
+            PopupMenuButton<String>(
+              tooltip: '增减天数',
+              padding: EdgeInsets.zero,
+              splashRadius: 20,
+              icon: Icon(Icons.more_vert_rounded,
+                  size: 20, color: scheme.onSurfaceVariant),
+              onSelected: (v) {
+                if (v == 'insert') onInsertDay?.call();
+                if (v == 'remove') onRemoveDay?.call();
+                if (v == 'multiselect') onMultiSelect?.call();
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                    value: 'insert',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.add_circle_outline_rounded),
+                      title: Text('插入一天…'),
+                    )),
+                if (canRemoveDay)
+                  const PopupMenuItem(
+                      value: 'remove',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.remove_circle_outline_rounded),
+                        title: Text('删除此天…'),
+                      )),
+                if (onMultiSelect != null)
+                  const PopupMenuItem(
+                      value: 'multiselect',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.checklist_rounded),
+                        title: Text('多选批量…'),
+                      )),
+              ],
+            ),
         ],
       ),
     );
@@ -1158,6 +1754,7 @@ class _ItemTile extends StatelessWidget {
     required this.isLast,
     this.linkedBillCents,
     this.onQuickBill,
+    this.onOpenGuide,
   });
 
   final TripItem item;
@@ -1167,6 +1764,9 @@ class _ItemTile extends StatelessWidget {
   /// 最新未结算关联账单金额（null = 未入账）
   final int? linkedBillCents;
   final void Function(BuildContext, TripItem)? onQuickBill;
+
+  /// 「攻略」角标点击（V2.7.2 S5 互链）；null = 不渲染角标。
+  final VoidCallback? onOpenGuide;
 
   @override
   Widget build(BuildContext context) {
@@ -1228,6 +1828,36 @@ class _ItemTile extends StatelessWidget {
                                 fontWeight: FontWeight.w700,
                                 fontFeatures: AppTextStyles.tabularFigures,
                                 color: visual.color)),
+                      ),
+                    if (item.guideRef != null &&
+                        item.guideRef!.isNotEmpty &&
+                        onOpenGuide != null)
+                      GestureDetector(
+                        onTap: onOpenGuide,
+                        child: Container(
+                          margin: const EdgeInsets.only(left: Spacing.sm),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: scheme.primary.withValues(alpha: 0.10),
+                            borderRadius: AppRadius.capsule,
+                            border: Border.all(
+                                color: scheme.primary.withValues(alpha: 0.45)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.menu_book_rounded,
+                                  size: 11, color: scheme.primary),
+                              const SizedBox(width: 3),
+                              Text('攻略',
+                                  style: TextStyle(
+                                      fontSize: AppFontSizes.caption - 2,
+                                      fontWeight: FontWeight.w700,
+                                      color: scheme.primary)),
+                            ],
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -1534,7 +2164,12 @@ class _OverviewCard extends StatelessWidget {
             const SizedBox(height: Spacing.md),
             const Divider(height: 1),
             const SizedBox(height: Spacing.sm),
-            _PlanActualCard(trip: trip, items: items, bills: bills),
+            // S8 口径：备胎不参与「计划 vs 实际」计划侧汇总
+            _PlanActualCard(
+                trip: trip,
+                items:
+                    items.where((e) => e.backupOf == null).toList(),
+                bills: bills),
           ],
         ],
       ),

@@ -191,8 +191,10 @@ List<RouteBase> buildAppRoutes() => [
                     final extra = state.extra;
                     if (extra is GuideRouteArgs) {
                       return extra.tripId != null
-                          ? TripGuideScreenBuilder(tripId: extra.tripId!)
-                          : TripGuideScreen(cityKey: extra.cityKey);
+                          ? TripGuideScreenBuilder(
+                              tripId: extra.tripId!, focusRef: extra.focusRef)
+                          : TripGuideScreen(
+                              cityKey: extra.cityKey, focusRef: extra.focusRef);
                     }
                     final tripId = extra as String? ?? '';
                     return TripGuideScreenBuilder(tripId: tripId);
@@ -355,8 +357,9 @@ List<RouteBase> buildAppRoutes() => [
           final extra = state.extra;
           if (extra is GuideRouteArgs) {
             return extra.tripId != null
-                ? TripGuideScreenBuilder(tripId: extra.tripId!)
-                : TripGuideScreen(cityKey: extra.cityKey);
+                ? TripGuideScreenBuilder(
+                    tripId: extra.tripId!, focusRef: extra.focusRef)
+                : TripGuideScreen(cityKey: extra.cityKey, focusRef: extra.focusRef);
           }
           final cityKey = state.uri.queryParameters['city'];
           return TripGuideScreen(cityKey: cityKey);

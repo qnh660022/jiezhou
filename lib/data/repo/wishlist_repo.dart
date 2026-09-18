@@ -116,4 +116,102 @@ class WishlistRepository {
       SyncOutboxService.notifyWrite('wishlist_items', id, op: 'delete');
     }
   }
+
+  /// 池内拖拽重排：整体按 10、20、30… 重编号（口径同 S4 reorderDay）；
+  /// 提交后仅对传入行逐行 notifyWrite。
+  Future<void> reorder(String tripId, List<String> orderedIds) async {
+    if (orderedIds.isEmpty) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.transaction(() async {
+      for (var i = 0; i < orderedIds.length; i++) {
+        await (db.update(db.wishlistItems)
+              ..where((t) => t.id.equals(orderedIds[i]) & t.tripId.equals(tripId)))
+            .write(WishlistItemsCompanion(
+                sortOrder: Value((i + 1) * 10), updatedAt: Value(now)));
+      }
+    });
+    for (final id in orderedIds) {
+      SyncOutboxService.notifyWrite('wishlist_items', id);
+    }
+  }
+
+  /// 落卡即移出（收口规则 1）：同一事务内建 TripItems 行 + 删 WishlistItems 行，
+  /// 提交后各自 notifyWrite（建卡 upsert + 删池墓碑）。
+  ///
+  /// 装配台落点（S7）与池内「排到第 N 天」（S6）都走本方法。
+  /// [durationMin] 可覆盖池条目估时（补时长后落卡）；[type]/[sortOrder] 缺省继承/追加；
+  /// [asBackup] = 装配台「转为备胎」（S8）：建无主备胎卡（backupOf=''），同样删池行
+  /// （收口规则 1：已进日程体系）。
+  Future<String> placeToDay({
+    required String tripId,
+    required String wishlistId,
+    required int dateEpochDay,
+    int? startTimeMin,
+    int? durationMin,
+    String? type,
+    int? sortOrder,
+    bool asBackup = false,
+  }) async {
+    final row = await getItem(wishlistId);
+    if (row == null) throw StateError('想去条目不存在：$wishlistId');
+    final cardId = newId('item');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.transaction(() async {
+      var maxSort = 0;
+      if (sortOrder == null) {
+        final dayItems = await (db.select(db.tripItems)
+              ..where((t) =>
+                  t.tripId.equals(tripId) &
+                  t.dateEpochDay.equals(dateEpochDay)))
+            .get();
+        for (final it in dayItems) {
+          if (it.sortOrder > maxSort) maxSort = it.sortOrder;
+        }
+      }
+      await db.into(db.tripItems).insert(TripItemsCompanion.insert(
+            id: cardId,
+            tripId: tripId,
+            dateEpochDay: Value(dateEpochDay),
+            type: Value(type ?? row.type),
+            name: Value(row.name),
+            address: Value(row.address),
+            startTimeMin: Value(startTimeMin),
+            durationMin: Value(durationMin ?? row.durationMin),
+            guideRef: Value(row.guideRef),
+            backupOf: Value(asBackup ? '' : null),
+            sortOrder: Value(sortOrder ?? maxSort + 10),
+            createdAt: now,
+            updatedAt: now,
+          ));
+      await (db.delete(db.wishlistItems)..where((t) => t.id.equals(wishlistId)))
+          .go();
+    });
+    SyncOutboxService.notifyWrite('trip_items', cardId);
+    SyncOutboxService.notifyWrite('wishlist_items', wishlistId, op: 'delete');
+    return cardId;
+  }
+
+  /// 以原 id 重建池行（装配台落点撤销 / Plan B 语义下恢复用）。
+  /// 冲突覆盖（同 id 已存在则整行替换），提交后 notifyWrite。
+  Future<void> restoreRow(WishlistRecord rec) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.into(db.wishlistItems).insertOnConflictUpdate(
+          WishlistItemsCompanion.insert(
+            id: rec.id,
+            tripId: rec.tripId,
+            cityKey: Value(rec.cityKey),
+            name: Value(rec.name),
+            address: Value(rec.address),
+            type: Value(rec.type),
+            durationMin: Value(rec.durationMin),
+            tag: Value(rec.tag),
+            guideRef: Value(rec.guideRef),
+            note: Value(rec.note),
+            sortOrder: Value(rec.sortOrder),
+            createdAt: rec.createdAt,
+            updatedAt: now,
+          ),
+        );
+    SyncOutboxService.notifyWrite('wishlist_items', rec.id);
+  }
 }

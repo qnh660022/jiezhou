@@ -1,9 +1,11 @@
 // 🗂️ 安排详情：按类型主题化的只读详情页。
 // 点击行程时间轴里的安排进入本页；顶栏与底部均提供「编辑」入口，进入 ItemEditScreen。
 // 数据经 tripsRepoProvider 流驱动，编辑保存返回后本页自动刷新。
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
@@ -12,8 +14,10 @@ import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../theme/tokens.dart';
+import '../guide_widgets.dart' show GuideRouteArgs;
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../widgets/guide_essence_section.dart';
 import 'item_edit_screen.dart';
 
 /// 安排详情页（按 itemId 流式定位，编辑后自动刷新）。
@@ -111,6 +115,8 @@ class _DetailView extends StatelessWidget {
   /// null = 只读模式（不渲染任何编辑入口）。
   final VoidCallback? onEdit;
 
+  bool get _hasGuide => item.guideRef != null && item.guideRef!.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
     final visual = tripTypeVisual(item.type);
@@ -149,6 +155,18 @@ class _DetailView extends StatelessWidget {
                     if (item.note.isNotEmpty)
                       _NoteCard(item: item),
                   ],
+                  // 攻略互链入口（V2.7.2 S5）：guideRef 非空才渲染；失效 ref
+                  // 跳转失败在攻略页内静默降级。Web 无 /guide 路由，不渲染。
+                  if (_hasGuide && !kIsWeb)
+                    _GuideLinkCard(
+                      onTap: () => context.push('/guide',
+                          extra: GuideRouteArgs(
+                              tripId: item.tripId, focusRef: item.guideRef)),
+                    ),
+                  // 攻略精要随卡（V2.7.2 S10）：只读折叠段，反查失败不渲染
+                  if (_hasGuide)
+                    GuideEssenceSection(
+                        guideRef: item.guideRef!, itemName: item.name),
                   const SizedBox(height: Spacing.xl),
                   // 只读模式（协作空间的他人行程项）：编辑入口整体不渲染。
                   if (onEdit != null)
@@ -164,6 +182,45 @@ class _DetailView extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 攻略互链卡（V2.7.2 S5）：guideRef 非空时显示，点击跳攻略页对应条目。
+class _GuideLinkCard extends StatelessWidget {
+  const _GuideLinkCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: Spacing.md),
+      child: Material(
+        color: scheme.primary.withValues(alpha: 0.08),
+        borderRadius: AppRadius.input,
+        child: InkWell(
+          borderRadius: AppRadius.input,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(Spacing.lg),
+            child: Row(children: [
+              Icon(Icons.menu_book_rounded, size: 18, color: scheme.primary),
+              const SizedBox(width: Spacing.md),
+              Expanded(
+                child: Text('来自目的地攻略 · 点击查看攻略条目',
+                    style: TextStyle(
+                        fontSize: AppFontSizes.bodyLarge - 2,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.primary)),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  size: 18, color: scheme.primary),
+            ]),
+          ),
+        ),
       ),
     );
   }

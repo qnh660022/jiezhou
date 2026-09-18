@@ -5,6 +5,7 @@ import "dart:typed_data";
 
 import "package:flutter/services.dart" show rootBundle;
 import "package:flutter/widgets.dart" show WidgetsFlutterBinding;
+import "../core/date_utils.dart";
 import "package:pdf/pdf.dart";
 import "package:pdf/widgets.dart" as pw;
 
@@ -263,6 +264,70 @@ pw.Widget _itemCard(Map<String, dynamic> item) {
   );
 }
 
+/// 行程总览行数据（V2.7.2 S12；纯数据便于单测）。
+class OverviewRowData {
+  const OverviewRowData({
+    required this.dayIndex,
+    required this.date,
+    required this.weekday,
+    required this.count,
+    required this.summary,
+  });
+
+  final int dayIndex;
+
+  /// 调用方传入的日期文案。
+  final String date;
+  final String weekday;
+
+  /// 当天正式卡数（备胎已排除）。
+  final int count;
+
+  /// 摘要：前 3 条（有时间 → `HH:mm 名称`；无 → `名称`）；空天 → `——`。
+  final List<String> summary;
+}
+
+/// 总览行构造：摘要取前 3（按传入顺序，调用方已按 sortOrder/时间排序），
+/// 备胎（backupOf != null）防御性再过滤一次。
+List<OverviewRowData> buildOverviewRows(List<Map<String, dynamic>> days) {
+  final rows = <OverviewRowData>[];
+  for (final day in days) {
+    final items = (day["items"] as List?)
+            ?.whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .where((item) => item["backupOf"] == null)
+            .toList() ??
+        <Map<String, dynamic>>[];
+    final summary = <String>[
+      for (final it in items.take(3))
+        '${(it["time"] ?? "").toString().trim().isEmpty ? "" : "${it["time"]} "}${it["name"] ?? ""}',
+    ];
+    if (items.length > 3) summary.add("…等 ${items.length - 3} 项");
+    if (summary.isEmpty) summary.add("——");
+    final epoch = day["epochDay"];
+    rows.add(OverviewRowData(
+      dayIndex: (day["dayIndex"] as int?) ?? (rows.length + 1),
+      date: (day["date"] ?? "").toString(),
+      weekday: epoch is int ? weekdayCnOf(epoch) : "",
+      count: items.length,
+      summary: summary,
+    ));
+  }
+  return rows;
+}
+
+/// 手动分块：22 行/块（每块自带表头，块间 pw.NewPage 由渲染层处理）。
+List<List<OverviewRowData>> splitOverviewBlocks(
+  List<OverviewRowData> rows, {
+  int perBlock = 22,
+}) {
+  final blocks = <List<OverviewRowData>>[];
+  for (var i = 0; i < rows.length; i += perBlock) {
+    blocks.add(rows.sublist(i, (i + perBlock).clamp(0, rows.length)));
+  }
+  return blocks;
+}
+
 /// 生成精美版行程 PDF。
 ///
 /// [days] 每项至少包含 date/items；可选字段包括 dayIndex、type、time、duration、cost、note、交通信息。
@@ -439,6 +504,19 @@ Future<Uint8List> buildTripPdf(
     ),
   );
 
+  // 行程总览页（V2.7.2 S12）：封面之后、每日详情之前；手动分块 22 行/块，
+  // 每块自带表头；备胎已在数据构造中防御性排除。
+  final overviewRows = buildOverviewRows(days);
+  if (overviewRows.isNotEmpty) {
+    doc.addPage(
+      _buildOverviewPage(
+        safeName,
+        dateRange,
+        splitOverviewBlocks(overviewRows),
+      ),
+    );
+  }
+
   // 内容页使用 MultiPage：长地址、大量安排会自动分页；每个日期仍从新页开始。
   doc.addPage(
     pw.MultiPage(
@@ -581,4 +659,125 @@ Future<Uint8List> buildTripPdf(
   );
 
   return doc.save();
+}
+
+/// 总览页（S12）：标题块 + 分块表格；页脚与内容页同风格。
+pw.MultiPage _buildOverviewPage(
+  String tripName,
+  String? dateRange,
+  List<List<OverviewRowData>> blocks,
+) {
+  return pw.MultiPage(
+    pageFormat: PdfPageFormat.a4,
+    margin: const pw.EdgeInsets.fromLTRB(38, 42, 38, 40),
+    footer: (ctx) => pw.Row(
+      children: [
+        pw.Expanded(
+          child: pw.Text(
+            "芥舟 · 旅行计划",
+            style: _textStyle(size: 8, color: _muted),
+          ),
+        ),
+        pw.Text(
+          "第 ${ctx.pageNumber} 页",
+          style: _textStyle(size: 8, color: _muted),
+        ),
+      ],
+    ),
+    build: (ctx) {
+      final widgets = <pw.Widget>[];
+      for (var b = 0; b < blocks.length; b++) {
+        if (b > 0) widgets.add(pw.NewPage());
+        widgets.add(_overviewBlock(
+          tripName,
+          dateRange,
+          blocks[b],
+          isFirst: b == 0,
+        ));
+      }
+      return widgets;
+    },
+  );
+}
+
+/// 单个总览分块：首块带页首标题，其余直接表头起（每块自带表头行）。
+pw.Widget _overviewBlock(
+  String tripName,
+  String? dateRange,
+  List<OverviewRowData> rows, {
+  required bool isFirst,
+}) {
+  final header = <pw.Widget>[];
+  if (isFirst) {
+    header.add(pw.Text(
+      "行程总览",
+      style: _textStyle(size: 21, weight: pw.FontWeight.bold),
+    ));
+    header.add(pw.SizedBox(height: 6));
+    header.add(pw.Text(
+      dateRange == null || dateRange.isEmpty
+          ? tripName
+          : "$tripName · $dateRange",
+      style: _textStyle(size: 10, color: _muted),
+    ));
+    header.add(pw.SizedBox(height: 12));
+  }
+  // 表头行
+  header.add(pw.Container(
+    padding: const pw.EdgeInsets.symmetric(vertical: 6),
+    decoration: pw.BoxDecoration(
+      border: pw.Border(bottom: pw.BorderSide(color: _line, width: 0.8)),
+    ),
+    child: pw.Row(children: [
+      _ovCell("DAY", 40, bold: true, muted: true),
+      _ovCell("日期", 90, bold: true, muted: true),
+      _ovCell("星期", 40, bold: true, muted: true),
+      _ovCell("安排", 40, bold: true, muted: true),
+      _ovCell("摘要", null, bold: true, muted: true),
+    ]),
+  ));
+  // 数据行（行高约 18pt：垂直 padding 5 + 字号 10）
+  for (final r in rows) {
+    header.add(pw.Container(
+      padding: const pw.EdgeInsets.symmetric(vertical: 5),
+      decoration: pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(color: _line, width: 0.3)),
+      ),
+      child: pw.Row(children: [
+        _ovCell("D${r.dayIndex}", 40, mint: true),
+        _ovCell(r.date, 90),
+        _ovCell(r.weekday, 40, muted: true),
+        _ovCell("${r.count}", 40, muted: true),
+        _ovCell(r.summary.join("、"), null),
+      ]),
+    ));
+  }
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: header,
+  );
+}
+
+/// 总览单元格：[width] 为 null 时横向展开（摘要列）。
+/// pdf 包无 ellipsis 溢出模式——超长文本手动截断加「…」（规格 §15.2）。
+pw.Widget _ovCell(
+  String raw,
+  double? width, {
+  bool bold = false,
+  bool muted = false,
+  bool mint = false,
+}) {
+  final limit = width == null ? 28 : (width ~/ 9.5).clamp(2, 28).toInt();
+  var text = raw;
+  if (text.length > limit) {
+    text = '${text.substring(0, (limit - 1).clamp(0, text.length))}…';
+  }
+  final style = _textStyle(
+    size: 10,
+    color: mint ? _mint : (muted ? _muted : _ink),
+    weight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+  );
+  final child = pw.Text(text, maxLines: 1, style: style);
+  if (width == null) return pw.Expanded(child: child);
+  return pw.SizedBox(width: width, child: child);
 }

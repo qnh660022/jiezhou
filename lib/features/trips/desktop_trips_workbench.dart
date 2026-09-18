@@ -13,7 +13,11 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../theme/tokens.dart';
 import 'screens/item_edit_screen.dart';
 import 'screens/trip_edit_screen.dart';
+import 'screens/trip_guide_screen.dart' show TripGuideScreenBuilder;
 import 'trip_utils.dart';
+import 'widgets/assemble_panel.dart';
+import 'widgets/day_ops_sheet.dart';
+import 'widgets/trip_tab_panels.dart';
 import '../desktop/desktop_context_menu.dart';
 import '../desktop/desktop_utils.dart';
 
@@ -444,7 +448,25 @@ class _TripView {
   static final provider = StateProvider<String>((_) => 'list');
 }
 
+/// 中栏页签（V2.7.2 总纲 §2.5 宿主 B）：装配 / 大纲 / 锦囊
+class _TripCenterView {
+  static final provider = StateProvider<String>((_) => 'assemble');
+}
+
+/// 三栏开关：左「攻略」栏显隐（默认开）
+class _DeskShowGuide {
+  static final provider = StateProvider<bool>((_) => true);
+}
+
+/// 三栏开关：右「时间轴」栏显隐（默认开）
+class _DeskShowTimeline {
+  static final provider = StateProvider<bool>((_) => true);
+}
+
 /// 行程详情主从右栏：行内改名/改日期 + 按天安排 + 添加/编辑/删除。
+///
+/// V2.7.2 升级为三栏：左攻略（可收起）、中装配/大纲/锦囊页签、右时间轴
+/// （列表/时间轴切换，可收起）——移动端页签组件直接复用。
 class _DesktopTripPane extends ConsumerWidget {
   const _DesktopTripPane({required this.tripId, required this.onEditTrip});
 
@@ -456,6 +478,9 @@ class _DesktopTripPane extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     final repo = ref.watch(tripsRepoProvider);
     final view = ref.watch(_TripView.provider);
+    final center = ref.watch(_TripCenterView.provider);
+    final showGuide = ref.watch(_DeskShowGuide.provider);
+    final showTimeline = ref.watch(_DeskShowTimeline.provider);
     return StreamBuilder<Trip?>(
       stream: repo.watchTrip(tripId),
       builder: (context, snap) {
@@ -466,38 +491,188 @@ class _DesktopTripPane extends ConsumerWidget {
         if (trip == null) {
           return const EmptyState(emoji: '🗂️', title: '行程不存在', message: '可能已被删除');
         }
+        Widget centerView;
+        switch (center) {
+          case 'outline':
+            centerView = OutlineTab(tripId: trip.id);
+            break;
+          case 'kit':
+            centerView = KitTab(tripId: trip.id);
+            break;
+          default:
+            centerView = AssemblePanel(tripId: trip.id, canEdit: true);
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _paneHeader(context, ref, scheme, trip),
             Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.6)),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.sm, Spacing.lg, 0),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'list', label: Text('列表'), icon: Icon(Icons.view_list_rounded, size: 16)),
-                    ButtonSegment(value: 'timeline', label: Text('时间轴'), icon: Icon(Icons.timeline_rounded, size: 16)),
-                  ],
-                  selected: {view},
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                  onSelectionChanged: (v) =>
-                      ref.read(_TripView.provider.notifier).state = v.first,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.6)),
             Expanded(
-              child: view == 'timeline'
-                  ? _TimelineView(trip: trip)
-                  : _DayItems(trip: trip),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ---- 左栏：攻略（可收起） ----
+                  if (showGuide) ...[
+                    SizedBox(
+                      width: 300,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _columnHeader(
+                            context,
+                            ref,
+                            scheme,
+                            icon: Icons.menu_book_rounded,
+                            label: '攻略',
+                            onClose: () => ref
+                                .read(_DeskShowGuide.provider.notifier)
+                                .state = false,
+                          ),
+                          Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.6)),
+                          Expanded(
+                            child: TripGuideScreenBuilder(tripId: trip.id),
+                          ),
+                        ],
+                      ),
+                    ),
+                    VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.6)),
+                  ],
+                  // ---- 中栏：装配 / 大纲 / 锦囊 ----
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                              Spacing.lg, Spacing.sm, Spacing.lg, 0),
+                          child: Row(children: [
+                            if (!showGuide)
+                              IconButton(
+                                tooltip: '展开攻略栏',
+                                icon: const Icon(Icons.menu_book_rounded, size: 18),
+                                onPressed: () => ref
+                                    .read(_DeskShowGuide.provider.notifier)
+                                    .state = true,
+                              ),
+                            const Spacer(),
+                            SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment(
+                                    value: 'assemble',
+                                    label: Text('装配'),
+                                    icon: Icon(Icons.dashboard_customize_rounded,
+                                        size: 16)),
+                                ButtonSegment(
+                                    value: 'outline',
+                                    label: Text('大纲'),
+                                    icon: Icon(Icons.notes_rounded, size: 16)),
+                                ButtonSegment(
+                                    value: 'kit',
+                                    label: Text('锦囊'),
+                                    icon: Icon(Icons.workspaces_rounded, size: 16)),
+                              ],
+                              selected: {center},
+                              showSelectedIcon: false,
+                              style: const ButtonStyle(
+                                  visualDensity: VisualDensity.compact),
+                              onSelectionChanged: (v) => ref
+                                  .read(_TripCenterView.provider.notifier)
+                                  .state = v.first,
+                            ),
+                          ]),
+                        ),
+                        const SizedBox(height: 4),
+                        Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.6)),
+                        Expanded(child: centerView),
+                      ],
+                    ),
+                  ),
+                  // ---- 右栏：时间轴（可收起） ----
+                  if (showTimeline) ...[
+                    VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.6)),
+                    SizedBox(
+                      width: 460,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                                Spacing.lg, Spacing.sm, Spacing.lg, 0),
+                            child: Row(children: [
+                              Text('时间轴',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700)),
+                              const Spacer(),
+                              SegmentedButton<String>(
+                                segments: const [
+                                  ButtonSegment(value: 'list', label: Text('列表'), icon: Icon(Icons.view_list_rounded, size: 16)),
+                                  ButtonSegment(value: 'timeline', label: Text('时间轴'), icon: Icon(Icons.timeline_rounded, size: 16)),
+                                ],
+                                selected: {view},
+                                showSelectedIcon: false,
+                                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                                onSelectionChanged: (v) =>
+                                    ref.read(_TripView.provider.notifier).state = v.first,
+                              ),
+                              IconButton(
+                                tooltip: '收起时间轴栏',
+                                icon: const Icon(Icons.chevron_right_rounded, size: 18),
+                                onPressed: () => ref
+                                    .read(_DeskShowTimeline.provider.notifier)
+                                    .state = false,
+                              ),
+                            ]),
+                          ),
+                          const SizedBox(height: 4),
+                          Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.6)),
+                          Expanded(
+                            child: view == 'timeline'
+                                ? _TimelineView(trip: trip)
+                                : _DayItems(trip: trip),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (!showTimeline)
+                    IconButton(
+                      tooltip: '展开时间轴栏',
+                      icon: const Icon(Icons.chevron_left_rounded, size: 18),
+                      onPressed: () => ref
+                          .read(_DeskShowTimeline.provider.notifier)
+                          .state = true,
+                    ),
+                ],
+              ),
             ),
           ],
         );
       },
+    );
+  }
+
+  /// 栏头（左栏用）：图标 + 标题 + 收起按钮。
+  Widget _columnHeader(
+    BuildContext context,
+    WidgetRef ref,
+    ColorScheme scheme, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onClose,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.sm, Spacing.sm, Spacing.sm),
+      child: Row(children: [
+        Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+        const SizedBox(width: Spacing.sm),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        const Spacer(),
+        IconButton(
+          tooltip: '收起攻略栏',
+          icon: const Icon(Icons.chevron_left_rounded, size: 18),
+          onPressed: onClose,
+        ),
+      ]),
     );
   }
 
@@ -886,6 +1061,31 @@ class _ItemRow extends ConsumerWidget {
             if (item.costCents != null)
               Text((item.costCents! / 100).toStringAsFixed(0) + ' 元',
                   style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+            // 「攻略」角标（V2.7.2 S5 互链）：点击在对话框中打开攻略页并定位
+            if (item.guideRef != null && item.guideRef!.isNotEmpty)
+              Tooltip(
+                message: '来自目的地攻略 · 点击查看',
+                child: InkWell(
+                  borderRadius: AppRadius.capsule,
+                  onTap: () => openAsDialog(
+                    context,
+                    TripGuideScreenBuilder(tripId: tripId, focusRef: item.guideRef),
+                    width: 860,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.menu_book_rounded, size: 13, color: scheme.primary),
+                      const SizedBox(width: 3),
+                      Text('攻略',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: scheme.primary)),
+                    ]),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -967,10 +1167,44 @@ class _DayTimeline extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
-          child: Text(
-            '第 ${dayIndexOf(trip.startEpochDay, trip.endEpochDay, day) + 1} 天 · ${fmtMonthDayOfEpoch(day)}',
-            style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w700, color: scheme.primary),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '第 ${dayIndexOf(trip.startEpochDay, trip.endEpochDay, day) + 1} 天 · ${fmtMonthDayOfEpoch(day)}',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: scheme.primary),
+                ),
+              ),
+              // 增减天数入口（V2.7.2 S2，桌面同组件对话框形态）
+              Builder(builder: (btnContext) {
+                void run(String which) {
+                  final repo = ProviderScope.containerOf(btnContext).read(tripsRepoProvider);
+                  final k = dayIndexOf(trip.startEpochDay, trip.endEpochDay, day) + 1;
+                  if (which == 'insert') {
+                    runInsertDayDialog(btnContext,
+                        repo: repo, trip: trip, items: items);
+                  } else {
+                    runRemoveDayDialog(btnContext,
+                        repo: repo, trip: trip, items: items, k: k, affectedCount: items.length);
+                  }
+                }
+
+                return PopupMenuButton<String>(
+                  tooltip: '增减天数',
+                  padding: EdgeInsets.zero,
+                  icon: Icon(Icons.more_vert_rounded,
+                      size: 18, color: scheme.onSurfaceVariant),
+                  onSelected: run,
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'insert', child: Text('插入一天…')),
+                    // N=1 时无删除项（引擎要求至少保留一天）
+                    if (trip.startEpochDay < trip.endEpochDay)
+                      const PopupMenuItem(value: 'remove', child: Text('删除此天…')),
+                  ],
+                );
+              }),
+            ],
           ),
         ),
         if (allDay.isNotEmpty) ...[

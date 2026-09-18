@@ -24,11 +24,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/date_utils.dart';
 import '../../../data/guide/guide_models.dart';
-import '../../../data/db/database.dart' show TripItem;
+import '../../../data/db/database.dart' show Trip;
 import '../../../data/guide/guide_providers.dart';
 import '../../../data/guide/guide_service.dart' show GuideResult;
-import '../../../data/providers.dart' show tripsRepoProvider;
+import '../../../data/providers.dart'
+    show tripsRepoProvider, wishlistRepoProvider;
+import '../../../domain/guide_ref.dart';
 import '../../../features/ledger/ledger_models.dart' show TripCardView;
 import '../../../features/ledger/ledger_providers.dart' show allTripsProvider;
 import '../../../platform/open_external.dart';
@@ -38,7 +41,6 @@ import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../guide_city_picker.dart';
 import '../guide_widgets.dart';
-import 'item_edit_screen.dart' as edit;
 
 class TripGuideScreen extends ConsumerStatefulWidget {
   const TripGuideScreen({
@@ -46,6 +48,7 @@ class TripGuideScreen extends ConsumerStatefulWidget {
     this.tripId,
     this.destination = '',
     this.cityKey,
+    this.focusRef,
   });
 
   /// 行程入口才有；城市入口为 null。
@@ -56,6 +59,10 @@ class TripGuideScreen extends ConsumerStatefulWidget {
 
   /// 城市入口直接给的 key。
   final String? cityKey;
+
+  /// 深链定位（V2.7.2 S5）：行程卡「攻略」角标带来的 guideRef。
+  /// 定位失败（城缺失/序号越界/条目被筛选隐藏）一律静默降级，仅到城页。
+  final String? focusRef;
 
   @override
   ConsumerState<TripGuideScreen> createState() => _TripGuideScreenState();
@@ -81,6 +88,16 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
 
   /// 全部可选城市（换城市选择器数据源）。
   List<GuideCityOption> _allCities = const [];
+
+  /// 条目滚动锚点（V2.7.2 S5）：key = `cityKey|section|n:<名称>`。
+  /// 行程卡「攻略」角标深链定位用，随条目构建惰性登记。
+  final Map<String, GlobalKey> _itemKeys = {};
+
+  /// 多城 TabBar 宿主（切城定位用）。
+  final GlobalKey _tabHostKey = GlobalKey();
+
+  /// 深链定位只尝试一次（刷新/换城不再触发）。
+  bool _focusApplied = false;
 
   @override
   void initState() {
@@ -140,6 +157,69 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
       _refreshing = false;
     });
     await _loadCollapsedState(full);
+    await _applyFocus();
+  }
+
+  /// 「攻略」角标深链（V2.7.2 S5）：切到目标城 → 展开栏目 → 滚到条目。
+  /// 任何一步失败都静默降级（城页/栏目页），不报错不阻断。
+  Future<void> _applyFocus() async {
+    final raw = widget.focusRef;
+    if (_focusApplied || raw == null || raw.isEmpty) return;
+    final results = _display ?? _offline;
+    if (results == null || results.isEmpty) return;
+    final parsed = GuideRef.tryParse(raw);
+    _focusApplied = true; // 无论成败只尝试一次
+    if (parsed == null) return;
+    final cityIdx =
+        results.indexWhere((r) => r.location?.key == parsed.cityKey);
+    if (cityIdx < 0) return;
+    final sectionId = '${parsed.cityKey}|${parsed.section}';
+
+    // ① 下一帧：切城（多城 TabBar）→ 展开栏目 → 解析种子行名
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final host = _tabHostKey.currentContext;
+      if (host != null && results.length > 1) {
+        try {
+          DefaultTabController.maybeOf(host)?.animateTo(cityIdx);
+        } catch (_) {}
+      }
+      if (_collapsed[sectionId] == true) {
+        setState(() => _collapsed[sectionId] = false);
+        _persistCollapsed(parsed.cityKey);
+      }
+      // ② 解析种子行名（index → name），换算条目锚点
+      String? name;
+      try {
+        final seed = await ref
+            .read(guideServiceProvider)
+            .seedSource
+            .getSeed(parsed.cityKey);
+        final rows =
+            ((seed?['sections'] as Map?)?[parsed.section] as List?) ?? const [];
+        if (parsed.index < rows.length) {
+          name = ((rows[parsed.index] as Map)['name'] ?? '').toString();
+        }
+      } catch (_) {}
+      final anchorId =
+          name == null || name.isEmpty ? null : '$sectionId|n:$name';
+      // ③ 再下一帧（展开布局已稳定）滚动
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final targetKey = (anchorId != null ? _itemKeys[anchorId] : null) ??
+            _sectionKeys[sectionId];
+        final ctx = targetKey?.currentContext;
+        if (ctx == null) return; // 条目被筛选隐藏等：仅到城页
+        try {
+          await Scrollable.ensureVisible(
+            ctx,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            alignment: 0.06,
+          );
+        } catch (_) {}
+      });
+    });
   }
 
   /// 读该城的折叠/展开记忆（默认全部展开）。
@@ -335,13 +415,23 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
               _jumpToSection(results.first.location?.key ?? '', sk),
           sectionAnchor: (sk, child) =>
               _sectionAnchor(results.first.location?.key ?? '', sk, child),
+          itemAnchorKey: (sk, item) {
+            final cityKey = results.first.location?.key ?? '';
+            final name =
+                (item['name'] ?? item['title'] ?? '').toString();
+            if (name.isEmpty) return null;
+            return _itemKeys.putIfAbsent(
+                '$cityKey|$sk|n:$name', () => GlobalKey());
+          },
           onClearAi: results.first.isAiImported
               ? () => _clearAiContent(results.first.location?.key ?? '')
               : null,
         ),
       );
     }
-    return DefaultTabController(
+    return KeyedSubtree(
+    key: _tabHostKey,
+    child: DefaultTabController(
       length: results.length,
       child: Column(children: [
         TabBar(
@@ -377,6 +467,14 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
                   onJumpSection: (sk) => _jumpToSection(r.location?.key ?? '', sk),
                   sectionAnchor: (sk, child) =>
                       _sectionAnchor(r.location?.key ?? '', sk, child),
+                  itemAnchorKey: (sk, item) {
+                    final cityKey = r.location?.key ?? '';
+                    final name =
+                        (item['name'] ?? item['title'] ?? '').toString();
+                    if (name.isEmpty) return null;
+                    return _itemKeys.putIfAbsent(
+                        '$cityKey|$sk|n:$name', () => GlobalKey());
+                  },
                   onClearAi: r.isAiImported
                       ? () => _clearAiContent(r.location?.key ?? '')
                       : null,
@@ -385,6 +483,7 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
           ]),
         ),
       ]),
+    ),
     );
   }
 
@@ -422,12 +521,13 @@ class _CityGuideView extends StatelessWidget {
     required this.onToggleSection,
     required this.onJumpSection,
     required this.sectionAnchor,
+    this.itemAnchorKey,
     this.onClearAi,
   });
 
   final GuideResult result;
 
-  /// null = 无行程上下文（城市入口），「加入安排」需先选行程。
+  /// null = 无行程上下文（城市入口），动作需先选行程。
   final String? tripId;
 
   /// 完整阶段是否已完成（未完成且无种子时展示「正在获取网络攻略」）。
@@ -442,6 +542,10 @@ class _CityGuideView extends StatelessWidget {
   /// 否则 `Scrollable.ensureVisible` 找不到上下文（早前版本只挂了个空
   /// SizedBox 占位，点击宫格无反应）。
   final Widget Function(String sectionKey, Widget child) sectionAnchor;
+
+  /// 条目滚动锚点 key（行程卡「攻略」角标深链定位用）；null 表示不需要。
+  final Key? Function(String sectionKey, Map<String, dynamic> item)?
+      itemAnchorKey;
   final VoidCallback? onClearAi;
 
   String get _cityKey => result.location?.key ?? '';
@@ -584,6 +688,7 @@ class _CityGuideView extends StatelessWidget {
                     expanded: !_isCollapsed(key),
                     onToggle: () => onToggleSection(key),
                     itemActionBuilder: (item) => _addAction(context, key, item),
+                    itemAnchorKey: (item) => itemAnchorKey?.call(key, item),
                   ),
                 ),
               ),
@@ -633,15 +738,17 @@ class _CityGuideView extends StatelessWidget {
     return first == null ? null : (first['detail'] ?? '').toString();
   }
 
-  /// 「加入安排」：有 tripId 直接进选日期；无 tripId 先弹行程选择。
+  /// 条目双动作（V2.7.2 S5 §8.3）：有且仅有「直接排」「先想去」两个动词。
+  /// 仅 spots/food 提供且条目必须存在于种子（guideRef 需要稳定下标）；
+  /// 在线补充条目无稳定 ref，不提供动作（静默降级，偏差已登记）。
   Widget? _addAction(
       BuildContext context, String sectionKey, Map<String, dynamic> item) {
-    if (sectionKey != 'spots' && sectionKey != 'food') return null;
+    if (!GuideRef.knownSections.contains(sectionKey)) return null;
     final name = (item['name'] ?? item['title'] ?? '').toString();
     if (name.isEmpty) return null;
-    return _AddToPlanButton(
+    return _GuideEntryActions(
       tripId: tripId,
-      guideKey: _cityKey,
+      cityKey: _cityKey,
       sectionKey: sectionKey,
       item: item,
     );
@@ -655,170 +762,246 @@ class _CityGuideView extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// 「加入安排」按钮
+// 条目双动作（直接排 / 先想去）
 // ---------------------------------------------------------------------------
 
-class _AddToPlanButton extends ConsumerStatefulWidget {
-  const _AddToPlanButton({
+class _GuideEntryActions extends ConsumerStatefulWidget {
+  const _GuideEntryActions({
     required this.tripId,
-    required this.guideKey,
+    required this.cityKey,
     required this.sectionKey,
     required this.item,
   });
 
   final String? tripId;
-  final String guideKey;
+  final String cityKey;
   final String sectionKey;
   final Map<String, dynamic> item;
 
   @override
-  ConsumerState<_AddToPlanButton> createState() => _AddToPlanButtonState();
+  ConsumerState<_GuideEntryActions> createState() =>
+      _GuideEntryActionsState();
 }
 
-class _AddToPlanButtonState extends ConsumerState<_AddToPlanButton> {
-  String? _tripId;
-  int? _addedDay;
+class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
+  /// 城市入口选中的行程（选择后记住，刷新动作区）。
+  String? _pickedTripId;
+  bool _busy = false;
 
   String get _name =>
       (widget.item['name'] ?? widget.item['title'] ?? '').toString();
 
-  @override
-  void initState() {
-    super.initState();
-    _tripId = widget.tripId;
-    _refresh();
+  /// 种子下标 → guideRef；条目不在种子中（在线补充）→ null。
+  GuideRef? _refOf(Map<String, Map<String, int>>? seedIndex) {
+    final idx = seedIndex?[widget.sectionKey]?[_name];
+    if (idx == null) return null;
+    return GuideRef(
+        cityKey: widget.cityKey, section: widget.sectionKey, index: idx);
   }
 
-  @override
-  void didUpdateWidget(covariant _AddToPlanButton old) {
-    super.didUpdateWidget(old);
-    if (old.tripId != widget.tripId || old.item != widget.item) {
-      _tripId = widget.tripId;
-      _refresh();
-    }
-  }
+  /// §8.3 字段映射：spots→attraction / food→food。
+  String get _type => widget.sectionKey == 'food' ? 'food' : 'attraction';
 
-  Future<void> _refresh() async {
-    final tid = _tripId;
-    if (tid == null || tid.isEmpty) return;
-    final sp = await SharedPreferences.getInstance();
-    final day = sp.getInt('guide_added_${tid}_${widget.guideKey}_$_name');
-    if (!mounted) return;
-    setState(() => _addedDay = day);
-  }
+  /// §8.3 字段映射：spots→addr / food→area（food 无 addr）；不复制 note 长文。
+  String get _address =>
+      (widget.item['addr'] ?? widget.item['area'] ?? '').toString();
+
+  /// T1 映射（附录 T1）；未登记的 timeText → null（未估时）。
+  int? get _duration =>
+      guideDurationFromTimeText((widget.item['timeText'] ?? '').toString());
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    if (_addedDay != null) {
-      return Text('已加入 D${(_addedDay ?? 0) + 1}',
-          style: TextStyle(
-              fontSize: AppFontSizes.caption, color: scheme.outline));
+    final tid = _pickedTripId ?? widget.tripId;
+    final seedIndex =
+        ref.watch(guideSeedNameIndexProvider(widget.cityKey)).valueOrNull;
+    final guideRef = _refOf(seedIndex);
+    // 在线补充条目 / 种子索引未就绪：不渲染动作（静默降级）
+    if (guideRef == null) return const SizedBox.shrink();
+
+    if (tid == null || tid.isEmpty) {
+      return _actions(context, scheme, null, guideRef, false);
     }
+    final link = ref.watch(guideLinkProvider(tid)).valueOrNull;
+    final days = link?.daysFor(guideRef.format()) ?? const <int>[];
+    if (days.isNotEmpty) {
+      return Text(
+        '已安排 · 第 ${days.join('、')} 天',
+        style: TextStyle(
+          fontSize: AppFontSizes.caption,
+          fontWeight: FontWeight.w600,
+          color: scheme.primary,
+        ),
+      );
+    }
+    return _actions(
+        context, scheme, tid, guideRef, link?.isWishlisted(guideRef.format()) ?? false);
+  }
+
+  Widget _actions(BuildContext context, ColorScheme scheme, String? tid,
+      GuideRef guideRef, bool wished) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _entryButton(context, label: '直接排', onTap: () => _onPlace(guideRef)),
+        const SizedBox(width: Spacing.xs),
+        if (wished)
+          Text('已在想去',
+              style: TextStyle(
+                  fontSize: AppFontSizes.caption, color: scheme.outline))
+        else
+          _entryButton(context, label: '先想去', onTap: () => _onWish(guideRef)),
+      ],
+    );
+  }
+
+  Widget _entryButton(BuildContext context,
+      {required String label, required VoidCallback onTap}) {
     return TextButton(
-      onPressed: _onTap,
+      onPressed: _busy ? null : onTap,
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
         minimumSize: const Size(0, 32),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
-      child: Text(widget.tripId == null
-          ? '加入行程'
-          : copy('guide.addPlan')),
+      child: Text(label),
     );
   }
 
-  Future<void> _onTap() async {
-    var tid = _tripId;
-    // 城市入口没有行程上下文：先让用户挑一个行程
-    if (tid == null || tid.isEmpty) {
-      final trips =
-          ref.read(allTripsProvider).value ?? const <TripCardView>[];
-      if (!mounted) return;
-      if (trips.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('还没有行程，先创建一个行程再来安排')));
-        return;
-      }
-      final picked = await showDraggableSheet<String>(
-        context: context,
-        initialChildSize: 0.5,
-        builder: (ctx, _) => ListView(
-          shrinkWrap: true,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(Spacing.lg),
-              child: Text('把「$_name」加到哪个行程？'),
+  /// 城市入口：先选行程（沿用既有「挑行程」抽屉交互）。
+  Future<String?> _ensureTripId() async {
+    final current = _pickedTripId ?? widget.tripId;
+    if (current != null && current.isNotEmpty) return current;
+    final trips = ref.read(allTripsProvider).value ?? const <TripCardView>[];
+    if (!mounted) return null;
+    if (trips.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('还没有行程，先创建一个行程再来安排')));
+      return null;
+    }
+    final picked = await showDraggableSheet<String>(
+      context: context,
+      initialChildSize: 0.5,
+      builder: (ctx, _) => ListView(
+        shrinkWrap: true,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(Spacing.lg),
+            child: Text('把「$_name」加到哪个行程？'),
+          ),
+          for (final t in trips)
+            ListTile(
+              leading: Text(t.emoji, style: const TextStyle(fontSize: 22)),
+              title: Text(t.name),
+              subtitle: t.destination.isEmpty
+                  ? null
+                  : Text(t.destination,
+                      style: const TextStyle(fontSize: AppFontSizes.caption)),
+              onTap: () => Navigator.pop(ctx, t.id),
             ),
-            for (final t in trips)
-              ListTile(
-                leading: Text(t.emoji, style: const TextStyle(fontSize: 22)),
-                title: Text(t.name),
-                subtitle: t.destination.isEmpty
-                    ? null
-                    : Text(t.destination,
-                        style:
-                            const TextStyle(fontSize: AppFontSizes.caption)),
-                onTap: () => Navigator.pop(ctx, t.id),
-              ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return null;
+    setState(() => _pickedTripId = picked);
+    return picked;
+  }
+
+  /// 「直接排」：选天 + 可选时段 → 同 guideRef 同日去重确认 → 建正式卡。
+  Future<void> _onPlace(GuideRef guideRef) async {
+    final tid = await _ensureTripId();
+    if (tid == null || !mounted) return;
+    final picked = await showModalBottomSheet<(int, int)>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (_) => _GuidePlaceSheet(tripId: tid),
+    );
+    if (picked == null || !mounted) return;
+    final (day, slot) = picked;
+    // §8.3 去重：同 guideRef 同日已存在 → 确认弹层（跨天不去重）
+    final sameDay = await ref
+        .read(tripsRepoProvider)
+        .findByGuideRefPrefix(tid, guideRef.prefix());
+    if (sameDay.any((it) => it.dateEpochDay == day) && mounted) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('该条目已安排在此日'),
+          content: const Text('同一天已有这条攻略的安排，仍要再添加一条吗？'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('仍要添加')),
           ],
         ),
       );
-      if (picked == null || !mounted) return;
-      tid = picked;
-      setState(() => _tripId = picked);
+      if (ok != true || !mounted) return;
     }
-    if (!mounted) return;
-    final day = await showModalBottomSheet<int>(
-      context: context,
-      builder: (ctx) => SafeArea(child: _DayPicker(tripId: tid!)),
-    );
-    if (day == null || !mounted) return;
-    final sp = await SharedPreferences.getInstance();
-    await sp.setInt(
-        'guide_added_${tid}_${widget.guideKey}_$_name', day);
-    final type = widget.sectionKey == 'food' ? 'food' : 'attraction';
-    final rawNote =
-        (widget.item['note'] ?? widget.item['detail'] ?? '').toString();
-    final note = rawNote.isEmpty ? '来自攻略' : '$rawNote · 来自攻略';
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final prefill = TripItem(
-      id: 'guide_prefill',
-      tripId: tid,
-      dateEpochDay: day,
-      type: type,
-      name: _name,
-      address: (widget.item['addr'] ?? '').toString(),
-      fromName: '',
-      fromAddress: '',
-      toName: '',
-      toAddress: '',
-      sortOrder: 0,
-      costCurrency: 'CNY',
-      note: note,
-      createdAt: now,
-      updatedAt: now,
-    );
-    if (!mounted) return;
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) =>
-          edit.ItemEditScreen(tripId: tid!, item: prefill, prefillNew: true),
-    ));
-    setState(() => _addedDay = day);
+    setState(() => _busy = true);
+    try {
+      await ref.read(tripsRepoProvider).addItemWithGuideRef(
+            tripId: tid,
+            dateEpochDay: day,
+            name: _name,
+            type: _type,
+            guideRef: guideRef.format(),
+            address: _address,
+            durationMin: _duration,
+            startTimeMin: slot <= 0 ? null : slot,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('已排入第 $day 天')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 「先想去」：入想去池（S6 面板展示；落卡即移出）。
+  Future<void> _onWish(GuideRef guideRef) async {
+    final tid = await _ensureTripId();
+    if (tid == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final tag = (widget.item['tag'] ?? '').toString();
+      await ref.read(wishlistRepoProvider).addItem(
+            tripId: tid,
+            cityKey: widget.cityKey,
+            name: _name,
+            address: _address,
+            type: _type,
+            durationMin: _duration,
+            tag: tag.isEmpty ? null : tag,
+            guideRef: guideRef.format(),
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('已加入想去')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }
 
-class _DayPicker extends ConsumerStatefulWidget {
-  const _DayPicker({required this.tripId});
+/// 「直接排」选天 + 可选时段弹层（§8.3：天序列表含日期与星期，默认无时段）。
+class _GuidePlaceSheet extends ConsumerStatefulWidget {
+  const _GuidePlaceSheet({required this.tripId});
 
   final String tripId;
 
   @override
-  ConsumerState<_DayPicker> createState() => _DayPickerState();
+  ConsumerState<_GuidePlaceSheet> createState() => _GuidePlaceSheetState();
 }
 
-class _DayPickerState extends ConsumerState<_DayPicker> {
-  List<int>? _days;
+class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
+  Trip? _trip;
 
   @override
   void initState() {
@@ -829,53 +1012,108 @@ class _DayPickerState extends ConsumerState<_DayPicker> {
   Future<void> _load() async {
     final trip = await ref.read(tripsRepoProvider).getById(widget.tripId);
     if (!mounted) return;
-    if (trip == null) {
-      setState(() => _days = []);
-      return;
-    }
-    final days = <int>[];
-    for (var d = trip.startEpochDay; d <= trip.endEpochDay; d++) {
-      days.add(d);
-    }
-    setState(() => _days = days.isEmpty ? [trip.startEpochDay] : days);
+    setState(() => _trip = trip);
   }
+
+  Future<void> _pickDay(int day) async {
+    final slot = await _slotPicker();
+    if (!mounted) return;
+    Navigator.pop(context, (day, slot));
+  }
+
+  /// 可选时段：0 = 不指定。
+  Future<int> _slotPicker() {
+    return showModalBottomSheet<int>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg, Spacing.md, Spacing.lg, Spacing.xs),
+              child: Text('选择时段（可留空）',
+                  style: Theme.of(ctx).textTheme.titleMedium),
+            ),
+            ListTile(
+              title: const Text('不指定时段'),
+              onTap: () => Navigator.pop(ctx, 0),
+            ),
+            for (final m in const [540, 720, 900, 1080])
+              ListTile(title: Text(_fmtSlot(m)), onTap: () => Navigator.pop(ctx, m)),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, size: 20),
+              title: const Text('自定义…'),
+              onTap: () async {
+                final t = await showTimePicker(
+                    context: ctx, initialTime: const TimeOfDay(hour: 9, minute: 0));
+                if (t != null && ctx.mounted) {
+                  Navigator.pop(ctx, t.hour * 60 + t.minute);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    ).then((v) => v ?? 0);
+  }
+
+  String _fmtSlot(int m) =>
+      '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    final days = _days;
-    return ListView(
-      shrinkWrap: true,
-      children: [
-        const Padding(
-          padding: EdgeInsets.all(Spacing.lg),
-          child: Text('选择加入日期'),
-        ),
-        if (days == null)
-          const Padding(
-              padding: EdgeInsets.all(Spacing.xl),
-              child: Center(child: CircularProgressIndicator()))
-        else
-          for (final d in days)
-            ListTile(
-              title: Text('D${d - (days.first) + 1} · ${_fmt(d)}'),
-              onTap: () => Navigator.pop(context, d),
+    final trip = _trip;
+    if (trip == null) {
+      return const SizedBox(
+          height: 200, child: Center(child: CircularProgressIndicator()));
+    }
+    final n = trip.endEpochDay - trip.startEpochDay + 1;
+    if (n < 1) {
+      return const SizedBox(
+          height: 120,
+          child: Center(child: Text('该行程还没有日期，先去编辑行程设置日期')));
+    }
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                Spacing.lg, Spacing.md, Spacing.lg, Spacing.xs),
+            child: Text('排到哪一天？',
+                style: Theme.of(context).textTheme.titleMedium),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: n,
+              itemBuilder: (context, i) {
+                final day = trip.startEpochDay + i;
+                return ListTile(
+                  title: Text('第 ${i + 1} 天'),
+                  subtitle: Text(fmtFullDateOfEpoch(day)),
+                  onTap: () => _pickDay(day),
+                );
+              },
             ),
-      ],
+          ),
+        ],
+      ),
     );
-  }
-
-  String _fmt(int epochDay) {
-    final dt =
-        DateTime.fromMillisecondsSinceEpoch(epochDay * 86400000, isUtc: true);
-    return '${dt.month}月${dt.day}日';
   }
 }
 
 /// 路由包装（行程入口）：由 tripId 解析 destination 后挂载攻略页。
 class TripGuideScreenBuilder extends ConsumerWidget {
-  const TripGuideScreenBuilder({super.key, required this.tripId});
+  const TripGuideScreenBuilder({super.key, required this.tripId, this.focusRef});
 
   final String tripId;
+
+  /// 深链定位（V2.7.2 S5）：透传给攻略页。
+  final String? focusRef;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -889,7 +1127,8 @@ class TripGuideScreenBuilder extends ConsumerWidget {
           );
         }
         final dest = snap.data?.destination ?? '';
-        return TripGuideScreen(tripId: tripId, destination: dest);
+        return TripGuideScreen(
+            tripId: tripId, destination: dest, focusRef: focusRef);
       },
     );
   }

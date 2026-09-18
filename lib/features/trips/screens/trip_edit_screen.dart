@@ -11,6 +11,7 @@ import '../../../data/providers.dart';
 import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
 import 'destination_picker_sheet.dart';
 
+import '../../../domain/assemble_engine.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/sheet.dart';
@@ -43,6 +44,8 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
   String _coverKey = CoverGradients.keys.first;
   int? _startDay;
   int? _endDay;
+  // V2.7.2 S7：行程级装配节奏（relaxed/standard/tight）。
+  String _pace = 'standard';
 
   String? _editId;
   bool _loaded = false;
@@ -81,6 +84,7 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
       _coverKey = CoverGradients.keys.contains(trip.cover) ? trip.cover : _coverKey;
       _startDay = trip.startEpochDay;
       _endDay = trip.endEpochDay;
+      _pace = trip.pace;
       _loaded = true;
     });
   }
@@ -159,8 +163,8 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
       note: _noteCtrl.text.trim().isEmpty ? '' : _noteCtrl.text.trim(),
       groupId: existing?.groupId,
       archived: existing?.archived ?? false,
-      // V2.7.2：装配节奏档（编辑时保留原值；新建用默认 standard）。
-      pace: existing?.pace ?? 'standard',
+      // V2.7.2 S7：装配节奏档（行程级设置一次，装配台不再询问）。
+      pace: _pace,
       createdAt: existing?.createdAt ?? nowMs,
       updatedAt: nowMs,
     );
@@ -206,6 +210,8 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
             _buildCoverCard(),
             const SizedBox(height: Spacing.lg),
             _buildDateCard(),
+            const SizedBox(height: Spacing.lg),
+            _buildPaceCard(),
             const SizedBox(height: Spacing.lg),
             _buildNoteCard(),
             const SizedBox(height: Spacing.xxl),
@@ -463,6 +469,79 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  // ============ 区块：装配节奏（V2.7.2 S7） ============
+
+  Widget _buildPaceCard() {
+    final scheme = Theme.of(context).colorScheme;
+    Widget tile(TripPace pace, String desc) {
+      final selected = _pace == pace.name;
+      return Expanded(
+        child: InkWell(
+          borderRadius: AppRadius.input,
+          onTap: () => setState(() => _pace = pace.name),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                vertical: Spacing.md, horizontal: Spacing.xs),
+            decoration: BoxDecoration(
+              color: selected
+                  ? scheme.primaryContainer
+                  : scheme.surfaceContainerLow,
+              borderRadius: AppRadius.input,
+              border: Border.all(
+                  color: selected
+                      ? scheme.primary
+                      : scheme.outlineVariant.withValues(alpha: 0.5)),
+            ),
+            child: Column(
+              children: [
+                Text(tripPaceLabel(pace),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: selected
+                            ? scheme.onPrimaryContainer
+                            : scheme.onSurface)),
+                const SizedBox(height: 2),
+                Text(desc,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: AppFontSizes.caption - 1,
+                        color: selected
+                            ? scheme.onPrimaryContainer
+                            : scheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Text('装配节奏', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: Text('想去装配台按此档估算每天可排时长',
+                  style: TextStyle(
+                      fontSize: AppFontSizes.caption,
+                      color: scheme.onSurfaceVariant)),
+            ),
+          ]),
+          const SizedBox(height: Spacing.md),
+          Row(children: [
+            tile(TripPace.relaxed, '每天约 6 小时'),
+            const SizedBox(width: Spacing.sm),
+            tile(TripPace.standard, '每天约 8 小时'),
+            const SizedBox(width: Spacing.sm),
+            tile(TripPace.tight, '每天约 10 小时'),
+          ]),
         ],
       ),
     );

@@ -20,8 +20,8 @@ import '../core/uid.dart';
 /// 行程备份文件应用标识
 const String kTripBackupApp = 'travel-assistant-v2-trip';
 
-/// 当前行程备份格式版本
-const int kTripBackupVersion = 1;
+/// 当前行程备份格式版本（V2.7.2：+wishlist 行集，1→2）
+const int kTripBackupVersion = 2;
 
 /// id 换发器签名（测试注入确定性实现）
 typedef IdGen = String Function(String prefix);
@@ -41,6 +41,7 @@ Map<String, dynamic> buildTripBackup({
   required List<Map<String, dynamic>> items,
   required List<Map<String, dynamic>> photos,
   required List<Map<String, dynamic>> checklist,
+  List<Map<String, dynamic>> wishlist = const [],
 }) =>
     <String, dynamic>{
       'app': kTripBackupApp,
@@ -49,6 +50,7 @@ Map<String, dynamic> buildTripBackup({
       'items': [for (final it in items) _copy(it)],
       'photos': [for (final p in photos) _copy(p)],
       'checklist': [for (final c in checklist) _copy(c)],
+      'wishlist': [for (final w in wishlist) _copy(w)],
     };
 
 /// 备份 → JSON 文本
@@ -62,6 +64,7 @@ class TripBackup {
     required this.items,
     required this.photos,
     required this.checklist,
+    this.wishlist = const [],
   });
 
   final int version;
@@ -69,6 +72,9 @@ class TripBackup {
   final List<Map<String, dynamic>> items;
   final List<Map<String, dynamic>> photos;
   final List<Map<String, dynamic>> checklist;
+
+  /// V2.7.2：想去池行集（旧包为空）
+  final List<Map<String, dynamic>> wishlist;
 }
 
 /// 解析并校验备份文本；非法输入抛 [FormatException]。
@@ -100,6 +106,7 @@ TripBackup parseTripBackupMap(Map<String, dynamic> root) {
     items: _asMapList(root['items']),
     photos: _asMapList(root['photos']),
     checklist: _asMapList(root['checklist']),
+    wishlist: _asMapList(root['wishlist']),
   );
 }
 
@@ -109,14 +116,19 @@ class TripImportStats {
     required this.items,
     required this.photos,
     required this.checklist,
+    this.wishlist = 0,
   });
   final int items;
   final int photos;
   final int checklist;
 
+  /// V2.7.2：想去池行数
+  final int wishlist;
+
   @override
   String toString() =>
-      '安排$items · 照片$photos · 清单$checklist';
+      '安排$items · 照片$photos · 清单$checklist' +
+      (wishlist > 0 ? ' · 想去$wishlist' : '');
 }
 
 /// 导入产物：全部实体已换发新 id 且内部自洽，可直接批量入库。
@@ -127,12 +139,16 @@ class TripImportResult {
     required this.photos,
     required this.checklist,
     required this.stats,
+    this.wishlist = const [],
   });
 
   final Map<String, dynamic> trip;
   final List<Map<String, dynamic>> items;
   final List<Map<String, dynamic>> photos;
   final List<Map<String, dynamic>> checklist;
+
+  /// V2.7.2：想去池行（id 已换发、tripId 已指向新行程）
+  final List<Map<String, dynamic>> wishlist;
   final TripImportStats stats;
 }
 
@@ -184,6 +200,13 @@ TripImportResult applyTripImport(
     });
   }
 
+  // V2.7.2：想去池行重映射（换发新 id，tripId 指向新行程）
+  final newWishlist = <Map<String, dynamic>>[];
+  for (final w in backup.wishlist) {
+    final nid = g('wish');
+    newWishlist.add(<String, dynamic>{..._copy(w), 'id': nid, 'tripId': newTripId});
+  }
+
   final newTrip = <String, dynamic>{
     ..._copy(backup.trip),
     'id': newTripId,
@@ -195,10 +218,12 @@ TripImportResult applyTripImport(
     items: newItems,
     photos: newPhotos,
     checklist: newChecklist,
+    wishlist: newWishlist,
     stats: TripImportStats(
       items: newItems.length,
       photos: newPhotos.length,
       checklist: newChecklist.length,
+      wishlist: newWishlist.length,
     ),
   );
 }

@@ -187,8 +187,11 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
     setState(() => _generating = true);
     try {
       // 将完整行程信息转换为 PDF Builder 的结构，同时保留真实 Day 编号。
+      // V2.7.2 S8/S12：备胎不进 PDF（数据准备过滤 + 构建器防御性再过滤）。
+      final formal =
+          items.where((it) => it.backupOf == null).toList();
       final byDay = <int, List<TripItem>>{};
-      for (final it in items) {
+      for (final it in formal) {
         (byDay[it.dateEpochDay] ??= []).add(it);
       }
       final dayKeys = byDay.keys.toList()..sort();
@@ -223,11 +226,13 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
             'fromName': it.fromName,
             'toName': it.toName,
             'flightNo': it.flightNo ?? '',
+            'backupOf': it.backupOf,
           });
         }
         pdfDays.add({
           'dayIndex': day - trip.startEpochDay + 1,
           'date': cnFullDate(day),
+          'epochDay': day,
           'items': pdfItems,
         });
       }
@@ -239,7 +244,7 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
         coverKey: trip.cover,
         totalDays: totalDays,
         dateRange: cnDateRange(trip.startEpochDay, trip.endEpochDay),
-        totalItems: items.length,
+        totalItems: formal.length,
       );
       await shareFile(
         bytes,

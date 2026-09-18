@@ -34,6 +34,9 @@ String fmtIsoDate(DateTime d) =>
 /// epochDay 版便捷包装
 String fmtMonthDayOfEpoch(int epochDay) => fmtMonthDay(epochDayToDate(epochDay));
 
+/// 「周X」：epochDay 版（V2.7.2 S12 行程总览页用；星期计算唯一入口）。
+String weekdayCnOf(int epochDay) => fmtWeekday(epochDayToDate(epochDay));
+
 /// epochDay 版完整中文文案
 String fmtFullDateOfEpoch(int epochDay) => fmtFullDate(epochDayToDate(epochDay));
 
