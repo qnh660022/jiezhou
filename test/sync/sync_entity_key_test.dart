@@ -76,6 +76,10 @@ void main() {
         SyncEntity.spaces,
         SyncEntity.spaceMembers,
         SyncEntity.spaceEvents,
+        // V2.7.1：inboxItems 的枚举名是 `inboxItems`，本地键固定 `inbox_items`
+        SyncEntity.inboxItems,
+        // V2.7.2：wishlistItems → wishlist_items
+        SyncEntity.wishlistItems,
       };
       for (final e in SyncEntity.values) {
         if (renamed.contains(e)) continue;

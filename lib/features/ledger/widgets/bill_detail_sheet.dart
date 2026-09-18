@@ -90,6 +90,8 @@ class BillDetailSheet extends ConsumerWidget {
               shareModeLabel(expense.shareMode) +
               '）',
         ),
+        // S11：支付方式纯标签（无则显示「未标记」，不强制填写）。
+        DetailLine(label: '支付方式', value: payMethodLabel(expense.payMethod)),
         if (expense.note != null && expense.note!.isNotEmpty)
           DetailLine(label: '备注', value: expense.note!),
         const Divider(height: Spacing.xl),

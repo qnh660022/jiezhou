@@ -8,6 +8,7 @@ import "repo/categories_repo.dart";
 import "repo/checklist_repo.dart";
 import "repo/prefs_repo.dart";
 import "repo/travel_spaces_repo.dart";
+import "repo/wishlist_repo.dart";
 import "services/poi_service.dart";
 import "services/flight_service.dart";
 import "services/weather_service.dart";
@@ -30,12 +31,15 @@ final dbProvider = Provider<AppDatabase>((_) => AppDatabase());
 /// 仓储 providers
 final tripsRepoProvider = Provider<TripsRepository>((r) => TripsRepository(r.read(dbProvider)));
 final ledgerRepoProvider = Provider<LedgerRepository>((r) => LedgerRepository(r.read(dbProvider), r.read(prefsRepoProvider)));
-final categoriesRepoProvider = Provider<CategoriesRepository>((r) => CategoriesRepository(r.read(dbProvider)));
+final categoriesRepoProvider = Provider<CategoriesRepository>((r) => CategoriesRepository(r.read(dbProvider), prefs: r.read(prefsRepoProvider)));
 final checklistRepoProvider = Provider<ChecklistRepository>((r) => ChecklistRepository(r.read(dbProvider)));
 final prefsRepoProvider = Provider<PrefsRepository>((_) => PrefsRepository());
 /// V2.6.6.2 旅伴空间仓储（空间/成员/动态镜像 + 协作行程镜像）。
 final travelSpacesRepoProvider =
     Provider<TravelSpacesRepository>((r) => TravelSpacesRepository(r.read(dbProvider)));
+/// V2.7.2 想去池仓储（行程 UI 的唯一桥接层）。
+final wishlistRepoProvider =
+    Provider<WishlistRepository>((r) => WishlistRepository(r.read(dbProvider)));
 
 /// 服务 providers
 final poiServiceProvider = Provider<PoiService>((r) => PoiServiceImpl(prefsRepo: r.read(prefsRepoProvider)));

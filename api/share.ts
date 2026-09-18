@@ -38,7 +38,7 @@ const NEUTRAL_DESC = '来自芥舟 · 旅途助手的分享';
 // ============================================================================
 
 type RpcOutcome =
-    | { kind: 'ok'; shareKind: 'trip' | 'group'; data: SnapshotData }
+    | { kind: 'ok'; shareKind: 'trip' | 'group' | 'settle'; data: SnapshotData }
     | { kind: 'not_found' | 'need_pass' | 'bad_pass' | 'env_error' }
     // rpc_error 附带诊断信息（HTTP 状态 / 服务端报错摘要），渲染到错误页，
     // 便于远程定位（此前一律「加载失败」无法区分 500 / 网络异常 / 结构异常）
@@ -54,6 +54,9 @@ interface SnapshotData {
   members?: { name?: string }[];
   expenses?: { title?: string; categoryKey?: string; amountCents?: number }[];
   settlements?: { transfersJson?: string; roundNo?: number }[];
+  /** V2.7.1 S5：只读结算链接（仅转账列表，不含账单明细/备注/成员余额）。 */
+  settle?: { groupName?: string; roundNo?: number | null; completedAt?: number | null;
+             transfers?: { from?: string; to?: string; cents?: number }[] };
 }
 
 /**
@@ -91,9 +94,11 @@ async function callSnapshotRpc(token: string, pass: string | null): Promise<RpcO
     }
     const body = await res.json();
     if (body && body.ok === true) {
+      // V2.7.1 S5：settle 只读结算链接（仅团名/轮次/时间/转账列表）。
+      const kind = body.kind === 'group' ? 'group' : body.kind === 'settle' ? 'settle' : 'trip';
       return {
         kind: 'ok',
-        shareKind: body.kind === 'group' ? 'group' : 'trip',
+        shareKind: kind,
         data: body.data ?? {},
       };
     }
@@ -275,7 +280,16 @@ function catIcon(key: unknown): string {
 const MEMBER_COLORS = ['#00A878', '#2F80ED', '#F2994A', '#F06B9C', '#7B61FF', '#E0B14B'];
 
 /** 内容页动态 og/title（内容页才输出动态摘要） */
-function metaFor(shareKind: 'trip' | 'group', data: SnapshotData): { title: string; desc: string } {
+function metaFor(shareKind: 'trip' | 'group' | 'settle', data: SnapshotData): { title: string; desc: string } {
+  if (shareKind === 'settle') {
+    // 结算快照只有转账列表 → og 摘要也只暴露轮次与笔数
+    const s = data.settle ?? {};
+    const count = Array.isArray(s.transfers) ? s.transfers.length : 0;
+    return {
+      title: `${s.groupName || '结算单'} · 第 ${s.roundNo ?? ''} 轮结算`,
+      desc: `共 ${count} 笔转账`,
+    };
+  }
   if (shareKind === 'trip') {
     const t = data.trip ?? {};
     let title = [t.emoji, t.name].filter(Boolean).map((x) => String(x)).join(' ');
@@ -400,6 +414,36 @@ function groupBody(data: SnapshotData): string {
       }</div></div>`;
     }
   }
+  return `${hero}<main class="wrap"><div class="sheet">${inner}</div></main>`;
+}
+
+/**
+ * V2.7.1 S5：结算单只读页。
+ * 只渲染团名、轮次、生成时间与转账列表；**不含**账单明细、备注、成员余额。
+ */
+function settleBody(data: SnapshotData): string {
+  const s = data.settle ?? {};
+  const rows = Array.isArray(s.transfers) ? s.transfers : [];
+  let hero = '<header class="hero">';
+  hero += `<h1>${esc(s.groupName || '结算单')}</h1>`;
+  let when = '进行中';
+  if (typeof s.completedAt === 'number' && s.completedAt > 0) {
+    const d = new Date(s.completedAt);
+    const two = (v: number) => String(v).padStart(2, '0');
+    when = `完成于 ${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+  }
+  hero += `<p class="ava-names">第 ${esc(String(s.roundNo ?? ''))} 轮 · ${esc(when)}</p>`;
+  hero += '</header>';
+
+  let inner = '<div class="sec">转账方案</div>';
+  if (!rows.length) {
+    inner += '<div class="empty"><div class="ico">✅</div><p>本轮无需转账，账目已平</p></div>';
+  }
+  for (const tr of rows) {
+    const cents = typeof tr?.cents === 'number' ? tr.cents : 0;
+    inner += `<div class="tr-row"><span class="tr-people">${esc(tr?.from)} <i>→</i> ${esc(tr?.to)}</span><span class="tr-amt">¥${(cents / 100).toFixed(2)}</span></div>`;
+  }
+  inner += `<p class="ava-names">共 ${rows.length} 笔转账 · 已按最少转账方案计算</p>`;
   return `${hero}<main class="wrap"><div class="sheet">${inner}</div></main>`;
 }
 
@@ -591,7 +635,11 @@ export default async function handler(request: Request): Promise<Response> {
       if (cookiePass) clearFails(key); // 带 cookie GET ok → 口令验证成功，清零
       const meta = metaFor(outcome.shareKind, outcome.data);
       const body =
-        outcome.shareKind === 'group' ? groupBody(outcome.data) : tripBody(outcome.data);
+        outcome.shareKind === 'group'
+          ? groupBody(outcome.data)
+          : outcome.shareKind === 'settle'
+            ? settleBody(outcome.data)
+            : tripBody(outcome.data);
       return htmlPage(body, meta);
     }
     if (outcome.kind === 'bad_pass') {

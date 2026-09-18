@@ -122,11 +122,56 @@ class GroupListScreen extends ConsumerWidget {
                                   ),
                                   child: Text(g.icon, style: const TextStyle(fontSize: 22)),
                                 ),
-                                title: Text(g.name, style: Theme.of(context).textTheme.titleSmall),
+                                title: Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(g.name,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context).textTheme.titleSmall),
+                                    ),
+                                    const SizedBox(width: Spacing.xs),
+                                    // S4：账本类型标签 + 区别性图标。
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .secondaryContainer
+                                            .withValues(alpha: 0.7),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            g.isPersonal
+                                                ? Icons.person_outline_rounded
+                                                : Icons.groups_2_outlined,
+                                            size: 12,
+                                            color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            g.isPersonal ? '个人' : '旅行',
+                                            style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                color: Theme.of(context).colorScheme.onSecondaryContainer),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 subtitle: Text(
                                   g.archived
                                       ? '已结束 · 数据保留，可随时恢复'
-                                      : g.budgetEnabled ? '预算已开启 · 目标 ¥' + _yuan(g.budgetCents ?? 0) : '轻点切换为当前团',
+                                      : g.isPersonal
+                                          ? '只记自己的每一笔'
+                                          : g.budgetEnabled
+                                              ? '预算已开启 · 目标 ¥' + _yuan(g.budgetCents ?? 0)
+                                              : '轻点切换为当前团',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                                 trailing: Row(

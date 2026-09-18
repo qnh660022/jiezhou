@@ -24,6 +24,14 @@ const List<int> kTripBackupMagic = <int>[0x54, 0x41, 0x31, 0x54];
 /// 全量备份魔数 "TA1A"
 const List<int> kFullBackupMagic = <int>[0x54, 0x41, 0x31, 0x41];
 
+/// 默认接受的魔数白名单（S1 G2 收口）：三者齐全，避免未来调用点漏传
+/// `acceptedMagics` 时把 `.tavA` 全量备份误判为「不是芥舟备份」。
+const List<List<int>> kAllBackupMagics = <List<int>>[
+  kGroupBackupMagic,
+  kTripBackupMagic,
+  kFullBackupMagic,
+];
+
 const int _kVersion = 1;
 const int _kFlagGzip = 1 << 0;
 
@@ -54,7 +62,7 @@ Map<String, dynamic> decodeBackup(Uint8List bytes,
     throw const FormatException('备份文件长度不足');
   }
   final magic = <int>[bytes[0], bytes[1], bytes[2], bytes[3]];
-  final all = acceptedMagics ?? <List<int>>[kGroupBackupMagic, kTripBackupMagic];
+  final all = acceptedMagics ?? kAllBackupMagics;
   if (!all.any((m) => _sameMagic(m, magic))) {
     throw const FormatException('不是「芥舟」识别的备份文件');
   }
@@ -82,7 +90,7 @@ bool looksLikeBackupEnvelope(Uint8List bytes,
     {List<List<int>>? acceptedMagics}) {
   if (bytes.length < 4) return false;
   final magic = <int>[bytes[0], bytes[1], bytes[2], bytes[3]];
-  final all = acceptedMagics ?? <List<int>>[kGroupBackupMagic, kTripBackupMagic];
+  final all = acceptedMagics ?? kAllBackupMagics;
   return all.any((m) => _sameMagic(m, magic));
 }
 

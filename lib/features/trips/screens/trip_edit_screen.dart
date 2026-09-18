@@ -159,6 +159,8 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
       note: _noteCtrl.text.trim().isEmpty ? '' : _noteCtrl.text.trim(),
       groupId: existing?.groupId,
       archived: existing?.archived ?? false,
+      // V2.7.2：装配节奏档（编辑时保留原值；新建用默认 standard）。
+      pace: existing?.pace ?? 'standard',
       createdAt: existing?.createdAt ?? nowMs,
       updatedAt: nowMs,
     );

@@ -573,6 +573,7 @@ class _TripSectionState extends ConsumerState<_TripSection> {
       note: s.note,
       groupId: s.groupId,
       archived: s.archived,
+      pace: s.pace,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
     );

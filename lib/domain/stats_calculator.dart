@@ -1,12 +1,18 @@
-/// 统计计算器：总览/成员排行/分类占比/每日合计/预算进度。
+/// 统计计算器：总览/成员排行/分类占比/每日合计/月度趋势/预算进度。
 ///
 /// 【口径】
 /// * 除预付款外的一切统计均包含已结算账单（历史金额照常计入）；
 /// * type == prepay 只进 prepayTotal，不进 total/count；
 /// * refund 以负数自然冲减总额。
+///
+/// 【G3（V2.7.1 S2）】本文件已收口为**全类型化**纯函数：一律 `List<ExpenseRecord>`
+/// / `List<MemberRecord>`，不再有 `_Ex` 包装、`dynamic` 与「drift 行 / 领域记录」双形态分支。
+/// 旧的 `StatsCalculator` 静态包装类已删除（其唯一调用方 stats.dart 已同步迁移）。
+///
 /// 本文件纯 Dart 无 IO。
 library;
 
+import '../core/date_utils.dart';
 import 'models.dart';
 
 /// 团级总览
@@ -79,22 +85,77 @@ class BudgetProgress {
   final int percent;
 }
 
+/// 月度合计项（S6 趋势折线用）
+class MonthlyTotal {
+  const MonthlyTotal({required this.monthKey, required this.cents});
+
+  /// `year * 100 + month`（如 202609）
+  final int monthKey;
+  final int cents;
+}
+
 List<ExpenseRecord> _nonPrepay(List<ExpenseRecord> expenses) =>
     expenses.where((e) => e.type != ExpenseType.prepay).toList();
+
+// ---------------------------------------------------------------------------
+// 类型化标量口径（原 StatsCalculator 静态包装的直接替代）
+// ---------------------------------------------------------------------------
+
+/// 总支出（分）：normal + refund 冲减，不含 prepay。
+int totalCents(List<ExpenseRecord> expenses) {
+  var sum = 0;
+  for (final e in expenses) {
+    if (e.type == ExpenseType.prepay) continue;
+    sum += e.amountCents;
+  }
+  return sum;
+}
+
+/// 账单笔数：不含 prepay。
+int countOf(List<ExpenseRecord> expenses) => _nonPrepay(expenses).length;
+
+/// 预付款合计（分）。
+int prepayTotalCents(List<ExpenseRecord> expenses) {
+  var sum = 0;
+  for (final e in expenses) {
+    if (e.type == ExpenseType.prepay) sum += e.amountCents;
+  }
+  return sum;
+}
+
+/// 每人已付合计（memberId -> 分）。[includePrepay] 为 true 时含预付款账单。
+Map<String, int> paidByMember(List<ExpenseRecord> expenses,
+    {bool includePrepay = false}) {
+  final map = <String, int>{};
+  for (final e in includePrepay ? expenses : _nonPrepay(expenses)) {
+    for (final p in e.payers) {
+      map[p.memberId] = (map[p.memberId] ?? 0) + p.cents;
+    }
+  }
+  return map;
+}
+
+/// 每人应摊合计（memberId -> 分）。[includePrepay] 为 true 时含预付款账单。
+Map<String, int> shareByMember(List<ExpenseRecord> expenses,
+    {bool includePrepay = false}) {
+  final map = <String, int>{};
+  for (final e in includePrepay ? expenses : _nonPrepay(expenses)) {
+    for (final s in e.shares) {
+      map[s.memberId] = (map[s.memberId] ?? 0) + s.cents;
+    }
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------------------
+// 既有口径（保持逐位不变）
+// ---------------------------------------------------------------------------
 
 /// 团级总览。[memberCount] 为团内成员总数。
 GroupStats summarize(List<ExpenseRecord> expenses, {required int memberCount}) {
   final list = _nonPrepay(expenses);
-  var total = 0;
-  for (final e in list) {
-    // 退款按约定为负数（见 models.dart），直接累加即自然冲减总支出：
-    // 酒店 1000 + 退款 200 → 净支出 800。
-    total += e.amountCents;
-  }
-  var prepay = 0;
-  for (final e in expenses) {
-    if (e.type == ExpenseType.prepay) prepay += e.amountCents;
-  }
+  final total = totalCents(expenses);
+  final prepay = prepayTotalCents(expenses);
   return GroupStats(
     totalCents: total,
     count: list.length,
@@ -173,10 +234,7 @@ BudgetProgress? budgetProgress({
   required int? budgetCents,
 }) {
   if (budgetCents == null || budgetCents <= 0) return null;
-  var spent = 0;
-  for (final e in _nonPrepay(expenses)) {
-    spent += e.amountCents;
-  }
+  final spent = totalCents(expenses);
   return BudgetProgress(
     spentCents: spent,
     remainingCents: budgetCents - spent,
@@ -184,28 +242,142 @@ BudgetProgress? budgetProgress({
   );
 }
 
-/// 统一抽象：同时支持 ExpenseRecord 和 drift Expense
-class _Ex {
-  const _Ex._(this.id, this.type, this.amountCents, this.categoryKey, this.dateEpochDay, this.payersList, this.sharesList);
-  final String id, type, categoryKey;
-  final int amountCents, dateEpochDay;
-  final List<dynamic> payersList, sharesList;
-  bool get isPrepay => type == 'prepay';
+// ---------------------------------------------------------------------------
+// S6 · 统计升级：月度趋势 + 时间范围筛选
+//
+// 【时区口径】本模块一律用 dateEpochDay（设备本地日），与「今日驾驶舱」的
+// 目的地时区口径**不同**；UI 必须标注「按设备本地日期统计」。
+// ---------------------------------------------------------------------------
+
+/// 时间范围（会话级，不持久化；默认 all）
+enum StatsRange { all, thisMonth, lastMonth, thisYear, custom }
+
+/// 自定义日期的可选边界（与记账表单一致）
+final int kStatsCustomMinEpochDay = dateToEpochDay(DateTime(2015, 1, 1));
+final int kStatsCustomMaxEpochDay = dateToEpochDay(DateTime(2045, 12, 31));
+
+/// 闭区间 [fromEpochDay, toEpochDay]；null 表示该侧无界。
+class DayRange {
+  const DayRange({this.fromEpochDay, this.toEpochDay});
+
+  final int? fromEpochDay;
+  final int? toEpochDay;
+
+  bool contains(int day) =>
+      (fromEpochDay == null || day >= fromEpochDay!) &&
+      (toEpochDay == null || day <= toEpochDay!);
 }
 
-/// 包装类：兼容 ledger_providers.dart 的静态调用风格
-class StatsCalculator {
-  static _Ex _wrap(dynamic e) {
-    if (e is ExpenseRecord) return _Ex._(e.id, e.type.name, e.amountCents, e.categoryKey, e.dateEpochDay, e.payers, e.shares);
-    // drift Expense row
-    return _Ex._(e.id, e.type as String, e.amountCents as int, e.categoryKey as String, e.dateEpochDay as int, [], []);
+/// 解析时间范围的日界（本地日，闭区间）。
+///
+/// * all → 双端 null；
+/// * thisMonth / lastMonth / thisYear → 按 [now] 计算自然月/年边界；
+/// * custom → 取 [customFromEpochDay]/[customToEpochDay]，并夹到 2015-01-01~2045-12-31。
+DayRange statsRangeBounds(
+  StatsRange range, {
+  DateTime? now,
+  int? customFromEpochDay,
+  int? customToEpochDay,
+}) {
+  final base = now ?? DateTime.now();
+  switch (range) {
+    case StatsRange.all:
+      return const DayRange();
+    case StatsRange.thisMonth:
+      return _monthRange(base.year, base.month);
+    case StatsRange.lastMonth:
+      final y = base.month == 1 ? base.year - 1 : base.year;
+      final m = base.month == 1 ? 12 : base.month - 1;
+      return _monthRange(y, m);
+    case StatsRange.thisYear:
+      return DayRange(
+        fromEpochDay: dateToEpochDay(DateTime(base.year, 1, 1)),
+        toEpochDay: dateToEpochDay(DateTime(base.year, 12, 31)),
+      );
+    case StatsRange.custom:
+      var from = customFromEpochDay ?? kStatsCustomMinEpochDay;
+      var to = customToEpochDay ?? kStatsCustomMaxEpochDay;
+      if (from > to) {
+        final t = from;
+        from = to;
+        to = t;
+      }
+      if (from < kStatsCustomMinEpochDay) from = kStatsCustomMinEpochDay;
+      if (to > kStatsCustomMaxEpochDay) to = kStatsCustomMaxEpochDay;
+      return DayRange(fromEpochDay: from, toEpochDay: to);
   }
-  static List<_Ex> _toEs(List<dynamic> es) => es.map(_wrap).toList();
-  static int totalCents(List es) => _toEs(es).where((e)=>!e.isPrepay).fold(0,(s,e)=>s+e.amountCents);
-  static int countOf(List es) => _toEs(es).where((e)=>!e.isPrepay).length;
-  static int prepayTotalCents(List es) => _toEs(es).where((e)=>e.isPrepay).fold(0,(s,e)=>s+e.amountCents);
-  static Map<String,int> paidByMember(List es, {bool includePrepay = false}) { final m=<String,int>{}; for(final e in _toEs(es).where((x)=>includePrepay||!x.isPrepay)) { for(final p in e.payersList) { final mid=p is Map?(p["memberId"]??""):(p.memberId??""); final c=p is Map?(p["cents"]??0) as int:(p.cents??0) as int; m[mid]=(m[mid]??0)+c; } } return m; }
-  static Map<String,int> shareByMember(List es, {bool includePrepay = false}) { final m=<String,int>{}; for(final e in _toEs(es).where((x)=>includePrepay||!x.isPrepay)) { for(final s in e.sharesList) { final mid=s is Map?(s["memberId"]??""):(s.memberId??""); final c=s is Map?(s["cents"]??0) as int:(s.cents??0) as int; m[mid]=(m[mid]??0)+c; } } return m; }
-  static Map<String,int> categoryTotals(List es) { final m=<String,int>{}; for(final e in _toEs(es).where((x)=>!x.isPrepay)) { m[e.categoryKey]=(m[e.categoryKey]??0)+e.amountCents; } return m; }
-  static Map<int,int> dailyTotals(List es) { final m=<int,int>{}; for(final e in _toEs(es).where((x)=>!x.isPrepay)) { m[e.dateEpochDay]=(m[e.dateEpochDay]??0)+e.amountCents; } return m; }
+}
+
+DayRange _monthRange(int year, int month) {
+  final last = DateTime(year, month + 1, 0).day;
+  return DayRange(
+    fromEpochDay: dateToEpochDay(DateTime(year, month, 1)),
+    toEpochDay: dateToEpochDay(DateTime(year, month, last)),
+  );
+}
+
+/// 月度合计（monthKey = year*100+month）。口径同 [totalsByDay]：
+/// 含已结算、不含 prepay、refund 负数冲减。
+Map<int, int> totalsByMonth(
+  List<ExpenseRecord> expenses, {
+  int? fromEpochDay,
+  int? toEpochDay,
+}) {
+  final map = <int, int>{};
+  for (final e in _nonPrepay(expenses)) {
+    if (fromEpochDay != null && e.dateEpochDay < fromEpochDay) continue;
+    if (toEpochDay != null && e.dateEpochDay > toEpochDay) continue;
+    final d = epochDayToDate(e.dateEpochDay);
+    final key = d.year * 100 + d.month;
+    map[key] = (map[key] ?? 0) + e.amountCents;
+  }
+  return map;
+}
+
+/// 枚举 [fromEpochDay]..[toEpochDay] 覆盖的全部年月 key（含首尾整月）。
+List<int> monthKeysBetween(int fromEpochDay, int toEpochDay) {
+  final from = epochDayToDate(fromEpochDay);
+  final to = epochDayToDate(toEpochDay);
+  final out = <int>[];
+  var y = from.year;
+  var m = from.month;
+  while (y < to.year || (y == to.year && m <= to.month)) {
+    out.add(y * 100 + m);
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return out;
+}
+
+/// 趋势序列：按范围聚合 + **空月补 0**（折线不跳点）。
+///
+/// * [StatsRange.all]：以数据自身的最小/最大月份为界（无数据返回空表）；
+/// * 其余范围：以自然边界补齐（保证「本月」永远 1 个点、「今年」最多 12 个点）。
+List<MonthlyTotal> monthlyTrend(
+  List<ExpenseRecord> records, {
+  required StatsRange range,
+  DateTime? now,
+  int? customFromEpochDay,
+  int? customToEpochDay,
+}) {
+  final totals = totalsByMonth(records);
+  if (range == StatsRange.all) {
+    if (totals.isEmpty) return const [];
+    final keys = totals.keys.toList()..sort();
+    return [for (final k in keys) MonthlyTotal(monthKey: k, cents: totals[k]!)];
+  }
+  final bounds = statsRangeBounds(range,
+      now: now,
+      customFromEpochDay: customFromEpochDay,
+      customToEpochDay: customToEpochDay);
+  final keys =
+      monthKeysBetween(bounds.fromEpochDay!, bounds.toEpochDay!);
+  final scoped = totalsByMonth(records,
+      fromEpochDay: bounds.fromEpochDay, toEpochDay: bounds.toEpochDay);
+  return [
+    for (final k in keys) MonthlyTotal(monthKey: k, cents: scoped[k] ?? 0),
+  ];
 }

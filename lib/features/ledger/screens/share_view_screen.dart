@@ -142,9 +142,54 @@ class _ShareViewScreenState extends ConsumerState<ShareViewScreen> {
     return ListView(
       padding: const EdgeInsets.all(Spacing.xl),
       children: [
-        if (kind == 'trip') ..._tripCards(inner, scheme) else ..._groupCards(inner, scheme),
+        // V2.7.1 S5：settle 只渲染团名/轮次/时间/转账列表；trip / group 行为不变。
+        if (kind == 'trip')
+          ..._tripCards(inner, scheme)
+        else if (kind == 'settle')
+          ..._settleCards(inner, scheme)
+        else
+          ..._groupCards(inner, scheme),
       ],
     );
+  }
+
+  /// 结算单只读卡（隐私：不含账单明细 / 备注 / 成员余额）。
+  List<Widget> _settleCards(Map<String, dynamic> inner, ColorScheme scheme) {
+    final transfers = (inner['transfers'] as List?)?.cast<Map>() ?? const [];
+    final completedAt = inner['completedAt'];
+    var when = '进行中';
+    if (completedAt is num && completedAt > 0) {
+      final d = DateTime.fromMillisecondsSinceEpoch(completedAt.toInt());
+      String two(int v) => v.toString().padLeft(2, '0');
+      when = '完成于 ${d.year}-${two(d.month)}-${two(d.day)}';
+    }
+    return [
+      Text('${inner['groupName'] ?? '结算单'} · 第 ${inner['roundNo'] ?? ''} 轮结算',
+          style: Theme.of(context).textTheme.headlineSmall),
+      const SizedBox(height: Spacing.xs),
+      Text(when,
+          style:
+              TextStyle(color: scheme.onSurfaceVariant, fontSize: AppFontSizes.caption)),
+      const SizedBox(height: Spacing.lg),
+      if (transfers.isEmpty)
+        const Card(child: ListTile(title: Text('本轮无需转账，账目已平')))
+      else
+        for (final t in transfers)
+          Card(
+            margin: const EdgeInsets.only(bottom: Spacing.sm),
+            child: ListTile(
+              dense: true,
+              title: Text('${t['from'] ?? ''} → ${t['to'] ?? ''}'),
+              trailing: Text(
+                '¥${(((t['cents'] as num?)?.toInt() ?? 0) / 100).toStringAsFixed(2)}',
+              ),
+            ),
+          ),
+      const SizedBox(height: Spacing.sm),
+      Text('共 ${transfers.length} 笔转账 · 已按最少转账方案计算',
+          style:
+              TextStyle(color: scheme.onSurfaceVariant, fontSize: AppFontSizes.caption)),
+    ];
   }
 
   List<Widget> _tripCards(Map<String, dynamic> inner, ColorScheme scheme) {

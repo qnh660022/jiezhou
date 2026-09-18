@@ -1,4 +1,5 @@
-/// AppDatabase：Drift 单例，schemaVersion=4（V2.6.6.2 新增旅伴空间 5 表）。
+/// AppDatabase：Drift 单例，schemaVersion=6（V2.7.2 想去池 2 表 + TripItems
+/// guideRef/backupOf + Trips.pace）。
 library;
 
 import 'package:drift/drift.dart';
@@ -12,6 +13,7 @@ import 'daos/expenses_dao.dart';
 import 'daos/checklist_dao.dart';
 import 'daos/album_dao.dart';
 import 'daos/categories_dao.dart';
+import 'daos/wishlist_dao.dart';
 
 part 'database.g.dart';
 
@@ -23,15 +25,20 @@ part 'database.g.dart';
   SharedGroups, SharedMembers, SharedExpenses, SharedSettlements,
   // V2.6.6.2 旅伴空间：空间/成员/动态 + 受邀协作行程镜像
   TravelSpaces, SpaceMembers, SpaceEvents, SharedTrips, SharedTripItems,
+  // V2.7.1：公款池 / 记账收件箱 / 审计轨迹（仅本地）/ 冲突回执（仅本地）
+  Funds, InboxItems, AuditLogs, ConflictRecords,
+  // V2.7.2：想去池（行程内候选区）+ 受邀端镜像
+  WishlistItems, SharedWishlistItems,
 ], daos: [
   TripsDao, GroupsDao, ExpensesDao,
   ChecklistDao, AlbumDao, CategoriesDao,
+  WishlistDao,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? openDbConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -59,6 +66,33 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(spaceEvents);
             await m.createTable(sharedTrips);
             await m.createTable(sharedTripItems);
+          }
+          // v4 -> v5：V2.7.1 一次到位（5 新列 + 4 新表），幂等可重复执行。
+          // 老数据默认：kind='travel'、archived=false、fund_id/pay_method=NULL、
+          // strategy='minTransfers'。
+          if (from < 5) {
+            await m.addColumn(groups, groups.kind);
+            await m.addColumn(members, members.archived);
+            await m.addColumn(expenses, expenses.fundId);
+            await m.addColumn(expenses, expenses.payMethod);
+            await m.addColumn(settlements, settlements.strategy);
+            await m.createTable(funds);
+            await m.createTable(inboxItems);
+            await m.createTable(auditLogs);
+            await m.createTable(conflictRecords);
+          }
+          // v5 -> v6：V2.7.2 一次到位（2 新表 + 5 新列），幂等可重复执行。
+          // 老数据默认：pace='standard'、guide_ref/backup_of=NULL。
+          if (from < 6) {
+            await m.createTable(wishlistItems);
+            await m.createTable(sharedWishlistItems);
+            await m.addColumn(tripItems, tripItems.guideRef);
+            await m.addColumn(tripItems, tripItems.backupOf);
+            await m.addColumn(sharedTripItems, sharedTripItems.guideRef);
+            await m.addColumn(sharedTripItems, sharedTripItems.backupOf);
+            await m.addColumn(trips, trips.pace);
+            // 镜像表与业务表列同构：pace 需一并补齐（否则受邀端下行构造缺列）。
+            await m.addColumn(sharedTrips, sharedTrips.pace);
           }
         },
         beforeOpen: (details) async {

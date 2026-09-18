@@ -132,7 +132,7 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
     if (peer == null) return;
     setState(() => _peerStatus = '拉取中…');
     try {
-      final json = await _mgr.pullSnapshot(peer);
+      final json = await _mgr.pullSnapshot(peer, code: _codeCtrl.text.trim());
       final summary = await mergeGroupSnapshot(ref, json);
       if (!mounted) return;
       setState(() => _peerStatus = '拉取成功 · $summary');
@@ -154,7 +154,8 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
     setState(() => _peerStatus = '推送中…');
     try {
       final json = await exportGroupSnapshot(ref, gid);
-      final summary = await _mgr.pushSnapshot(peer, json);
+      final summary =
+          await _mgr.pushSnapshot(peer, json, code: _codeCtrl.text.trim());
       if (!mounted) return;
       setState(() => _peerStatus = '推送成功 · $summary');
     } catch (e) {
@@ -178,6 +179,28 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
             const SizedBox(height: 6),
             Text('两台手机连同一 Wi-Fi，一个「发起」、一个输口令「加入」，就能双向收发当前团的账本，并把全机行程（含安排）一并同步；全链路不走网络，断网也能用。',
                 style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant)),
+            const SizedBox(height: Spacing.md),
+            // S2.4 G6：明文风险提示（最小可接受实现的必备项，不得省略）。
+            Container(
+              padding: const EdgeInsets.all(Spacing.md),
+              decoration: BoxDecoration(
+                color: scheme.tertiaryContainer.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(AppRadius.cardValue),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.shield_outlined, size: 18, color: scheme.tertiary),
+                  const SizedBox(width: Spacing.sm),
+                  Expanded(
+                    child: Text(kLanPlaintextRiskNotice,
+                        style: TextStyle(
+                            fontSize: AppFontSizes.caption,
+                            color: scheme.onSurfaceVariant)),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: Spacing.xl),
 
             if (_mode.isEmpty) _buildModePicker(scheme),

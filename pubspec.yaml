@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.6.6+2662
+version: 2.7.1+2710
 
 environment:
   sdk: ^3.13.1
@@ -56,6 +56,10 @@ dependencies:
   collection: ^1.19.1
   flutter_local_notifications: ^22.3.0
   archive: ^4.0.9
+  # V2.7.1 S2.4/S7.2：局域网完整性校验（HMAC-SHA256）与启动锁 PIN 的 PBKDF2
+  # 派生共用；纯 Dart 实现，覆盖 Android / Web。规格书原定 `cryptography`，
+  # 因本版采用 §S2.4.8「最小可接受实现」，改用更轻的 `crypto`（等价 HMAC/PBKDF2 原语）。
+  crypto: ^3.0.7
   web: ^1.1.1
   qr_flutter: ^4.1.0
   zxing2: ^0.2.4

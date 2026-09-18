@@ -192,6 +192,22 @@ ShareMode _shareModeOf(String raw) => ShareMode.values.firstWhere(
   orElse: () => ShareMode.equal,
 );
 
+/// portionsJson → {memberId: 值}（portions=份数 / percent=bp，语义由 shareMode 判别）。
+Map<String, int>? parsePortionsMap(String? json) {
+  if (json == null || json.isEmpty || json == '{}') return null;
+  try {
+    final decoded = jsonDecode(json);
+    if (decoded is! Map) return null;
+    final out = <String, int>{};
+    decoded.forEach((k, v) {
+      if (k is String) out[k] = v is num ? v.toInt() : 0;
+    });
+    return out.isEmpty ? null : out;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// 镜像行 → 域模型（原 `_sharedToRecord`）。
 ExpenseRecord sharedExpenseToRecord(SharedExpense e) => ExpenseRecord(
   id: e.id,
@@ -206,11 +222,12 @@ ExpenseRecord sharedExpenseToRecord(SharedExpense e) => ExpenseRecord(
   payers: parseShareList(e.payersJson),
   shares: parseShareList(e.sharesJson),
   shareMode: _shareModeOf(e.shareMode),
+  portions: parsePortionsMap(e.portionsJson),
   note: e.note,
   settledRoundId: e.settledRoundId,
 );
 
-/// 本地行 → 域模型（字段与镜像表完全同构）。
+/// 本地行 → 域模型（字段与镜像表完全同构 + V2.7.1 本地专有列）。
 ExpenseRecord localExpenseToRecord(Expense e) => ExpenseRecord(
   id: e.id,
   groupId: e.groupId,
@@ -224,8 +241,11 @@ ExpenseRecord localExpenseToRecord(Expense e) => ExpenseRecord(
   payers: parseShareList(e.payersJson),
   shares: parseShareList(e.sharesJson),
   shareMode: _shareModeOf(e.shareMode),
+  portions: parsePortionsMap(e.portionsJson),
   note: e.note,
   settledRoundId: e.settledRoundId,
+  fundId: e.fundId,
+  payMethod: e.payMethod,
 );
 
 /// `转账建议 JSON` → 中立转账行（解析失败回退空表，与原实现同）。
@@ -873,7 +893,7 @@ class _SharedBillsSectionState extends ConsumerState<SharedBillsSection>
                     ListTile(
                       dense: true,
                       title: Text(
-                        '${nameOf[p.memberId] ?? p.memberId} 付 ${formatMoney(p.cents)}',
+                        '${nameOf[p.memberId] ?? '已移除成员'} 付 ${formatMoney(p.cents)}',
                       ),
                     ),
                   const SizedBox(height: Spacing.sm),
@@ -885,7 +905,7 @@ class _SharedBillsSectionState extends ConsumerState<SharedBillsSection>
                     ListTile(
                       dense: true,
                       title: Text(
-                        '${nameOf[s.memberId] ?? s.memberId} 摊 ${formatMoney(s.cents)}',
+                        '${nameOf[s.memberId] ?? '已移除成员'} 摊 ${formatMoney(s.cents)}',
                       ),
                     ),
                   if ((e.note ?? '').isNotEmpty) ...[

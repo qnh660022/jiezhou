@@ -234,9 +234,15 @@ class SyncEngine {
         case 'trip_items':
           final tid = row['trip_id'];
           return tid is String ? engine.tripSyncEnabled(tid) : true;
+        case 'wishlist_items':
+          // 与 trips/tripItems 完全同口径：随行程上云开关。
+          final tid = row['trip_id'];
+          return tid is String ? engine.tripSyncEnabled(tid) : true;
         case 'groups':
           return engine.groupSyncEnabled(rowId);
         case 'members':
+        case 'funds':
+        case 'inbox_items':
         case 'expenses':
         case 'settlements':
           final gid = row['group_id'];
@@ -393,8 +399,8 @@ class SyncEngine {
     if (uid == null) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final entity in const [
-      'groups', 'members', 'expenses', 'settlements',
-      'trips', 'trip_items', 'categories',
+      'groups', 'members', 'funds', 'inbox_items', 'expenses', 'settlements',
+      'trips', 'trip_items', 'wishlist_items', 'categories',
       // 空间：只有「我创建的」会上行（space_members / space_events 由 RPC 维护，
       // 不入引导全量上传，避免成员端把必被 RLS 拒绝的行塞进 outbox）
       'travel_spaces',
@@ -454,10 +460,15 @@ class SyncEngine {
         for (final i in items) {
           await outbox.enqueue('trip_items', i.id, 'upsert', now);
         }
+        // V2.7.2：想去池随行程重开全量重传
+        final wl = await (db.select(db.wishlistItems)..where((t) => t.tripId.equals(id))).get();
+        for (final w in wl) {
+          await outbox.enqueue('wishlist_items', w.id, 'upsert', now);
+        }
         await syncNow(manual: true);
       } else {
         await outbox.enqueue('groups', id, 'upsert', now);
-        for (final table in const ['members', 'expenses', 'settlements']) {
+        for (final table in const ['members', 'funds', 'inbox_items', 'expenses', 'settlements']) {
           final rows = await _rowsOfGroup(table, id);
           for (final r in rows) {
             await outbox.enqueue(table, r, 'upsert', now);
@@ -474,6 +485,12 @@ class SyncEngine {
       case 'members':
         return (await (db.select(db.members)..where((m) => m.groupId.equals(groupId))).get())
             .map((m) => m.id).toList();
+      case 'funds':
+        return (await (db.select(db.funds)..where((f) => f.groupId.equals(groupId))).get())
+            .map((f) => f.id).toList();
+      case 'inbox_items':
+        return (await (db.select(db.inboxItems)..where((i) => i.groupId.equals(groupId))).get())
+            .map((i) => i.id).toList();
       case 'expenses':
         return (await (db.select(db.expenses)..where((e) => e.groupId.equals(groupId))).get())
             .map((e) => e.id).toList();
@@ -488,16 +505,23 @@ class SyncEngine {
   Future<void> purgeEntityCloudRows({required bool isTrip, required String id}) async {
     if (isTrip) {
       await transport.deleteWhere('trip_items_sync', {'trip_id': id});
+      await transport.deleteWhere('wishlist_items_sync', {'trip_id': id});
       await transport.deleteWhere('trips_sync', {'id': id});
       await outbox.clearEntity('trips');
       await outbox.clearEntity('trip_items');
+      await outbox.clearEntity('wishlist_items');
     } else {
-      for (final table in const ['members_sync', 'expenses_sync', 'settlements_sync', 'groups_sync']) {
+      for (final table in const [
+        'members_sync', 'funds_sync', 'inbox_items_sync',
+        'expenses_sync', 'settlements_sync', 'groups_sync',
+      ]) {
         await transport.deleteWhere(table, {'group_id': id});
       }
       await transport.deleteWhere('groups_sync', {'id': id});
       await outbox.clearEntity('groups');
       await outbox.clearEntity('members');
+      await outbox.clearEntity('funds');
+      await outbox.clearEntity('inbox_items');
       await outbox.clearEntity('expenses');
       await outbox.clearEntity('settlements');
     }
@@ -811,6 +835,7 @@ class SyncEngine {
           if (nextTrips.difference(_collabSpaceTripIds).isNotEmpty) {
             await metaService.reset('trips');
             await metaService.reset('trip_items');
+            await metaService.reset('wishlist_items');
           }
         }
         _collabSpaceIds = nextSpaces;
@@ -926,6 +951,7 @@ class SyncEngine {
   Future<void> onJoinedSharedSpace(String spaceId) async {
     for (final e in const [
       'travel_spaces', 'space_members', 'space_events', 'trips', 'trip_items',
+      'wishlist_items',
     ]) {
       await metaService.reset(e);
     }

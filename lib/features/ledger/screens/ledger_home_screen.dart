@@ -15,15 +15,18 @@ import '../../../shared/widgets/progress_ring.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
+import '../ledger_access.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/bill_detail_sheet.dart';
+import '../widgets/conflict_badge.dart';
 import '../widgets/category_icon_box.dart';
 import '../widgets/count_up_text.dart';
 import '../widgets/member_avatar.dart';
 import '../widgets/stagger_in.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/sync_status_capsule.dart';
+import 'inbox_sheets.dart';
 
 /// 💰 记账 Tab 主页：当前团总览 + 余额榜 + 预算 + 最近账单流。
 class LedgerHomeScreen extends ConsumerWidget {
@@ -39,10 +42,18 @@ class LedgerHomeScreen extends ConsumerWidget {
         LedgerLargeHeader(
           title: '账本',
           actions: [
-            HeaderIconButton(
-              icon: Icons.wifi_tethering_rounded,
-              tooltip: '局域网同步（同 Wi-Fi 快照合并）',
-              onTap: () => context.pushNamed('lan-sync'),
+            // S7 E2：viewer 不渲染「快照合并」写入口（导出类只读操作保留）。
+            Consumer(
+              builder: (context, ref, _) {
+                if (ref.watch(_canWriteActiveGroupProvider) != true) {
+                  return const SizedBox.shrink();
+                }
+                return HeaderIconButton(
+                  icon: Icons.wifi_tethering_rounded,
+                  tooltip: '局域网同步（同 Wi-Fi 快照合并）',
+                  onTap: () => context.pushNamed('lan-sync'),
+                );
+              },
             ),
             HeaderIconButton(
               icon: Icons.swap_horizontal_circle_rounded,
@@ -73,6 +84,8 @@ class LedgerHomeScreen extends ConsumerWidget {
               padding: EdgeInsets.only(left: Spacing.sm),
               child: SyncStatusCapsule(),
             ),
+            // S12.3：变更记录入口（仅 owner/editor 渲染，隐藏不置灰）。
+            const _HeaderOverflowMenu(),
           ],
         ),
         Expanded(
@@ -99,45 +112,125 @@ class LedgerHomeScreen extends ConsumerWidget {
 }
 
 // ---------------------------------------------------------------------------
+// S7 · E2：当前激活团的写权限（UI 三态的唯一判据）
+// ---------------------------------------------------------------------------
+
+/// 当前激活团是否可写。
+///
+/// * 未知角色（`ledgerAccessProvider` 仍在加载 / 解析不出）→ **可写**：
+///   云 RLS 才是最终屏障，误藏入口比误露入口更伤体验（§S7.1.4）。
+/// * 无激活团 → false（此时页面走空态，无写入口）。
+final _canWriteActiveGroupProvider = Provider<bool>((ref) {
+  final gid = ref.watch(activeGroupIdProvider).value ?? '';
+  if (gid.isEmpty) return false;
+  return (ref.watch(ledgerAccessProvider(gid)).value ?? LedgerAccess.owner)
+      .canWrite;
+});
+
+/// 头部溢出菜单：变更记录入口（viewer 不渲染，§S12.3-3）。
+class _HeaderOverflowMenu extends ConsumerWidget {
+  const _HeaderOverflowMenu();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(_canWriteActiveGroupProvider) != true) {
+      return const SizedBox.shrink();
+    }
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_horiz_rounded),
+      tooltip: '更多',
+      onSelected: (value) {
+        if (value == 'audit') context.pushNamed('audit-log');
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem<String>(
+          value: 'audit',
+          child: Row(
+            children: [
+              Icon(Icons.history_rounded, size: 18),
+              SizedBox(width: Spacing.sm),
+              Text('变更记录'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 消费入口快捷行（原「消费」Tab 并入账本后的门面）
 // ---------------------------------------------------------------------------
 
 class _QuickActions extends ConsumerWidget {
-  const _QuickActions({required this.unsettled});
+  const _QuickActions({
+    required this.unsettled,
+    this.personal = false,
+    this.inboxCount = 0,
+    this.hasFund = false,
+    this.canWrite = true,
+  });
 
   final int unsettled;
 
+  /// S4：个人账本隐藏 AA 结算与公费池入口。
+  final bool personal;
+
+  /// S10：待归类条数（快速记入口徽章）。
+  final int inboxCount;
+
+  /// S8：存在未关闭公款池时才显示入口（仅旅行账本）。
+  final bool hasFund;
+
+  /// S7 E2：viewer 隐藏全部写入口（AA 结算 / 公费池 / 快速记），
+  /// 「全部账单」「统计图表」属只读操作，保留。
+  final bool canWrite;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tiles = <Widget>[
+      _ActionTile(
+        icon: Icons.receipt_long_rounded,
+        label: '全部账单',
+        onTap: () => context.push('/expenses'),
+      ),
+      _ActionTile(
+        icon: Icons.donut_small_rounded,
+        label: '统计图表',
+        onTap: () => context.push('/expenses/stats'),
+      ),
+      if (canWrite && !personal)
+        _ActionTile(
+          icon: Icons.balance_rounded,
+          label: 'AA 结算',
+          badgeCount: unsettled > 0 ? unsettled : null,
+          onTap: () => context.push('/expenses/settle'),
+        ),
+      if (canWrite && !personal && hasFund)
+        _ActionTile(
+          icon: Icons.savings_rounded,
+          label: '公费池',
+          onTap: () => context.push('/expenses/fund'),
+        ),
+      if (canWrite)
+        _ActionTile(
+          icon: Icons.bolt_rounded,
+          label: '快速记',
+          badgeCount: inboxCount > 0 ? inboxCount : null,
+          onTap: () => context.push('/expenses/inbox'),
+        ),
+    ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: _ActionTile(
-              icon: Icons.receipt_long_rounded,
-              label: '全部账单',
-              onTap: () => context.push('/expenses'),
-            ),
-          ),
-          const SizedBox(width: Spacing.sm),
-          Expanded(
-            child: _ActionTile(
-              icon: Icons.donut_small_rounded,
-              label: '统计图表',
-              onTap: () => context.push('/expenses/stats'),
-            ),
-          ),
-          const SizedBox(width: Spacing.sm),
-          Expanded(
-            child: _ActionTile(
-              icon: Icons.balance_rounded,
-              label: 'AA 结算',
-              badgeCount: unsettled > 0 ? unsettled : null,
-              onTap: () => context.push('/expenses/settle'),
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = (constraints.maxWidth - Spacing.sm) / 2;
+          return Wrap(
+            spacing: Spacing.sm,
+            runSpacing: Spacing.sm,
+            children: [for (final t in tiles) SizedBox(width: w, child: t)],
+          );
+        },
       ),
     );
   }
@@ -219,6 +312,14 @@ class _LedgerBody extends ConsumerWidget {
     final expenses = expensesAsync.value ?? const <ExpenseRecord>[];
     final trips = tripsAsync.value ?? const <TripCardView>[];
     final unsettled = unsettledAsync.value ?? 0;
+    // S4：个人账本分流渲染（隐藏余额板 / AA 结算 / 公费池，保留预算与账单）。
+    final isPersonal = ref.watch(activeGroupProvider).value?.isPersonal ?? false;
+    // S10：待归类徽章；S8：存在未关闭公款池时才显示入口。
+    final inboxCount = ref.watch(pendingInboxCountProvider).value ?? 0;
+    final hasFund = ref.watch(openFundProvider).value != null;
+    // S7 E2：权限三态（viewer=只读）。未知角色按可写处理，RLS 兜底。
+    final access =
+        ref.watch(ledgerAccessProvider(groupId)).value ?? LedgerAccess.owner;
 
     // 超支横幅（插在最顶，StaggerIn index=0 后移）
     final showOverBudgetBanner = budget.enabled && budget.overBudget;
@@ -248,33 +349,75 @@ class _LedgerBody extends ConsumerWidget {
               if (showOverBudgetBanner)
                 StaggerIn(index: 0, child: _OverBudgetBanner(budget: budget)),
               StaggerIn(index: showOverBudgetBanner ? 1 : 0, child: _GlassGroupCard(group: _currentGroup(ref, groupId), members: members, unsettled: unsettled)),
-              StaggerIn(index: showOverBudgetBanner ? 2 : 1, child: _BudgetCard(budget: budget)),
-              StaggerIn(index: 2, child: _QuickActions(unsettled: unsettled)),
-              StaggerIn(index: 3, child: _BalanceBoard(board: board)),
-              StaggerIn(index: 4, child: _RecentBills(expenses: recentExpenses.take(5).toList(), members: members)),
+              // S12.2：未确认冲突总数（本地计数；无冲突时不占位）。
+              const ConflictCountChip(),
+              StaggerIn(index: showOverBudgetBanner ? 2 : 1, child: _BudgetCard(budget: budget, canEdit: access.canWrite)),
+              StaggerIn(
+                index: 2,
+                child: _QuickActions(
+                  unsettled: unsettled,
+                  personal: isPersonal,
+                  inboxCount: inboxCount,
+                  hasFund: hasFund,
+                  canWrite: access.canWrite,
+                ),
+              ),
+              if (!isPersonal)
+                StaggerIn(
+                  index: 3,
+                  child: _BalanceBoard(
+                    board: board,
+                    // S7.1.3：viewer 不渲染成员管理写入口。
+                    onManageMembers: access.canManage
+                        ? () => context.pushNamed('members')
+                        : null,
+                  ),
+                ),
+              if (isPersonal && expenses.isEmpty)
+                const StaggerIn(
+                  index: 3,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
+                    child: EmptyState(
+                      emoji: '✍️',
+                      title: '记下自己的每一笔',
+                      message: '个人账本不用选付款人与分摊，点下面按钮直接开记。',
+                    ),
+                  ),
+                ),
+              StaggerIn(index: 4, child: _RecentBills(expenses: recentExpenses.take(5).toList(), members: members, canEdit: access.canWrite)),
               if (trips.isNotEmpty)
                 StaggerIn(index: 5, child: _LinkedTrips(trips: trips.where((t) => !t.archived).toList())),
             ],
           ),
         ),
-        Positioned(
-          right: Spacing.xl,
-          bottom: AppBottomLayout.withSafeArea(
-            context,
-            AppBottomLayout.actionButtonOffset,
+        // S7.1.3：viewer 不渲染「记一笔」FAB（隐藏不置灰）。
+        if (access.canWrite)
+          Positioned(
+            right: Spacing.xl,
+            bottom: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.actionButtonOffset,
+            ),
+            child: GestureDetector(
+              // S10 双入口保底：FAB 长按 → 快速记（只填金额）；点按 → 常规记一笔。
+              onLongPress: () {
+                HapticFeedback.mediumImpact();
+                showCaptureInboxSheet(context, ref, groupId);
+              },
+              child: FloatingActionButton.extended(
+                heroTag: 'fab-ledger-add',
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  context.push('/expenses/edit');
+                },
+                icon: const Icon(Icons.edit_note_rounded),
+                label: const Text('记一笔'),
+              ),
+            ),
           ),
-          child: FloatingActionButton.extended(
-            heroTag: 'fab-ledger-add',
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              context.push('/expenses/edit');
-            },
-            icon: const Icon(Icons.edit_note_rounded),
-            label: const Text('记一笔'),
-          ),
-        ),
       ],
     );
   }
@@ -419,9 +562,12 @@ class _UnsettledBadge extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _BudgetCard extends StatelessWidget {
-  const _BudgetCard({required this.budget});
+  const _BudgetCard({required this.budget, this.canEdit = true});
 
   final BudgetStatusView budget;
+
+  /// S7.1.3：viewer 隐藏预算设置编辑入口（数值照常可查看，不做灰化）。
+  final bool canEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -440,10 +586,12 @@ class _BudgetCard extends StatelessWidget {
         borderRadius: AppRadius.card,
         child: InkWell(
           borderRadius: AppRadius.card,
-          onTap: () {
-            HapticFeedback.selectionClick();
-            context.push('/expenses/budget');
-          },
+          onTap: canEdit
+              ? () {
+                  HapticFeedback.selectionClick();
+                  context.push('/expenses/budget');
+                }
+              : null,
           child: Padding(
             padding: const EdgeInsets.all(Spacing.xl),
             child: Row(
@@ -560,9 +708,12 @@ String _fmtAbs(int cents) {
 // ---------------------------------------------------------------------------
 
 class _BalanceBoard extends StatelessWidget {
-  const _BalanceBoard({required this.board});
+  const _BalanceBoard({required this.board, this.onManageMembers});
 
   final List<MemberStatView> board;
+
+  /// S7.1.3：viewer 传 null → 「管理成员」写入口整块不渲染。
+  final VoidCallback? onManageMembers;
 
   @override
   Widget build(BuildContext context) {
@@ -570,26 +721,29 @@ class _BalanceBoard extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final scheme = Theme.of(context).colorScheme;
+    final manage = onManageMembers;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         LedgerSectionTitle(
           title: '谁付了多少',
-          trailing: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              HapticFeedback.selectionClick();
-              context.pushNamed('members');
-            },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('管理成员',
-                    style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.primary)),
-                Icon(Icons.chevron_right_rounded, size: 16, color: scheme.primary),
-              ],
-            ),
-          ),
+          trailing: manage == null
+              ? null
+              : GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    manage();
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('管理成员',
+                          style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.primary)),
+                      Icon(Icons.chevron_right_rounded, size: 16, color: scheme.primary),
+                    ],
+                  ),
+                ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
@@ -678,10 +832,17 @@ class _BalanceRow extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _RecentBills extends ConsumerWidget {
-  const _RecentBills({required this.expenses, required this.members});
+  const _RecentBills({
+    required this.expenses,
+    required this.members,
+    this.canEdit = true,
+  });
 
   final List<ExpenseRecord> expenses;
   final List<LedgerMemberView> members;
+
+  /// S7.1.3：viewer 时不给行挂 Dismissible（滑动编辑/删除入口整体不挂载）。
+  final bool canEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -705,7 +866,13 @@ class _RecentBills extends ConsumerWidget {
                 for (var i = 0; i < expenses.length; i++) ...[
                   if (i > 0)
                     Divider(height: 0.8, thickness: 0.8, indent: 74, color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6)),
-                  StaggerIn(index: i, child: _BillTile(expense: expenses[i], members: members)),
+                  StaggerIn(
+                      index: i,
+                      child: _BillTile(
+                        expense: expenses[i],
+                        members: members,
+                        canEdit: canEdit,
+                      )),
                 ],
               ],
             ),
@@ -733,10 +900,17 @@ class _NoBillsHint extends StatelessWidget {
 }
 
 class _BillTile extends ConsumerStatefulWidget {
-  const _BillTile({required this.expense, required this.members});
+  const _BillTile({
+    required this.expense,
+    required this.members,
+    this.canEdit = true,
+  });
 
   final ExpenseRecord expense;
   final List<LedgerMemberView> members;
+
+  /// S7.1.3：viewer 不挂 Dismissible（无滑动编辑/删除）。
+  final bool canEdit;
 
   @override
   ConsumerState<_BillTile> createState() => _BillTileState();
@@ -886,6 +1060,8 @@ class _BillTileState extends ConsumerState<_BillTile> {
                             foreground: scheme.error,
                           ),
                         ],
+                        // S12.2：该行存在未确认冲突时显示小标记（仅提示，不回选）。
+                        ConflictDot(entityId: e.id),
                       ],
                     ),
                     const SizedBox(height: 1),
@@ -908,6 +1084,9 @@ class _BillTileState extends ConsumerState<_BillTile> {
         ),
       ),
     );
+
+    // S7.1.3：viewer 只读态 —— 整块滑动动作（编辑/删除）不挂载。
+    if (!widget.canEdit) return tile;
 
     return Dismissible(
       key: ValueKey('bill-' + e.id),

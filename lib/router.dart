@@ -9,12 +9,17 @@ import 'features/checklist/screens/checklist_screen.dart';
 import 'features/checklist/screens/item_edit_screen.dart';
 import 'features/desktop/desktop_shell.dart';
 import 'features/desktop/desktop_utils.dart' show isDesktopWeb;
+import 'features/lock/lock_screen.dart';
+import 'platform/app_lock.dart' show AppLockGate;
 import 'features/ledger/desktop_ledger_workbench.dart';
 import 'features/trips/desktop_trips_workbench.dart' as trips_wb;
+import 'features/ledger/screens/audit_log_screen.dart';
 import 'features/ledger/screens/budget_screen.dart';
 import 'features/ledger/screens/categories_screen.dart';
 import 'features/ledger/screens/expense_edit_screen.dart';
 import 'features/ledger/screens/expenses_screen.dart';
+import 'features/ledger/screens/fund_screen.dart';
+import 'features/ledger/screens/inbox_screen.dart';
 import 'features/ledger/screens/group_edit_screen.dart';
 import 'features/ledger/screens/group_list_screen.dart';
 import 'features/ledger/screens/invite_screen.dart';
@@ -32,6 +37,7 @@ import 'features/today/screens/today_cockpit_screen.dart';
 import 'features/today/screens/today_plan_screen.dart';
 import 'features/today/screens/today_spend_screen.dart';
 import 'features/settings/screens/about_screen.dart';
+import 'features/settings/screens/app_lock_screen.dart';
 import 'features/settings/screens/cloud_account_screen.dart';
 import 'features/settings/screens/share_center_screen.dart';
 import 'features/settings/screens/sync_center_screen.dart';
@@ -58,8 +64,23 @@ import 'shared/widgets/floating_capsule_nav_bar.dart';
 /// `/expenses` 子树为顶层全屏路由（从账本页打开，不占 Tab）
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
+  redirect: appLockRedirect,
   routes: buildAppRoutes(),
 );
+
+/// V2.7.1 S7.2（F3）：启动锁的**唯一**拦截点。
+///
+/// * 锁状态未加载（`AppLockGate.ready == false`）时不拦——开屏页负责 `load()`；
+/// * `lockEnabled && !unlocked` → 重定向 `/lock`；
+/// * `/lock` 自身放行，避免自锁循环；锁已解除时把 `/lock` 弹回开屏。
+/// * 只拦冷启动这一次，**不做**「进入账本二级校验」（§S7.2 不做清单）。
+String? appLockRedirect(BuildContext context, GoRouterState state) {
+  if (!AppLockGate.ready) return null;
+  final onLock = state.matchedLocation == '/lock';
+  if (AppLockGate.locked && !onLock) return '/lock';
+  if (!AppLockGate.locked && onLock) return '/';
+  return null;
+}
 
 /// 应用路由表（独立函数便于测试注入全新 GoRouter 实例，避免跨测试共享导航状态）
 List<RouteBase> buildAppRoutes() => [
@@ -68,6 +89,12 @@ List<RouteBase> buildAppRoutes() => [
       path: '/',
       name: 'splash',
       builder: (context, state) => const SplashScreen(),
+    ),
+    // ============ 启动锁屏（V2.7.1 S7.2，顶层：独立于底部 Tab 壳） ============
+    GoRoute(
+      path: '/lock',
+      name: 'app-lock',
+      builder: (context, state) => const LockScreen(),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) => HomeShell(shell: navigationShell),
@@ -240,6 +267,12 @@ List<RouteBase> buildAppRoutes() => [
                 name: 'privacy',
                 builder: (context, state) => const PrivacyScreen(),
               ),
+              // V2.7.1 S7.2：启动锁设置（仅本地 PIN，不参与云同步）
+              GoRoute(
+                path: 'app-lock',
+                name: 'app-lock-settings',
+                builder: (context, state) => const AppLockScreen(),
+              ),
               // 分享与协作中心：邀请旅伴 / 只读链接 / 加团 / 局域网，一处收口。
               GoRoute(
                 path: 'share',
@@ -363,10 +396,27 @@ List<RouteBase> buildAppRoutes() => [
           name: 'budget',
           builder: (context, state) => const BudgetScreen(),
         ),
+        // ===== V2.7.1：记账收件箱（S10）与公款池（S8） =====
+        GoRoute(
+          path: 'inbox',
+          name: 'inbox',
+          builder: (context, state) => const InboxScreen(),
+        ),
+        GoRoute(
+          path: 'fund',
+          name: 'fund',
+          builder: (context, state) => const FundScreen(),
+        ),
         GoRoute(
           path: 'categories',
           name: 'categories',
           builder: (context, state) => const CategoriesScreen(),
+        ),
+        // ===== V2.7.1 S12.3：变更记录页（仅本地审计；入口对 viewer 不渲染）=====
+        GoRoute(
+          path: 'audit',
+          name: 'audit-log',
+          builder: (context, state) => const AuditLogScreen(),
         ),
       ],
     ),

@@ -120,9 +120,14 @@ GroupBackup parseGroupBackupMap(Map<String, dynamic> root) {
   }
   final gRaw = root['group'];
   if (gRaw is! Map) throw FormatException('缺少 group 节点');
+  final group = gRaw.cast<String, dynamic>();
+  // V2.7.1 S4：老备份（无 kind）一律按 travel 处理，禁止报错。
+  if (group['kind'] is! String || (group['kind'] as String).isEmpty) {
+    group['kind'] = 'travel';
+  }
   return GroupBackup(
     version: version,
-    group: gRaw.cast<String, dynamic>(),
+    group: group,
     members: _asMapList(root['members']),
     expenses: _asMapList(root['expenses']),
     settlements: _asMapList(root['settlements']),

@@ -88,6 +88,16 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("travel"),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -119,6 +129,7 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
     budgetCents,
     archived,
     archivedAtMs,
+    kind,
     createdAt,
     updatedAt,
   ];
@@ -186,6 +197,12 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
         ),
       );
     }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -239,6 +256,10 @@ class $GroupsTable extends Groups with TableInfo<$GroupsTable, Group> {
         DriftSqlType.int,
         data['${effectivePrefix}archived_at_ms'],
       ),
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -264,6 +285,7 @@ class Group extends DataClass implements Insertable<Group> {
   final int? budgetCents;
   final bool archived;
   final int? archivedAtMs;
+  final String kind;
   final int createdAt;
   final int updatedAt;
   const Group({
@@ -274,6 +296,7 @@ class Group extends DataClass implements Insertable<Group> {
     this.budgetCents,
     required this.archived,
     this.archivedAtMs,
+    required this.kind,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -291,6 +314,7 @@ class Group extends DataClass implements Insertable<Group> {
     if (!nullToAbsent || archivedAtMs != null) {
       map['archived_at_ms'] = Variable<int>(archivedAtMs);
     }
+    map['kind'] = Variable<String>(kind);
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -309,6 +333,7 @@ class Group extends DataClass implements Insertable<Group> {
       archivedAtMs: archivedAtMs == null && nullToAbsent
           ? const Value.absent()
           : Value(archivedAtMs),
+      kind: Value(kind),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -327,6 +352,7 @@ class Group extends DataClass implements Insertable<Group> {
       budgetCents: serializer.fromJson<int?>(json['budgetCents']),
       archived: serializer.fromJson<bool>(json['archived']),
       archivedAtMs: serializer.fromJson<int?>(json['archivedAtMs']),
+      kind: serializer.fromJson<String>(json['kind']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -342,6 +368,7 @@ class Group extends DataClass implements Insertable<Group> {
       'budgetCents': serializer.toJson<int?>(budgetCents),
       'archived': serializer.toJson<bool>(archived),
       'archivedAtMs': serializer.toJson<int?>(archivedAtMs),
+      'kind': serializer.toJson<String>(kind),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -355,6 +382,7 @@ class Group extends DataClass implements Insertable<Group> {
     Value<int?> budgetCents = const Value.absent(),
     bool? archived,
     Value<int?> archivedAtMs = const Value.absent(),
+    String? kind,
     int? createdAt,
     int? updatedAt,
   }) => Group(
@@ -365,6 +393,7 @@ class Group extends DataClass implements Insertable<Group> {
     budgetCents: budgetCents.present ? budgetCents.value : this.budgetCents,
     archived: archived ?? this.archived,
     archivedAtMs: archivedAtMs.present ? archivedAtMs.value : this.archivedAtMs,
+    kind: kind ?? this.kind,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -383,6 +412,7 @@ class Group extends DataClass implements Insertable<Group> {
       archivedAtMs: data.archivedAtMs.present
           ? data.archivedAtMs.value
           : this.archivedAtMs,
+      kind: data.kind.present ? data.kind.value : this.kind,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -398,6 +428,7 @@ class Group extends DataClass implements Insertable<Group> {
           ..write('budgetCents: $budgetCents, ')
           ..write('archived: $archived, ')
           ..write('archivedAtMs: $archivedAtMs, ')
+          ..write('kind: $kind, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -413,6 +444,7 @@ class Group extends DataClass implements Insertable<Group> {
     budgetCents,
     archived,
     archivedAtMs,
+    kind,
     createdAt,
     updatedAt,
   );
@@ -427,6 +459,7 @@ class Group extends DataClass implements Insertable<Group> {
           other.budgetCents == this.budgetCents &&
           other.archived == this.archived &&
           other.archivedAtMs == this.archivedAtMs &&
+          other.kind == this.kind &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -439,6 +472,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
   final Value<int?> budgetCents;
   final Value<bool> archived;
   final Value<int?> archivedAtMs;
+  final Value<String> kind;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -450,6 +484,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     this.budgetCents = const Value.absent(),
     this.archived = const Value.absent(),
     this.archivedAtMs = const Value.absent(),
+    this.kind = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -462,6 +497,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     this.budgetCents = const Value.absent(),
     this.archived = const Value.absent(),
     this.archivedAtMs = const Value.absent(),
+    this.kind = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -477,6 +513,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     Expression<int>? budgetCents,
     Expression<bool>? archived,
     Expression<int>? archivedAtMs,
+    Expression<String>? kind,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -489,6 +526,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
       if (budgetCents != null) 'budget_cents': budgetCents,
       if (archived != null) 'archived': archived,
       if (archivedAtMs != null) 'archived_at_ms': archivedAtMs,
+      if (kind != null) 'kind': kind,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -503,6 +541,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     Value<int?>? budgetCents,
     Value<bool>? archived,
     Value<int?>? archivedAtMs,
+    Value<String>? kind,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -515,6 +554,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
       budgetCents: budgetCents ?? this.budgetCents,
       archived: archived ?? this.archived,
       archivedAtMs: archivedAtMs ?? this.archivedAtMs,
+      kind: kind ?? this.kind,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -545,6 +585,9 @@ class GroupsCompanion extends UpdateCompanion<Group> {
     if (archivedAtMs.present) {
       map['archived_at_ms'] = Variable<int>(archivedAtMs.value);
     }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -567,6 +610,7 @@ class GroupsCompanion extends UpdateCompanion<Group> {
           ..write('budgetCents: $budgetCents, ')
           ..write('archived: $archived, ')
           ..write('archivedAtMs: $archivedAtMs, ')
+          ..write('kind: $kind, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -624,6 +668,21 @@ class $MembersTable extends Members with TableInfo<$MembersTable, Member> {
     requiredDuringInsert: false,
     defaultValue: Constant(0),
   );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
+    'archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("archived" IN (0, 1))',
+    ),
+    defaultValue: Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -641,6 +700,7 @@ class $MembersTable extends Members with TableInfo<$MembersTable, Member> {
     groupId,
     name,
     colorIndex,
+    archived,
     createdAt,
   ];
   @override
@@ -682,6 +742,12 @@ class $MembersTable extends Members with TableInfo<$MembersTable, Member> {
         colorIndex.isAcceptableOrUnknown(data['color_index']!, _colorIndexMeta),
       );
     }
+    if (data.containsKey('archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -715,6 +781,10 @@ class $MembersTable extends Members with TableInfo<$MembersTable, Member> {
         DriftSqlType.int,
         data['${effectivePrefix}color_index'],
       )!,
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}archived'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -733,12 +803,14 @@ class Member extends DataClass implements Insertable<Member> {
   final String groupId;
   final String name;
   final int colorIndex;
+  final bool archived;
   final int createdAt;
   const Member({
     required this.id,
     required this.groupId,
     required this.name,
     required this.colorIndex,
+    required this.archived,
     required this.createdAt,
   });
   @override
@@ -748,6 +820,7 @@ class Member extends DataClass implements Insertable<Member> {
     map['group_id'] = Variable<String>(groupId);
     map['name'] = Variable<String>(name);
     map['color_index'] = Variable<int>(colorIndex);
+    map['archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<int>(createdAt);
     return map;
   }
@@ -758,6 +831,7 @@ class Member extends DataClass implements Insertable<Member> {
       groupId: Value(groupId),
       name: Value(name),
       colorIndex: Value(colorIndex),
+      archived: Value(archived),
       createdAt: Value(createdAt),
     );
   }
@@ -772,6 +846,7 @@ class Member extends DataClass implements Insertable<Member> {
       groupId: serializer.fromJson<String>(json['groupId']),
       name: serializer.fromJson<String>(json['name']),
       colorIndex: serializer.fromJson<int>(json['colorIndex']),
+      archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
     );
   }
@@ -783,6 +858,7 @@ class Member extends DataClass implements Insertable<Member> {
       'groupId': serializer.toJson<String>(groupId),
       'name': serializer.toJson<String>(name),
       'colorIndex': serializer.toJson<int>(colorIndex),
+      'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<int>(createdAt),
     };
   }
@@ -792,12 +868,14 @@ class Member extends DataClass implements Insertable<Member> {
     String? groupId,
     String? name,
     int? colorIndex,
+    bool? archived,
     int? createdAt,
   }) => Member(
     id: id ?? this.id,
     groupId: groupId ?? this.groupId,
     name: name ?? this.name,
     colorIndex: colorIndex ?? this.colorIndex,
+    archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
   );
   Member copyWithCompanion(MembersCompanion data) {
@@ -808,6 +886,7 @@ class Member extends DataClass implements Insertable<Member> {
       colorIndex: data.colorIndex.present
           ? data.colorIndex.value
           : this.colorIndex,
+      archived: data.archived.present ? data.archived.value : this.archived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -819,13 +898,15 @@ class Member extends DataClass implements Insertable<Member> {
           ..write('groupId: $groupId, ')
           ..write('name: $name, ')
           ..write('colorIndex: $colorIndex, ')
+          ..write('archived: $archived, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, groupId, name, colorIndex, createdAt);
+  int get hashCode =>
+      Object.hash(id, groupId, name, colorIndex, archived, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -834,6 +915,7 @@ class Member extends DataClass implements Insertable<Member> {
           other.groupId == this.groupId &&
           other.name == this.name &&
           other.colorIndex == this.colorIndex &&
+          other.archived == this.archived &&
           other.createdAt == this.createdAt);
 }
 
@@ -842,6 +924,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
   final Value<String> groupId;
   final Value<String> name;
   final Value<int> colorIndex;
+  final Value<bool> archived;
   final Value<int> createdAt;
   final Value<int> rowid;
   const MembersCompanion({
@@ -849,6 +932,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
     this.groupId = const Value.absent(),
     this.name = const Value.absent(),
     this.colorIndex = const Value.absent(),
+    this.archived = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -857,6 +941,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
     required String groupId,
     required String name,
     this.colorIndex = const Value.absent(),
+    this.archived = const Value.absent(),
     required int createdAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -868,6 +953,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
     Expression<String>? groupId,
     Expression<String>? name,
     Expression<int>? colorIndex,
+    Expression<bool>? archived,
     Expression<int>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -876,6 +962,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
       if (groupId != null) 'group_id': groupId,
       if (name != null) 'name': name,
       if (colorIndex != null) 'color_index': colorIndex,
+      if (archived != null) 'archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -886,6 +973,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
     Value<String>? groupId,
     Value<String>? name,
     Value<int>? colorIndex,
+    Value<bool>? archived,
     Value<int>? createdAt,
     Value<int>? rowid,
   }) {
@@ -894,6 +982,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
       groupId: groupId ?? this.groupId,
       name: name ?? this.name,
       colorIndex: colorIndex ?? this.colorIndex,
+      archived: archived ?? this.archived,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -914,6 +1003,9 @@ class MembersCompanion extends UpdateCompanion<Member> {
     if (colorIndex.present) {
       map['color_index'] = Variable<int>(colorIndex.value);
     }
+    if (archived.present) {
+      map['archived'] = Variable<bool>(archived.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -930,6 +1022,7 @@ class MembersCompanion extends UpdateCompanion<Member> {
           ..write('groupId: $groupId, ')
           ..write('name: $name, ')
           ..write('colorIndex: $colorIndex, ')
+          ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -1052,6 +1145,16 @@ class $TripsTable extends Trips with TableInfo<$TripsTable, Trip> {
     ),
     defaultValue: Constant(false),
   );
+  static const VerificationMeta _paceMeta = const VerificationMeta('pace');
+  @override
+  late final GeneratedColumn<String> pace = GeneratedColumn<String>(
+    'pace',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("standard"),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1086,6 +1189,7 @@ class $TripsTable extends Trips with TableInfo<$TripsTable, Trip> {
     note,
     groupId,
     archived,
+    pace,
     createdAt,
     updatedAt,
   ];
@@ -1171,6 +1275,12 @@ class $TripsTable extends Trips with TableInfo<$TripsTable, Trip> {
         archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
       );
     }
+    if (data.containsKey('pace')) {
+      context.handle(
+        _paceMeta,
+        pace.isAcceptableOrUnknown(data['pace']!, _paceMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1236,6 +1346,10 @@ class $TripsTable extends Trips with TableInfo<$TripsTable, Trip> {
         DriftSqlType.bool,
         data['${effectivePrefix}archived'],
       )!,
+      pace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pace'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -1264,6 +1378,7 @@ class Trip extends DataClass implements Insertable<Trip> {
   final String note;
   final String? groupId;
   final bool archived;
+  final String pace;
   final int createdAt;
   final int updatedAt;
   const Trip({
@@ -1277,6 +1392,7 @@ class Trip extends DataClass implements Insertable<Trip> {
     required this.note,
     this.groupId,
     required this.archived,
+    required this.pace,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -1295,6 +1411,7 @@ class Trip extends DataClass implements Insertable<Trip> {
       map['group_id'] = Variable<String>(groupId);
     }
     map['archived'] = Variable<bool>(archived);
+    map['pace'] = Variable<String>(pace);
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -1314,6 +1431,7 @@ class Trip extends DataClass implements Insertable<Trip> {
           ? const Value.absent()
           : Value(groupId),
       archived: Value(archived),
+      pace: Value(pace),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -1335,6 +1453,7 @@ class Trip extends DataClass implements Insertable<Trip> {
       note: serializer.fromJson<String>(json['note']),
       groupId: serializer.fromJson<String?>(json['groupId']),
       archived: serializer.fromJson<bool>(json['archived']),
+      pace: serializer.fromJson<String>(json['pace']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -1353,6 +1472,7 @@ class Trip extends DataClass implements Insertable<Trip> {
       'note': serializer.toJson<String>(note),
       'groupId': serializer.toJson<String?>(groupId),
       'archived': serializer.toJson<bool>(archived),
+      'pace': serializer.toJson<String>(pace),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -1369,6 +1489,7 @@ class Trip extends DataClass implements Insertable<Trip> {
     String? note,
     Value<String?> groupId = const Value.absent(),
     bool? archived,
+    String? pace,
     int? createdAt,
     int? updatedAt,
   }) => Trip(
@@ -1382,6 +1503,7 @@ class Trip extends DataClass implements Insertable<Trip> {
     note: note ?? this.note,
     groupId: groupId.present ? groupId.value : this.groupId,
     archived: archived ?? this.archived,
+    pace: pace ?? this.pace,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -1403,6 +1525,7 @@ class Trip extends DataClass implements Insertable<Trip> {
       note: data.note.present ? data.note.value : this.note,
       groupId: data.groupId.present ? data.groupId.value : this.groupId,
       archived: data.archived.present ? data.archived.value : this.archived,
+      pace: data.pace.present ? data.pace.value : this.pace,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1421,6 +1544,7 @@ class Trip extends DataClass implements Insertable<Trip> {
           ..write('note: $note, ')
           ..write('groupId: $groupId, ')
           ..write('archived: $archived, ')
+          ..write('pace: $pace, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1439,6 +1563,7 @@ class Trip extends DataClass implements Insertable<Trip> {
     note,
     groupId,
     archived,
+    pace,
     createdAt,
     updatedAt,
   );
@@ -1456,6 +1581,7 @@ class Trip extends DataClass implements Insertable<Trip> {
           other.note == this.note &&
           other.groupId == this.groupId &&
           other.archived == this.archived &&
+          other.pace == this.pace &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1471,6 +1597,7 @@ class TripsCompanion extends UpdateCompanion<Trip> {
   final Value<String> note;
   final Value<String?> groupId;
   final Value<bool> archived;
+  final Value<String> pace;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -1485,6 +1612,7 @@ class TripsCompanion extends UpdateCompanion<Trip> {
     this.note = const Value.absent(),
     this.groupId = const Value.absent(),
     this.archived = const Value.absent(),
+    this.pace = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1500,6 +1628,7 @@ class TripsCompanion extends UpdateCompanion<Trip> {
     this.note = const Value.absent(),
     this.groupId = const Value.absent(),
     this.archived = const Value.absent(),
+    this.pace = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -1518,6 +1647,7 @@ class TripsCompanion extends UpdateCompanion<Trip> {
     Expression<String>? note,
     Expression<String>? groupId,
     Expression<bool>? archived,
+    Expression<String>? pace,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -1533,6 +1663,7 @@ class TripsCompanion extends UpdateCompanion<Trip> {
       if (note != null) 'note': note,
       if (groupId != null) 'group_id': groupId,
       if (archived != null) 'archived': archived,
+      if (pace != null) 'pace': pace,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1550,6 +1681,7 @@ class TripsCompanion extends UpdateCompanion<Trip> {
     Value<String>? note,
     Value<String?>? groupId,
     Value<bool>? archived,
+    Value<String>? pace,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -1565,6 +1697,7 @@ class TripsCompanion extends UpdateCompanion<Trip> {
       note: note ?? this.note,
       groupId: groupId ?? this.groupId,
       archived: archived ?? this.archived,
+      pace: pace ?? this.pace,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -1604,6 +1737,9 @@ class TripsCompanion extends UpdateCompanion<Trip> {
     if (archived.present) {
       map['archived'] = Variable<bool>(archived.value);
     }
+    if (pace.present) {
+      map['pace'] = Variable<String>(pace.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -1629,6 +1765,7 @@ class TripsCompanion extends UpdateCompanion<Trip> {
           ..write('note: $note, ')
           ..write('groupId: $groupId, ')
           ..write('archived: $archived, ')
+          ..write('pace: $pace, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -1901,6 +2038,28 @@ class $TripItemsTable extends TripItems
     requiredDuringInsert: false,
     defaultValue: Constant(0),
   );
+  static const VerificationMeta _guideRefMeta = const VerificationMeta(
+    'guideRef',
+  );
+  @override
+  late final GeneratedColumn<String> guideRef = GeneratedColumn<String>(
+    'guide_ref',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _backupOfMeta = const VerificationMeta(
+    'backupOf',
+  );
+  @override
+  late final GeneratedColumn<String> backupOf = GeneratedColumn<String>(
+    'backup_of',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1949,6 +2108,8 @@ class $TripItemsTable extends TripItems
     toLng,
     flightNo,
     sortOrder,
+    guideRef,
+    backupOf,
     createdAt,
     updatedAt,
   ];
@@ -2124,6 +2285,18 @@ class $TripItemsTable extends TripItems
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('guide_ref')) {
+      context.handle(
+        _guideRefMeta,
+        guideRef.isAcceptableOrUnknown(data['guide_ref']!, _guideRefMeta),
+      );
+    }
+    if (data.containsKey('backup_of')) {
+      context.handle(
+        _backupOfMeta,
+        backupOf.isAcceptableOrUnknown(data['backup_of']!, _backupOfMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2245,6 +2418,14 @@ class $TripItemsTable extends TripItems
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      guideRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}guide_ref'],
+      ),
+      backupOf: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}backup_of'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -2287,6 +2468,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
   final double? toLng;
   final String? flightNo;
   final int sortOrder;
+  final String? guideRef;
+  final String? backupOf;
   final int createdAt;
   final int updatedAt;
   const TripItem({
@@ -2314,6 +2497,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
     this.toLng,
     this.flightNo,
     required this.sortOrder,
+    this.guideRef,
+    this.backupOf,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -2366,6 +2551,12 @@ class TripItem extends DataClass implements Insertable<TripItem> {
       map['flight_no'] = Variable<String>(flightNo);
     }
     map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || guideRef != null) {
+      map['guide_ref'] = Variable<String>(guideRef);
+    }
+    if (!nullToAbsent || backupOf != null) {
+      map['backup_of'] = Variable<String>(backupOf);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -2415,6 +2606,12 @@ class TripItem extends DataClass implements Insertable<TripItem> {
           ? const Value.absent()
           : Value(flightNo),
       sortOrder: Value(sortOrder),
+      guideRef: guideRef == null && nullToAbsent
+          ? const Value.absent()
+          : Value(guideRef),
+      backupOf: backupOf == null && nullToAbsent
+          ? const Value.absent()
+          : Value(backupOf),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -2450,6 +2647,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
       toLng: serializer.fromJson<double?>(json['toLng']),
       flightNo: serializer.fromJson<String?>(json['flightNo']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      guideRef: serializer.fromJson<String?>(json['guideRef']),
+      backupOf: serializer.fromJson<String?>(json['backupOf']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -2482,6 +2681,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
       'toLng': serializer.toJson<double?>(toLng),
       'flightNo': serializer.toJson<String?>(flightNo),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'guideRef': serializer.toJson<String?>(guideRef),
+      'backupOf': serializer.toJson<String?>(backupOf),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -2512,6 +2713,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
     Value<double?> toLng = const Value.absent(),
     Value<String?> flightNo = const Value.absent(),
     int? sortOrder,
+    Value<String?> guideRef = const Value.absent(),
+    Value<String?> backupOf = const Value.absent(),
     int? createdAt,
     int? updatedAt,
   }) => TripItem(
@@ -2539,6 +2742,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
     toLng: toLng.present ? toLng.value : this.toLng,
     flightNo: flightNo.present ? flightNo.value : this.flightNo,
     sortOrder: sortOrder ?? this.sortOrder,
+    guideRef: guideRef.present ? guideRef.value : this.guideRef,
+    backupOf: backupOf.present ? backupOf.value : this.backupOf,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -2578,6 +2783,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
       toLng: data.toLng.present ? data.toLng.value : this.toLng,
       flightNo: data.flightNo.present ? data.flightNo.value : this.flightNo,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      guideRef: data.guideRef.present ? data.guideRef.value : this.guideRef,
+      backupOf: data.backupOf.present ? data.backupOf.value : this.backupOf,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -2610,6 +2817,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
           ..write('toLng: $toLng, ')
           ..write('flightNo: $flightNo, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('guideRef: $guideRef, ')
+          ..write('backupOf: $backupOf, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -2642,6 +2851,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
     toLng,
     flightNo,
     sortOrder,
+    guideRef,
+    backupOf,
     createdAt,
     updatedAt,
   ]);
@@ -2673,6 +2884,8 @@ class TripItem extends DataClass implements Insertable<TripItem> {
           other.toLng == this.toLng &&
           other.flightNo == this.flightNo &&
           other.sortOrder == this.sortOrder &&
+          other.guideRef == this.guideRef &&
+          other.backupOf == this.backupOf &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -2702,6 +2915,8 @@ class TripItemsCompanion extends UpdateCompanion<TripItem> {
   final Value<double?> toLng;
   final Value<String?> flightNo;
   final Value<int> sortOrder;
+  final Value<String?> guideRef;
+  final Value<String?> backupOf;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -2730,6 +2945,8 @@ class TripItemsCompanion extends UpdateCompanion<TripItem> {
     this.toLng = const Value.absent(),
     this.flightNo = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.guideRef = const Value.absent(),
+    this.backupOf = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2759,6 +2976,8 @@ class TripItemsCompanion extends UpdateCompanion<TripItem> {
     this.toLng = const Value.absent(),
     this.flightNo = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.guideRef = const Value.absent(),
+    this.backupOf = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -2791,6 +3010,8 @@ class TripItemsCompanion extends UpdateCompanion<TripItem> {
     Expression<double>? toLng,
     Expression<String>? flightNo,
     Expression<int>? sortOrder,
+    Expression<String>? guideRef,
+    Expression<String>? backupOf,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -2820,6 +3041,8 @@ class TripItemsCompanion extends UpdateCompanion<TripItem> {
       if (toLng != null) 'to_lng': toLng,
       if (flightNo != null) 'flight_no': flightNo,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (guideRef != null) 'guide_ref': guideRef,
+      if (backupOf != null) 'backup_of': backupOf,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -2851,6 +3074,8 @@ class TripItemsCompanion extends UpdateCompanion<TripItem> {
     Value<double?>? toLng,
     Value<String?>? flightNo,
     Value<int>? sortOrder,
+    Value<String?>? guideRef,
+    Value<String?>? backupOf,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -2880,6 +3105,8 @@ class TripItemsCompanion extends UpdateCompanion<TripItem> {
       toLng: toLng ?? this.toLng,
       flightNo: flightNo ?? this.flightNo,
       sortOrder: sortOrder ?? this.sortOrder,
+      guideRef: guideRef ?? this.guideRef,
+      backupOf: backupOf ?? this.backupOf,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -2961,6 +3188,12 @@ class TripItemsCompanion extends UpdateCompanion<TripItem> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (guideRef.present) {
+      map['guide_ref'] = Variable<String>(guideRef.value);
+    }
+    if (backupOf.present) {
+      map['backup_of'] = Variable<String>(backupOf.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -3000,6 +3233,8 @@ class TripItemsCompanion extends UpdateCompanion<TripItem> {
           ..write('toLng: $toLng, ')
           ..write('flightNo: $flightNo, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('guideRef: $guideRef, ')
+          ..write('backupOf: $backupOf, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -4022,6 +4257,26 @@ class $ExpensesTable extends Expenses with TableInfo<$ExpensesTable, Expense> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _fundIdMeta = const VerificationMeta('fundId');
+  @override
+  late final GeneratedColumn<String> fundId = GeneratedColumn<String>(
+    'fund_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _payMethodMeta = const VerificationMeta(
+    'payMethod',
+  );
+  @override
+  late final GeneratedColumn<String> payMethod = GeneratedColumn<String>(
+    'pay_method',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -4053,6 +4308,8 @@ class $ExpensesTable extends Expenses with TableInfo<$ExpensesTable, Expense> {
     settledRoundId,
     tripId,
     tripItemId,
+    fundId,
+    payMethod,
     createdAt,
   ];
   @override
@@ -4197,6 +4454,18 @@ class $ExpensesTable extends Expenses with TableInfo<$ExpensesTable, Expense> {
         ),
       );
     }
+    if (data.containsKey('fund_id')) {
+      context.handle(
+        _fundIdMeta,
+        fundId.isAcceptableOrUnknown(data['fund_id']!, _fundIdMeta),
+      );
+    }
+    if (data.containsKey('pay_method')) {
+      context.handle(
+        _payMethodMeta,
+        payMethod.isAcceptableOrUnknown(data['pay_method']!, _payMethodMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -4286,6 +4555,14 @@ class $ExpensesTable extends Expenses with TableInfo<$ExpensesTable, Expense> {
         DriftSqlType.string,
         data['${effectivePrefix}trip_item_id'],
       ),
+      fundId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}fund_id'],
+      ),
+      payMethod: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pay_method'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -4318,6 +4595,8 @@ class Expense extends DataClass implements Insertable<Expense> {
   final String? settledRoundId;
   final String? tripId;
   final String? tripItemId;
+  final String? fundId;
+  final String? payMethod;
   final int createdAt;
   const Expense({
     required this.id,
@@ -4338,6 +4617,8 @@ class Expense extends DataClass implements Insertable<Expense> {
     this.settledRoundId,
     this.tripId,
     this.tripItemId,
+    this.fundId,
+    this.payMethod,
     required this.createdAt,
   });
   @override
@@ -4370,6 +4651,12 @@ class Expense extends DataClass implements Insertable<Expense> {
     }
     if (!nullToAbsent || tripItemId != null) {
       map['trip_item_id'] = Variable<String>(tripItemId);
+    }
+    if (!nullToAbsent || fundId != null) {
+      map['fund_id'] = Variable<String>(fundId);
+    }
+    if (!nullToAbsent || payMethod != null) {
+      map['pay_method'] = Variable<String>(payMethod);
     }
     map['created_at'] = Variable<int>(createdAt);
     return map;
@@ -4405,6 +4692,12 @@ class Expense extends DataClass implements Insertable<Expense> {
       tripItemId: tripItemId == null && nullToAbsent
           ? const Value.absent()
           : Value(tripItemId),
+      fundId: fundId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fundId),
+      payMethod: payMethod == null && nullToAbsent
+          ? const Value.absent()
+          : Value(payMethod),
       createdAt: Value(createdAt),
     );
   }
@@ -4433,6 +4726,8 @@ class Expense extends DataClass implements Insertable<Expense> {
       settledRoundId: serializer.fromJson<String?>(json['settledRoundId']),
       tripId: serializer.fromJson<String?>(json['tripId']),
       tripItemId: serializer.fromJson<String?>(json['tripItemId']),
+      fundId: serializer.fromJson<String?>(json['fundId']),
+      payMethod: serializer.fromJson<String?>(json['payMethod']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
     );
   }
@@ -4458,6 +4753,8 @@ class Expense extends DataClass implements Insertable<Expense> {
       'settledRoundId': serializer.toJson<String?>(settledRoundId),
       'tripId': serializer.toJson<String?>(tripId),
       'tripItemId': serializer.toJson<String?>(tripItemId),
+      'fundId': serializer.toJson<String?>(fundId),
+      'payMethod': serializer.toJson<String?>(payMethod),
       'createdAt': serializer.toJson<int>(createdAt),
     };
   }
@@ -4481,6 +4778,8 @@ class Expense extends DataClass implements Insertable<Expense> {
     Value<String?> settledRoundId = const Value.absent(),
     Value<String?> tripId = const Value.absent(),
     Value<String?> tripItemId = const Value.absent(),
+    Value<String?> fundId = const Value.absent(),
+    Value<String?> payMethod = const Value.absent(),
     int? createdAt,
   }) => Expense(
     id: id ?? this.id,
@@ -4505,6 +4804,8 @@ class Expense extends DataClass implements Insertable<Expense> {
         : this.settledRoundId,
     tripId: tripId.present ? tripId.value : this.tripId,
     tripItemId: tripItemId.present ? tripItemId.value : this.tripItemId,
+    fundId: fundId.present ? fundId.value : this.fundId,
+    payMethod: payMethod.present ? payMethod.value : this.payMethod,
     createdAt: createdAt ?? this.createdAt,
   );
   Expense copyWithCompanion(ExpensesCompanion data) {
@@ -4545,6 +4846,8 @@ class Expense extends DataClass implements Insertable<Expense> {
       tripItemId: data.tripItemId.present
           ? data.tripItemId.value
           : this.tripItemId,
+      fundId: data.fundId.present ? data.fundId.value : this.fundId,
+      payMethod: data.payMethod.present ? data.payMethod.value : this.payMethod,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -4570,13 +4873,15 @@ class Expense extends DataClass implements Insertable<Expense> {
           ..write('settledRoundId: $settledRoundId, ')
           ..write('tripId: $tripId, ')
           ..write('tripItemId: $tripItemId, ')
+          ..write('fundId: $fundId, ')
+          ..write('payMethod: $payMethod, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     groupId,
     dateEpochDay,
@@ -4595,8 +4900,10 @@ class Expense extends DataClass implements Insertable<Expense> {
     settledRoundId,
     tripId,
     tripItemId,
+    fundId,
+    payMethod,
     createdAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -4619,6 +4926,8 @@ class Expense extends DataClass implements Insertable<Expense> {
           other.settledRoundId == this.settledRoundId &&
           other.tripId == this.tripId &&
           other.tripItemId == this.tripItemId &&
+          other.fundId == this.fundId &&
+          other.payMethod == this.payMethod &&
           other.createdAt == this.createdAt);
 }
 
@@ -4641,6 +4950,8 @@ class ExpensesCompanion extends UpdateCompanion<Expense> {
   final Value<String?> settledRoundId;
   final Value<String?> tripId;
   final Value<String?> tripItemId;
+  final Value<String?> fundId;
+  final Value<String?> payMethod;
   final Value<int> createdAt;
   final Value<int> rowid;
   const ExpensesCompanion({
@@ -4662,6 +4973,8 @@ class ExpensesCompanion extends UpdateCompanion<Expense> {
     this.settledRoundId = const Value.absent(),
     this.tripId = const Value.absent(),
     this.tripItemId = const Value.absent(),
+    this.fundId = const Value.absent(),
+    this.payMethod = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -4684,6 +4997,8 @@ class ExpensesCompanion extends UpdateCompanion<Expense> {
     this.settledRoundId = const Value.absent(),
     this.tripId = const Value.absent(),
     this.tripItemId = const Value.absent(),
+    this.fundId = const Value.absent(),
+    this.payMethod = const Value.absent(),
     required int createdAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -4708,6 +5023,8 @@ class ExpensesCompanion extends UpdateCompanion<Expense> {
     Expression<String>? settledRoundId,
     Expression<String>? tripId,
     Expression<String>? tripItemId,
+    Expression<String>? fundId,
+    Expression<String>? payMethod,
     Expression<int>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -4731,6 +5048,8 @@ class ExpensesCompanion extends UpdateCompanion<Expense> {
       if (settledRoundId != null) 'settled_round_id': settledRoundId,
       if (tripId != null) 'trip_id': tripId,
       if (tripItemId != null) 'trip_item_id': tripItemId,
+      if (fundId != null) 'fund_id': fundId,
+      if (payMethod != null) 'pay_method': payMethod,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -4755,6 +5074,8 @@ class ExpensesCompanion extends UpdateCompanion<Expense> {
     Value<String?>? settledRoundId,
     Value<String?>? tripId,
     Value<String?>? tripItemId,
+    Value<String?>? fundId,
+    Value<String?>? payMethod,
     Value<int>? createdAt,
     Value<int>? rowid,
   }) {
@@ -4777,6 +5098,8 @@ class ExpensesCompanion extends UpdateCompanion<Expense> {
       settledRoundId: settledRoundId ?? this.settledRoundId,
       tripId: tripId ?? this.tripId,
       tripItemId: tripItemId ?? this.tripItemId,
+      fundId: fundId ?? this.fundId,
+      payMethod: payMethod ?? this.payMethod,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -4839,6 +5162,12 @@ class ExpensesCompanion extends UpdateCompanion<Expense> {
     if (tripItemId.present) {
       map['trip_item_id'] = Variable<String>(tripItemId.value);
     }
+    if (fundId.present) {
+      map['fund_id'] = Variable<String>(fundId.value);
+    }
+    if (payMethod.present) {
+      map['pay_method'] = Variable<String>(payMethod.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -4869,6 +5198,8 @@ class ExpensesCompanion extends UpdateCompanion<Expense> {
           ..write('settledRoundId: $settledRoundId, ')
           ..write('tripId: $tripId, ')
           ..write('tripItemId: $tripItemId, ')
+          ..write('fundId: $fundId, ')
+          ..write('payMethod: $payMethod, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -4951,6 +5282,18 @@ class $SettlementsTable extends Settlements
     requiredDuringInsert: false,
     defaultValue: Constant(1),
   );
+  static const VerificationMeta _strategyMeta = const VerificationMeta(
+    'strategy',
+  );
+  @override
+  late final GeneratedColumn<String> strategy = GeneratedColumn<String>(
+    'strategy',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("minTransfers"),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -4981,6 +5324,7 @@ class $SettlementsTable extends Settlements
     transfersJson,
     expenseIdsJson,
     roundNo,
+    strategy,
     createdAt,
     completedAt,
   ];
@@ -5039,6 +5383,12 @@ class $SettlementsTable extends Settlements
         roundNo.isAcceptableOrUnknown(data['round_no']!, _roundNoMeta),
       );
     }
+    if (data.containsKey('strategy')) {
+      context.handle(
+        _strategyMeta,
+        strategy.isAcceptableOrUnknown(data['strategy']!, _strategyMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -5089,6 +5439,10 @@ class $SettlementsTable extends Settlements
         DriftSqlType.int,
         data['${effectivePrefix}round_no'],
       )!,
+      strategy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}strategy'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -5113,6 +5467,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
   final String transfersJson;
   final String expenseIdsJson;
   final int roundNo;
+  final String strategy;
   final int createdAt;
   final int? completedAt;
   const Settlement({
@@ -5122,6 +5477,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
     required this.transfersJson,
     required this.expenseIdsJson,
     required this.roundNo,
+    required this.strategy,
     required this.createdAt,
     this.completedAt,
   });
@@ -5134,6 +5490,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
     map['transfers_json'] = Variable<String>(transfersJson);
     map['expense_ids_json'] = Variable<String>(expenseIdsJson);
     map['round_no'] = Variable<int>(roundNo);
+    map['strategy'] = Variable<String>(strategy);
     map['created_at'] = Variable<int>(createdAt);
     if (!nullToAbsent || completedAt != null) {
       map['completed_at'] = Variable<int>(completedAt);
@@ -5149,6 +5506,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
       transfersJson: Value(transfersJson),
       expenseIdsJson: Value(expenseIdsJson),
       roundNo: Value(roundNo),
+      strategy: Value(strategy),
       createdAt: Value(createdAt),
       completedAt: completedAt == null && nullToAbsent
           ? const Value.absent()
@@ -5168,6 +5526,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
       transfersJson: serializer.fromJson<String>(json['transfersJson']),
       expenseIdsJson: serializer.fromJson<String>(json['expenseIdsJson']),
       roundNo: serializer.fromJson<int>(json['roundNo']),
+      strategy: serializer.fromJson<String>(json['strategy']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       completedAt: serializer.fromJson<int?>(json['completedAt']),
     );
@@ -5182,6 +5541,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
       'transfersJson': serializer.toJson<String>(transfersJson),
       'expenseIdsJson': serializer.toJson<String>(expenseIdsJson),
       'roundNo': serializer.toJson<int>(roundNo),
+      'strategy': serializer.toJson<String>(strategy),
       'createdAt': serializer.toJson<int>(createdAt),
       'completedAt': serializer.toJson<int?>(completedAt),
     };
@@ -5194,6 +5554,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
     String? transfersJson,
     String? expenseIdsJson,
     int? roundNo,
+    String? strategy,
     int? createdAt,
     Value<int?> completedAt = const Value.absent(),
   }) => Settlement(
@@ -5203,6 +5564,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
     transfersJson: transfersJson ?? this.transfersJson,
     expenseIdsJson: expenseIdsJson ?? this.expenseIdsJson,
     roundNo: roundNo ?? this.roundNo,
+    strategy: strategy ?? this.strategy,
     createdAt: createdAt ?? this.createdAt,
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
   );
@@ -5218,6 +5580,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
           ? data.expenseIdsJson.value
           : this.expenseIdsJson,
       roundNo: data.roundNo.present ? data.roundNo.value : this.roundNo,
+      strategy: data.strategy.present ? data.strategy.value : this.strategy,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       completedAt: data.completedAt.present
           ? data.completedAt.value
@@ -5234,6 +5597,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
           ..write('transfersJson: $transfersJson, ')
           ..write('expenseIdsJson: $expenseIdsJson, ')
           ..write('roundNo: $roundNo, ')
+          ..write('strategy: $strategy, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt')
           ..write(')'))
@@ -5248,6 +5612,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
     transfersJson,
     expenseIdsJson,
     roundNo,
+    strategy,
     createdAt,
     completedAt,
   );
@@ -5261,6 +5626,7 @@ class Settlement extends DataClass implements Insertable<Settlement> {
           other.transfersJson == this.transfersJson &&
           other.expenseIdsJson == this.expenseIdsJson &&
           other.roundNo == this.roundNo &&
+          other.strategy == this.strategy &&
           other.createdAt == this.createdAt &&
           other.completedAt == this.completedAt);
 }
@@ -5272,6 +5638,7 @@ class SettlementsCompanion extends UpdateCompanion<Settlement> {
   final Value<String> transfersJson;
   final Value<String> expenseIdsJson;
   final Value<int> roundNo;
+  final Value<String> strategy;
   final Value<int> createdAt;
   final Value<int?> completedAt;
   final Value<int> rowid;
@@ -5282,6 +5649,7 @@ class SettlementsCompanion extends UpdateCompanion<Settlement> {
     this.transfersJson = const Value.absent(),
     this.expenseIdsJson = const Value.absent(),
     this.roundNo = const Value.absent(),
+    this.strategy = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.completedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -5293,6 +5661,7 @@ class SettlementsCompanion extends UpdateCompanion<Settlement> {
     this.transfersJson = const Value.absent(),
     this.expenseIdsJson = const Value.absent(),
     this.roundNo = const Value.absent(),
+    this.strategy = const Value.absent(),
     required int createdAt,
     this.completedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -5306,6 +5675,7 @@ class SettlementsCompanion extends UpdateCompanion<Settlement> {
     Expression<String>? transfersJson,
     Expression<String>? expenseIdsJson,
     Expression<int>? roundNo,
+    Expression<String>? strategy,
     Expression<int>? createdAt,
     Expression<int>? completedAt,
     Expression<int>? rowid,
@@ -5317,6 +5687,7 @@ class SettlementsCompanion extends UpdateCompanion<Settlement> {
       if (transfersJson != null) 'transfers_json': transfersJson,
       if (expenseIdsJson != null) 'expense_ids_json': expenseIdsJson,
       if (roundNo != null) 'round_no': roundNo,
+      if (strategy != null) 'strategy': strategy,
       if (createdAt != null) 'created_at': createdAt,
       if (completedAt != null) 'completed_at': completedAt,
       if (rowid != null) 'rowid': rowid,
@@ -5330,6 +5701,7 @@ class SettlementsCompanion extends UpdateCompanion<Settlement> {
     Value<String>? transfersJson,
     Value<String>? expenseIdsJson,
     Value<int>? roundNo,
+    Value<String>? strategy,
     Value<int>? createdAt,
     Value<int?>? completedAt,
     Value<int>? rowid,
@@ -5341,6 +5713,7 @@ class SettlementsCompanion extends UpdateCompanion<Settlement> {
       transfersJson: transfersJson ?? this.transfersJson,
       expenseIdsJson: expenseIdsJson ?? this.expenseIdsJson,
       roundNo: roundNo ?? this.roundNo,
+      strategy: strategy ?? this.strategy,
       createdAt: createdAt ?? this.createdAt,
       completedAt: completedAt ?? this.completedAt,
       rowid: rowid ?? this.rowid,
@@ -5368,6 +5741,9 @@ class SettlementsCompanion extends UpdateCompanion<Settlement> {
     if (roundNo.present) {
       map['round_no'] = Variable<int>(roundNo.value);
     }
+    if (strategy.present) {
+      map['strategy'] = Variable<String>(strategy.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -5389,6 +5765,7 @@ class SettlementsCompanion extends UpdateCompanion<Settlement> {
           ..write('transfersJson: $transfersJson, ')
           ..write('expenseIdsJson: $expenseIdsJson, ')
           ..write('roundNo: $roundNo, ')
+          ..write('strategy: $strategy, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt, ')
           ..write('rowid: $rowid')
@@ -10619,6 +10996,16 @@ class $SharedTripsTable extends SharedTrips
     ),
     defaultValue: Constant(false),
   );
+  static const VerificationMeta _paceMeta = const VerificationMeta('pace');
+  @override
+  late final GeneratedColumn<String> pace = GeneratedColumn<String>(
+    'pace',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("standard"),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -10653,6 +11040,7 @@ class $SharedTripsTable extends SharedTrips
     note,
     groupId,
     archived,
+    pace,
     createdAt,
     updatedAt,
   ];
@@ -10738,6 +11126,12 @@ class $SharedTripsTable extends SharedTrips
         archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
       );
     }
+    if (data.containsKey('pace')) {
+      context.handle(
+        _paceMeta,
+        pace.isAcceptableOrUnknown(data['pace']!, _paceMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -10803,6 +11197,10 @@ class $SharedTripsTable extends SharedTrips
         DriftSqlType.bool,
         data['${effectivePrefix}archived'],
       )!,
+      pace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pace'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -10831,6 +11229,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
   final String note;
   final String? groupId;
   final bool archived;
+  final String pace;
   final int createdAt;
   final int updatedAt;
   const SharedTrip({
@@ -10844,6 +11243,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
     required this.note,
     this.groupId,
     required this.archived,
+    required this.pace,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -10862,6 +11262,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
       map['group_id'] = Variable<String>(groupId);
     }
     map['archived'] = Variable<bool>(archived);
+    map['pace'] = Variable<String>(pace);
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -10881,6 +11282,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
           ? const Value.absent()
           : Value(groupId),
       archived: Value(archived),
+      pace: Value(pace),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -10902,6 +11304,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
       note: serializer.fromJson<String>(json['note']),
       groupId: serializer.fromJson<String?>(json['groupId']),
       archived: serializer.fromJson<bool>(json['archived']),
+      pace: serializer.fromJson<String>(json['pace']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -10920,6 +11323,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
       'note': serializer.toJson<String>(note),
       'groupId': serializer.toJson<String?>(groupId),
       'archived': serializer.toJson<bool>(archived),
+      'pace': serializer.toJson<String>(pace),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -10936,6 +11340,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
     String? note,
     Value<String?> groupId = const Value.absent(),
     bool? archived,
+    String? pace,
     int? createdAt,
     int? updatedAt,
   }) => SharedTrip(
@@ -10949,6 +11354,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
     note: note ?? this.note,
     groupId: groupId.present ? groupId.value : this.groupId,
     archived: archived ?? this.archived,
+    pace: pace ?? this.pace,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -10970,6 +11376,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
       note: data.note.present ? data.note.value : this.note,
       groupId: data.groupId.present ? data.groupId.value : this.groupId,
       archived: data.archived.present ? data.archived.value : this.archived,
+      pace: data.pace.present ? data.pace.value : this.pace,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -10988,6 +11395,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
           ..write('note: $note, ')
           ..write('groupId: $groupId, ')
           ..write('archived: $archived, ')
+          ..write('pace: $pace, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -11006,6 +11414,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
     note,
     groupId,
     archived,
+    pace,
     createdAt,
     updatedAt,
   );
@@ -11023,6 +11432,7 @@ class SharedTrip extends DataClass implements Insertable<SharedTrip> {
           other.note == this.note &&
           other.groupId == this.groupId &&
           other.archived == this.archived &&
+          other.pace == this.pace &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -11038,6 +11448,7 @@ class SharedTripsCompanion extends UpdateCompanion<SharedTrip> {
   final Value<String> note;
   final Value<String?> groupId;
   final Value<bool> archived;
+  final Value<String> pace;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -11052,6 +11463,7 @@ class SharedTripsCompanion extends UpdateCompanion<SharedTrip> {
     this.note = const Value.absent(),
     this.groupId = const Value.absent(),
     this.archived = const Value.absent(),
+    this.pace = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -11067,6 +11479,7 @@ class SharedTripsCompanion extends UpdateCompanion<SharedTrip> {
     this.note = const Value.absent(),
     this.groupId = const Value.absent(),
     this.archived = const Value.absent(),
+    this.pace = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -11085,6 +11498,7 @@ class SharedTripsCompanion extends UpdateCompanion<SharedTrip> {
     Expression<String>? note,
     Expression<String>? groupId,
     Expression<bool>? archived,
+    Expression<String>? pace,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -11100,6 +11514,7 @@ class SharedTripsCompanion extends UpdateCompanion<SharedTrip> {
       if (note != null) 'note': note,
       if (groupId != null) 'group_id': groupId,
       if (archived != null) 'archived': archived,
+      if (pace != null) 'pace': pace,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -11117,6 +11532,7 @@ class SharedTripsCompanion extends UpdateCompanion<SharedTrip> {
     Value<String>? note,
     Value<String?>? groupId,
     Value<bool>? archived,
+    Value<String>? pace,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -11132,6 +11548,7 @@ class SharedTripsCompanion extends UpdateCompanion<SharedTrip> {
       note: note ?? this.note,
       groupId: groupId ?? this.groupId,
       archived: archived ?? this.archived,
+      pace: pace ?? this.pace,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -11171,6 +11588,9 @@ class SharedTripsCompanion extends UpdateCompanion<SharedTrip> {
     if (archived.present) {
       map['archived'] = Variable<bool>(archived.value);
     }
+    if (pace.present) {
+      map['pace'] = Variable<String>(pace.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -11196,6 +11616,7 @@ class SharedTripsCompanion extends UpdateCompanion<SharedTrip> {
           ..write('note: $note, ')
           ..write('groupId: $groupId, ')
           ..write('archived: $archived, ')
+          ..write('pace: $pace, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -11465,6 +11886,28 @@ class $SharedTripItemsTable extends SharedTripItems
     requiredDuringInsert: false,
     defaultValue: Constant(0),
   );
+  static const VerificationMeta _guideRefMeta = const VerificationMeta(
+    'guideRef',
+  );
+  @override
+  late final GeneratedColumn<String> guideRef = GeneratedColumn<String>(
+    'guide_ref',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _backupOfMeta = const VerificationMeta(
+    'backupOf',
+  );
+  @override
+  late final GeneratedColumn<String> backupOf = GeneratedColumn<String>(
+    'backup_of',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -11513,6 +11956,8 @@ class $SharedTripItemsTable extends SharedTripItems
     toLng,
     flightNo,
     sortOrder,
+    guideRef,
+    backupOf,
     createdAt,
     updatedAt,
   ];
@@ -11688,6 +12133,18 @@ class $SharedTripItemsTable extends SharedTripItems
         sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
       );
     }
+    if (data.containsKey('guide_ref')) {
+      context.handle(
+        _guideRefMeta,
+        guideRef.isAcceptableOrUnknown(data['guide_ref']!, _guideRefMeta),
+      );
+    }
+    if (data.containsKey('backup_of')) {
+      context.handle(
+        _backupOfMeta,
+        backupOf.isAcceptableOrUnknown(data['backup_of']!, _backupOfMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -11809,6 +12266,14 @@ class $SharedTripItemsTable extends SharedTripItems
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
       )!,
+      guideRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}guide_ref'],
+      ),
+      backupOf: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}backup_of'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_at'],
@@ -11851,6 +12316,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
   final double? toLng;
   final String? flightNo;
   final int sortOrder;
+  final String? guideRef;
+  final String? backupOf;
   final int createdAt;
   final int updatedAt;
   const SharedTripItem({
@@ -11878,6 +12345,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
     this.toLng,
     this.flightNo,
     required this.sortOrder,
+    this.guideRef,
+    this.backupOf,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -11930,6 +12399,12 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
       map['flight_no'] = Variable<String>(flightNo);
     }
     map['sort_order'] = Variable<int>(sortOrder);
+    if (!nullToAbsent || guideRef != null) {
+      map['guide_ref'] = Variable<String>(guideRef);
+    }
+    if (!nullToAbsent || backupOf != null) {
+      map['backup_of'] = Variable<String>(backupOf);
+    }
     map['created_at'] = Variable<int>(createdAt);
     map['updated_at'] = Variable<int>(updatedAt);
     return map;
@@ -11979,6 +12454,12 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
           ? const Value.absent()
           : Value(flightNo),
       sortOrder: Value(sortOrder),
+      guideRef: guideRef == null && nullToAbsent
+          ? const Value.absent()
+          : Value(guideRef),
+      backupOf: backupOf == null && nullToAbsent
+          ? const Value.absent()
+          : Value(backupOf),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -12014,6 +12495,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
       toLng: serializer.fromJson<double?>(json['toLng']),
       flightNo: serializer.fromJson<String?>(json['flightNo']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      guideRef: serializer.fromJson<String?>(json['guideRef']),
+      backupOf: serializer.fromJson<String?>(json['backupOf']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
     );
@@ -12046,6 +12529,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
       'toLng': serializer.toJson<double?>(toLng),
       'flightNo': serializer.toJson<String?>(flightNo),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'guideRef': serializer.toJson<String?>(guideRef),
+      'backupOf': serializer.toJson<String?>(backupOf),
       'createdAt': serializer.toJson<int>(createdAt),
       'updatedAt': serializer.toJson<int>(updatedAt),
     };
@@ -12076,6 +12561,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
     Value<double?> toLng = const Value.absent(),
     Value<String?> flightNo = const Value.absent(),
     int? sortOrder,
+    Value<String?> guideRef = const Value.absent(),
+    Value<String?> backupOf = const Value.absent(),
     int? createdAt,
     int? updatedAt,
   }) => SharedTripItem(
@@ -12103,6 +12590,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
     toLng: toLng.present ? toLng.value : this.toLng,
     flightNo: flightNo.present ? flightNo.value : this.flightNo,
     sortOrder: sortOrder ?? this.sortOrder,
+    guideRef: guideRef.present ? guideRef.value : this.guideRef,
+    backupOf: backupOf.present ? backupOf.value : this.backupOf,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -12142,6 +12631,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
       toLng: data.toLng.present ? data.toLng.value : this.toLng,
       flightNo: data.flightNo.present ? data.flightNo.value : this.flightNo,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      guideRef: data.guideRef.present ? data.guideRef.value : this.guideRef,
+      backupOf: data.backupOf.present ? data.backupOf.value : this.backupOf,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -12174,6 +12665,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
           ..write('toLng: $toLng, ')
           ..write('flightNo: $flightNo, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('guideRef: $guideRef, ')
+          ..write('backupOf: $backupOf, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -12206,6 +12699,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
     toLng,
     flightNo,
     sortOrder,
+    guideRef,
+    backupOf,
     createdAt,
     updatedAt,
   ]);
@@ -12237,6 +12732,8 @@ class SharedTripItem extends DataClass implements Insertable<SharedTripItem> {
           other.toLng == this.toLng &&
           other.flightNo == this.flightNo &&
           other.sortOrder == this.sortOrder &&
+          other.guideRef == this.guideRef &&
+          other.backupOf == this.backupOf &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -12266,6 +12763,8 @@ class SharedTripItemsCompanion extends UpdateCompanion<SharedTripItem> {
   final Value<double?> toLng;
   final Value<String?> flightNo;
   final Value<int> sortOrder;
+  final Value<String?> guideRef;
+  final Value<String?> backupOf;
   final Value<int> createdAt;
   final Value<int> updatedAt;
   final Value<int> rowid;
@@ -12294,6 +12793,8 @@ class SharedTripItemsCompanion extends UpdateCompanion<SharedTripItem> {
     this.toLng = const Value.absent(),
     this.flightNo = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.guideRef = const Value.absent(),
+    this.backupOf = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -12323,6 +12824,8 @@ class SharedTripItemsCompanion extends UpdateCompanion<SharedTripItem> {
     this.toLng = const Value.absent(),
     this.flightNo = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.guideRef = const Value.absent(),
+    this.backupOf = const Value.absent(),
     required int createdAt,
     required int updatedAt,
     this.rowid = const Value.absent(),
@@ -12355,6 +12858,8 @@ class SharedTripItemsCompanion extends UpdateCompanion<SharedTripItem> {
     Expression<double>? toLng,
     Expression<String>? flightNo,
     Expression<int>? sortOrder,
+    Expression<String>? guideRef,
+    Expression<String>? backupOf,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -12384,6 +12889,8 @@ class SharedTripItemsCompanion extends UpdateCompanion<SharedTripItem> {
       if (toLng != null) 'to_lng': toLng,
       if (flightNo != null) 'flight_no': flightNo,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (guideRef != null) 'guide_ref': guideRef,
+      if (backupOf != null) 'backup_of': backupOf,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -12415,6 +12922,8 @@ class SharedTripItemsCompanion extends UpdateCompanion<SharedTripItem> {
     Value<double?>? toLng,
     Value<String?>? flightNo,
     Value<int>? sortOrder,
+    Value<String?>? guideRef,
+    Value<String?>? backupOf,
     Value<int>? createdAt,
     Value<int>? updatedAt,
     Value<int>? rowid,
@@ -12444,6 +12953,8 @@ class SharedTripItemsCompanion extends UpdateCompanion<SharedTripItem> {
       toLng: toLng ?? this.toLng,
       flightNo: flightNo ?? this.flightNo,
       sortOrder: sortOrder ?? this.sortOrder,
+      guideRef: guideRef ?? this.guideRef,
+      backupOf: backupOf ?? this.backupOf,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -12525,6 +13036,12 @@ class SharedTripItemsCompanion extends UpdateCompanion<SharedTripItem> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (guideRef.present) {
+      map['guide_ref'] = Variable<String>(guideRef.value);
+    }
+    if (backupOf.present) {
+      map['backup_of'] = Variable<String>(backupOf.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -12564,6 +13081,3711 @@ class SharedTripItemsCompanion extends UpdateCompanion<SharedTripItem> {
           ..write('toLng: $toLng, ')
           ..write('flightNo: $flightNo, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('guideRef: $guideRef, ')
+          ..write('backupOf: $backupOf, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $FundsTable extends Funds with TableInfo<$FundsTable, Fund> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FundsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES "groups" (id)',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _managerMemberIdMeta = const VerificationMeta(
+    'managerMemberId',
+  );
+  @override
+  late final GeneratedColumn<String> managerMemberId = GeneratedColumn<String>(
+    'manager_member_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _targetCentsMeta = const VerificationMeta(
+    'targetCents',
+  );
+  @override
+  late final GeneratedColumn<int> targetCents = GeneratedColumn<int>(
+    'target_cents',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("open"),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    groupId,
+    name,
+    managerMemberId,
+    targetCents,
+    status,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'funds';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Fund> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('manager_member_id')) {
+      context.handle(
+        _managerMemberIdMeta,
+        managerMemberId.isAcceptableOrUnknown(
+          data['manager_member_id']!,
+          _managerMemberIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_managerMemberIdMeta);
+    }
+    if (data.containsKey('target_cents')) {
+      context.handle(
+        _targetCentsMeta,
+        targetCents.isAcceptableOrUnknown(
+          data['target_cents']!,
+          _targetCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Fund map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Fund(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      managerMemberId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}manager_member_id'],
+      )!,
+      targetCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}target_cents'],
+      ),
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FundsTable createAlias(String alias) {
+    return $FundsTable(attachedDatabase, alias);
+  }
+}
+
+class Fund extends DataClass implements Insertable<Fund> {
+  final String id;
+  final String groupId;
+  final String name;
+  final String managerMemberId;
+  final int? targetCents;
+  final String status;
+  final int createdAt;
+  final int updatedAt;
+  const Fund({
+    required this.id,
+    required this.groupId,
+    required this.name,
+    required this.managerMemberId,
+    this.targetCents,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['group_id'] = Variable<String>(groupId);
+    map['name'] = Variable<String>(name);
+    map['manager_member_id'] = Variable<String>(managerMemberId);
+    if (!nullToAbsent || targetCents != null) {
+      map['target_cents'] = Variable<int>(targetCents);
+    }
+    map['status'] = Variable<String>(status);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  FundsCompanion toCompanion(bool nullToAbsent) {
+    return FundsCompanion(
+      id: Value(id),
+      groupId: Value(groupId),
+      name: Value(name),
+      managerMemberId: Value(managerMemberId),
+      targetCents: targetCents == null && nullToAbsent
+          ? const Value.absent()
+          : Value(targetCents),
+      status: Value(status),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Fund.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Fund(
+      id: serializer.fromJson<String>(json['id']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      name: serializer.fromJson<String>(json['name']),
+      managerMemberId: serializer.fromJson<String>(json['managerMemberId']),
+      targetCents: serializer.fromJson<int?>(json['targetCents']),
+      status: serializer.fromJson<String>(json['status']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'groupId': serializer.toJson<String>(groupId),
+      'name': serializer.toJson<String>(name),
+      'managerMemberId': serializer.toJson<String>(managerMemberId),
+      'targetCents': serializer.toJson<int?>(targetCents),
+      'status': serializer.toJson<String>(status),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  Fund copyWith({
+    String? id,
+    String? groupId,
+    String? name,
+    String? managerMemberId,
+    Value<int?> targetCents = const Value.absent(),
+    String? status,
+    int? createdAt,
+    int? updatedAt,
+  }) => Fund(
+    id: id ?? this.id,
+    groupId: groupId ?? this.groupId,
+    name: name ?? this.name,
+    managerMemberId: managerMemberId ?? this.managerMemberId,
+    targetCents: targetCents.present ? targetCents.value : this.targetCents,
+    status: status ?? this.status,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  Fund copyWithCompanion(FundsCompanion data) {
+    return Fund(
+      id: data.id.present ? data.id.value : this.id,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      name: data.name.present ? data.name.value : this.name,
+      managerMemberId: data.managerMemberId.present
+          ? data.managerMemberId.value
+          : this.managerMemberId,
+      targetCents: data.targetCents.present
+          ? data.targetCents.value
+          : this.targetCents,
+      status: data.status.present ? data.status.value : this.status,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Fund(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('name: $name, ')
+          ..write('managerMemberId: $managerMemberId, ')
+          ..write('targetCents: $targetCents, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    groupId,
+    name,
+    managerMemberId,
+    targetCents,
+    status,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Fund &&
+          other.id == this.id &&
+          other.groupId == this.groupId &&
+          other.name == this.name &&
+          other.managerMemberId == this.managerMemberId &&
+          other.targetCents == this.targetCents &&
+          other.status == this.status &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class FundsCompanion extends UpdateCompanion<Fund> {
+  final Value<String> id;
+  final Value<String> groupId;
+  final Value<String> name;
+  final Value<String> managerMemberId;
+  final Value<int?> targetCents;
+  final Value<String> status;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const FundsCompanion({
+    this.id = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.managerMemberId = const Value.absent(),
+    this.targetCents = const Value.absent(),
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FundsCompanion.insert({
+    required String id,
+    required String groupId,
+    required String name,
+    required String managerMemberId,
+    this.targetCents = const Value.absent(),
+    this.status = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       groupId = Value(groupId),
+       name = Value(name),
+       managerMemberId = Value(managerMemberId),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<Fund> custom({
+    Expression<String>? id,
+    Expression<String>? groupId,
+    Expression<String>? name,
+    Expression<String>? managerMemberId,
+    Expression<int>? targetCents,
+    Expression<String>? status,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (groupId != null) 'group_id': groupId,
+      if (name != null) 'name': name,
+      if (managerMemberId != null) 'manager_member_id': managerMemberId,
+      if (targetCents != null) 'target_cents': targetCents,
+      if (status != null) 'status': status,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FundsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? groupId,
+    Value<String>? name,
+    Value<String>? managerMemberId,
+    Value<int?>? targetCents,
+    Value<String>? status,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return FundsCompanion(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      name: name ?? this.name,
+      managerMemberId: managerMemberId ?? this.managerMemberId,
+      targetCents: targetCents ?? this.targetCents,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (managerMemberId.present) {
+      map['manager_member_id'] = Variable<String>(managerMemberId.value);
+    }
+    if (targetCents.present) {
+      map['target_cents'] = Variable<int>(targetCents.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FundsCompanion(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('name: $name, ')
+          ..write('managerMemberId: $managerMemberId, ')
+          ..write('targetCents: $targetCents, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $InboxItemsTable extends InboxItems
+    with TableInfo<$InboxItemsTable, InboxItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $InboxItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES "groups" (id)',
+    ),
+  );
+  static const VerificationMeta _amountCentsMeta = const VerificationMeta(
+    'amountCents',
+  );
+  @override
+  late final GeneratedColumn<int> amountCents = GeneratedColumn<int>(
+    'amount_cents',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(0),
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _capturedAtMeta = const VerificationMeta(
+    'capturedAt',
+  );
+  @override
+  late final GeneratedColumn<int> capturedAt = GeneratedColumn<int>(
+    'captured_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("manual"),
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("pending"),
+  );
+  static const VerificationMeta _convertedExpenseIdMeta =
+      const VerificationMeta('convertedExpenseId');
+  @override
+  late final GeneratedColumn<String> convertedExpenseId =
+      GeneratedColumn<String>(
+        'converted_expense_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    groupId,
+    amountCents,
+    note,
+    capturedAt,
+    source,
+    status,
+    convertedExpenseId,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'inbox_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<InboxItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('amount_cents')) {
+      context.handle(
+        _amountCentsMeta,
+        amountCents.isAcceptableOrUnknown(
+          data['amount_cents']!,
+          _amountCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('captured_at')) {
+      context.handle(
+        _capturedAtMeta,
+        capturedAt.isAcceptableOrUnknown(data['captured_at']!, _capturedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_capturedAtMeta);
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('converted_expense_id')) {
+      context.handle(
+        _convertedExpenseIdMeta,
+        convertedExpenseId.isAcceptableOrUnknown(
+          data['converted_expense_id']!,
+          _convertedExpenseIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  InboxItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return InboxItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      amountCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}amount_cents'],
+      )!,
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      capturedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}captured_at'],
+      )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      convertedExpenseId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}converted_expense_id'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $InboxItemsTable createAlias(String alias) {
+    return $InboxItemsTable(attachedDatabase, alias);
+  }
+}
+
+class InboxItem extends DataClass implements Insertable<InboxItem> {
+  final String id;
+  final String groupId;
+  final int amountCents;
+  final String? note;
+  final int capturedAt;
+  final String source;
+  final String status;
+  final String? convertedExpenseId;
+  final int createdAt;
+  final int updatedAt;
+  const InboxItem({
+    required this.id,
+    required this.groupId,
+    required this.amountCents,
+    this.note,
+    required this.capturedAt,
+    required this.source,
+    required this.status,
+    this.convertedExpenseId,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['group_id'] = Variable<String>(groupId);
+    map['amount_cents'] = Variable<int>(amountCents);
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['captured_at'] = Variable<int>(capturedAt);
+    map['source'] = Variable<String>(source);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || convertedExpenseId != null) {
+      map['converted_expense_id'] = Variable<String>(convertedExpenseId);
+    }
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  InboxItemsCompanion toCompanion(bool nullToAbsent) {
+    return InboxItemsCompanion(
+      id: Value(id),
+      groupId: Value(groupId),
+      amountCents: Value(amountCents),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      capturedAt: Value(capturedAt),
+      source: Value(source),
+      status: Value(status),
+      convertedExpenseId: convertedExpenseId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(convertedExpenseId),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory InboxItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return InboxItem(
+      id: serializer.fromJson<String>(json['id']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      amountCents: serializer.fromJson<int>(json['amountCents']),
+      note: serializer.fromJson<String?>(json['note']),
+      capturedAt: serializer.fromJson<int>(json['capturedAt']),
+      source: serializer.fromJson<String>(json['source']),
+      status: serializer.fromJson<String>(json['status']),
+      convertedExpenseId: serializer.fromJson<String?>(
+        json['convertedExpenseId'],
+      ),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'groupId': serializer.toJson<String>(groupId),
+      'amountCents': serializer.toJson<int>(amountCents),
+      'note': serializer.toJson<String?>(note),
+      'capturedAt': serializer.toJson<int>(capturedAt),
+      'source': serializer.toJson<String>(source),
+      'status': serializer.toJson<String>(status),
+      'convertedExpenseId': serializer.toJson<String?>(convertedExpenseId),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  InboxItem copyWith({
+    String? id,
+    String? groupId,
+    int? amountCents,
+    Value<String?> note = const Value.absent(),
+    int? capturedAt,
+    String? source,
+    String? status,
+    Value<String?> convertedExpenseId = const Value.absent(),
+    int? createdAt,
+    int? updatedAt,
+  }) => InboxItem(
+    id: id ?? this.id,
+    groupId: groupId ?? this.groupId,
+    amountCents: amountCents ?? this.amountCents,
+    note: note.present ? note.value : this.note,
+    capturedAt: capturedAt ?? this.capturedAt,
+    source: source ?? this.source,
+    status: status ?? this.status,
+    convertedExpenseId: convertedExpenseId.present
+        ? convertedExpenseId.value
+        : this.convertedExpenseId,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  InboxItem copyWithCompanion(InboxItemsCompanion data) {
+    return InboxItem(
+      id: data.id.present ? data.id.value : this.id,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      amountCents: data.amountCents.present
+          ? data.amountCents.value
+          : this.amountCents,
+      note: data.note.present ? data.note.value : this.note,
+      capturedAt: data.capturedAt.present
+          ? data.capturedAt.value
+          : this.capturedAt,
+      source: data.source.present ? data.source.value : this.source,
+      status: data.status.present ? data.status.value : this.status,
+      convertedExpenseId: data.convertedExpenseId.present
+          ? data.convertedExpenseId.value
+          : this.convertedExpenseId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('InboxItem(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('amountCents: $amountCents, ')
+          ..write('note: $note, ')
+          ..write('capturedAt: $capturedAt, ')
+          ..write('source: $source, ')
+          ..write('status: $status, ')
+          ..write('convertedExpenseId: $convertedExpenseId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    groupId,
+    amountCents,
+    note,
+    capturedAt,
+    source,
+    status,
+    convertedExpenseId,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is InboxItem &&
+          other.id == this.id &&
+          other.groupId == this.groupId &&
+          other.amountCents == this.amountCents &&
+          other.note == this.note &&
+          other.capturedAt == this.capturedAt &&
+          other.source == this.source &&
+          other.status == this.status &&
+          other.convertedExpenseId == this.convertedExpenseId &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class InboxItemsCompanion extends UpdateCompanion<InboxItem> {
+  final Value<String> id;
+  final Value<String> groupId;
+  final Value<int> amountCents;
+  final Value<String?> note;
+  final Value<int> capturedAt;
+  final Value<String> source;
+  final Value<String> status;
+  final Value<String?> convertedExpenseId;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const InboxItemsCompanion({
+    this.id = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.amountCents = const Value.absent(),
+    this.note = const Value.absent(),
+    this.capturedAt = const Value.absent(),
+    this.source = const Value.absent(),
+    this.status = const Value.absent(),
+    this.convertedExpenseId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  InboxItemsCompanion.insert({
+    required String id,
+    required String groupId,
+    this.amountCents = const Value.absent(),
+    this.note = const Value.absent(),
+    required int capturedAt,
+    this.source = const Value.absent(),
+    this.status = const Value.absent(),
+    this.convertedExpenseId = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       groupId = Value(groupId),
+       capturedAt = Value(capturedAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<InboxItem> custom({
+    Expression<String>? id,
+    Expression<String>? groupId,
+    Expression<int>? amountCents,
+    Expression<String>? note,
+    Expression<int>? capturedAt,
+    Expression<String>? source,
+    Expression<String>? status,
+    Expression<String>? convertedExpenseId,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (groupId != null) 'group_id': groupId,
+      if (amountCents != null) 'amount_cents': amountCents,
+      if (note != null) 'note': note,
+      if (capturedAt != null) 'captured_at': capturedAt,
+      if (source != null) 'source': source,
+      if (status != null) 'status': status,
+      if (convertedExpenseId != null)
+        'converted_expense_id': convertedExpenseId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  InboxItemsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? groupId,
+    Value<int>? amountCents,
+    Value<String?>? note,
+    Value<int>? capturedAt,
+    Value<String>? source,
+    Value<String>? status,
+    Value<String?>? convertedExpenseId,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return InboxItemsCompanion(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      amountCents: amountCents ?? this.amountCents,
+      note: note ?? this.note,
+      capturedAt: capturedAt ?? this.capturedAt,
+      source: source ?? this.source,
+      status: status ?? this.status,
+      convertedExpenseId: convertedExpenseId ?? this.convertedExpenseId,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (amountCents.present) {
+      map['amount_cents'] = Variable<int>(amountCents.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (capturedAt.present) {
+      map['captured_at'] = Variable<int>(capturedAt.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (convertedExpenseId.present) {
+      map['converted_expense_id'] = Variable<String>(convertedExpenseId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('InboxItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('amountCents: $amountCents, ')
+          ..write('note: $note, ')
+          ..write('capturedAt: $capturedAt, ')
+          ..write('source: $source, ')
+          ..write('status: $status, ')
+          ..write('convertedExpenseId: $convertedExpenseId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $AuditLogsTable extends AuditLogs
+    with TableInfo<$AuditLogsTable, AuditLog> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AuditLogsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityMeta = const VerificationMeta('entity');
+  @override
+  late final GeneratedColumn<String> entity = GeneratedColumn<String>(
+    'entity',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+    'action',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actorMemberIdMeta = const VerificationMeta(
+    'actorMemberId',
+  );
+  @override
+  late final GeneratedColumn<String> actorMemberId = GeneratedColumn<String>(
+    'actor_member_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _changedFieldsJsonMeta = const VerificationMeta(
+    'changedFieldsJson',
+  );
+  @override
+  late final GeneratedColumn<String> changedFieldsJson =
+      GeneratedColumn<String>(
+        'changed_fields_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: Constant("{}"),
+      );
+  static const VerificationMeta _atMsMeta = const VerificationMeta('atMs');
+  @override
+  late final GeneratedColumn<int> atMs = GeneratedColumn<int>(
+    'at_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    groupId,
+    entity,
+    entityId,
+    action,
+    actorMemberId,
+    changedFieldsJson,
+    atMs,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'audit_logs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AuditLog> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('entity')) {
+      context.handle(
+        _entityMeta,
+        entity.isAcceptableOrUnknown(data['entity']!, _entityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('action')) {
+      context.handle(
+        _actionMeta,
+        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionMeta);
+    }
+    if (data.containsKey('actor_member_id')) {
+      context.handle(
+        _actorMemberIdMeta,
+        actorMemberId.isAcceptableOrUnknown(
+          data['actor_member_id']!,
+          _actorMemberIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('changed_fields_json')) {
+      context.handle(
+        _changedFieldsJsonMeta,
+        changedFieldsJson.isAcceptableOrUnknown(
+          data['changed_fields_json']!,
+          _changedFieldsJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('at_ms')) {
+      context.handle(
+        _atMsMeta,
+        atMs.isAcceptableOrUnknown(data['at_ms']!, _atMsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_atMsMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AuditLog map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AuditLog(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      entity: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity'],
+      )!,
+      entityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_id'],
+      )!,
+      action: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action'],
+      )!,
+      actorMemberId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_member_id'],
+      ),
+      changedFieldsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}changed_fields_json'],
+      )!,
+      atMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}at_ms'],
+      )!,
+    );
+  }
+
+  @override
+  $AuditLogsTable createAlias(String alias) {
+    return $AuditLogsTable(attachedDatabase, alias);
+  }
+}
+
+class AuditLog extends DataClass implements Insertable<AuditLog> {
+  final String id;
+  final String groupId;
+  final String entity;
+  final String entityId;
+  final String action;
+  final String? actorMemberId;
+  final String changedFieldsJson;
+  final int atMs;
+  const AuditLog({
+    required this.id,
+    required this.groupId,
+    required this.entity,
+    required this.entityId,
+    required this.action,
+    this.actorMemberId,
+    required this.changedFieldsJson,
+    required this.atMs,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['group_id'] = Variable<String>(groupId);
+    map['entity'] = Variable<String>(entity);
+    map['entity_id'] = Variable<String>(entityId);
+    map['action'] = Variable<String>(action);
+    if (!nullToAbsent || actorMemberId != null) {
+      map['actor_member_id'] = Variable<String>(actorMemberId);
+    }
+    map['changed_fields_json'] = Variable<String>(changedFieldsJson);
+    map['at_ms'] = Variable<int>(atMs);
+    return map;
+  }
+
+  AuditLogsCompanion toCompanion(bool nullToAbsent) {
+    return AuditLogsCompanion(
+      id: Value(id),
+      groupId: Value(groupId),
+      entity: Value(entity),
+      entityId: Value(entityId),
+      action: Value(action),
+      actorMemberId: actorMemberId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(actorMemberId),
+      changedFieldsJson: Value(changedFieldsJson),
+      atMs: Value(atMs),
+    );
+  }
+
+  factory AuditLog.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AuditLog(
+      id: serializer.fromJson<String>(json['id']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      entity: serializer.fromJson<String>(json['entity']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      action: serializer.fromJson<String>(json['action']),
+      actorMemberId: serializer.fromJson<String?>(json['actorMemberId']),
+      changedFieldsJson: serializer.fromJson<String>(json['changedFieldsJson']),
+      atMs: serializer.fromJson<int>(json['atMs']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'groupId': serializer.toJson<String>(groupId),
+      'entity': serializer.toJson<String>(entity),
+      'entityId': serializer.toJson<String>(entityId),
+      'action': serializer.toJson<String>(action),
+      'actorMemberId': serializer.toJson<String?>(actorMemberId),
+      'changedFieldsJson': serializer.toJson<String>(changedFieldsJson),
+      'atMs': serializer.toJson<int>(atMs),
+    };
+  }
+
+  AuditLog copyWith({
+    String? id,
+    String? groupId,
+    String? entity,
+    String? entityId,
+    String? action,
+    Value<String?> actorMemberId = const Value.absent(),
+    String? changedFieldsJson,
+    int? atMs,
+  }) => AuditLog(
+    id: id ?? this.id,
+    groupId: groupId ?? this.groupId,
+    entity: entity ?? this.entity,
+    entityId: entityId ?? this.entityId,
+    action: action ?? this.action,
+    actorMemberId: actorMemberId.present
+        ? actorMemberId.value
+        : this.actorMemberId,
+    changedFieldsJson: changedFieldsJson ?? this.changedFieldsJson,
+    atMs: atMs ?? this.atMs,
+  );
+  AuditLog copyWithCompanion(AuditLogsCompanion data) {
+    return AuditLog(
+      id: data.id.present ? data.id.value : this.id,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      entity: data.entity.present ? data.entity.value : this.entity,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      action: data.action.present ? data.action.value : this.action,
+      actorMemberId: data.actorMemberId.present
+          ? data.actorMemberId.value
+          : this.actorMemberId,
+      changedFieldsJson: data.changedFieldsJson.present
+          ? data.changedFieldsJson.value
+          : this.changedFieldsJson,
+      atMs: data.atMs.present ? data.atMs.value : this.atMs,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AuditLog(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('entity: $entity, ')
+          ..write('entityId: $entityId, ')
+          ..write('action: $action, ')
+          ..write('actorMemberId: $actorMemberId, ')
+          ..write('changedFieldsJson: $changedFieldsJson, ')
+          ..write('atMs: $atMs')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    groupId,
+    entity,
+    entityId,
+    action,
+    actorMemberId,
+    changedFieldsJson,
+    atMs,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AuditLog &&
+          other.id == this.id &&
+          other.groupId == this.groupId &&
+          other.entity == this.entity &&
+          other.entityId == this.entityId &&
+          other.action == this.action &&
+          other.actorMemberId == this.actorMemberId &&
+          other.changedFieldsJson == this.changedFieldsJson &&
+          other.atMs == this.atMs);
+}
+
+class AuditLogsCompanion extends UpdateCompanion<AuditLog> {
+  final Value<String> id;
+  final Value<String> groupId;
+  final Value<String> entity;
+  final Value<String> entityId;
+  final Value<String> action;
+  final Value<String?> actorMemberId;
+  final Value<String> changedFieldsJson;
+  final Value<int> atMs;
+  final Value<int> rowid;
+  const AuditLogsCompanion({
+    this.id = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.entity = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.action = const Value.absent(),
+    this.actorMemberId = const Value.absent(),
+    this.changedFieldsJson = const Value.absent(),
+    this.atMs = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AuditLogsCompanion.insert({
+    required String id,
+    required String groupId,
+    required String entity,
+    required String entityId,
+    required String action,
+    this.actorMemberId = const Value.absent(),
+    this.changedFieldsJson = const Value.absent(),
+    required int atMs,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       groupId = Value(groupId),
+       entity = Value(entity),
+       entityId = Value(entityId),
+       action = Value(action),
+       atMs = Value(atMs);
+  static Insertable<AuditLog> custom({
+    Expression<String>? id,
+    Expression<String>? groupId,
+    Expression<String>? entity,
+    Expression<String>? entityId,
+    Expression<String>? action,
+    Expression<String>? actorMemberId,
+    Expression<String>? changedFieldsJson,
+    Expression<int>? atMs,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (groupId != null) 'group_id': groupId,
+      if (entity != null) 'entity': entity,
+      if (entityId != null) 'entity_id': entityId,
+      if (action != null) 'action': action,
+      if (actorMemberId != null) 'actor_member_id': actorMemberId,
+      if (changedFieldsJson != null) 'changed_fields_json': changedFieldsJson,
+      if (atMs != null) 'at_ms': atMs,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AuditLogsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? groupId,
+    Value<String>? entity,
+    Value<String>? entityId,
+    Value<String>? action,
+    Value<String?>? actorMemberId,
+    Value<String>? changedFieldsJson,
+    Value<int>? atMs,
+    Value<int>? rowid,
+  }) {
+    return AuditLogsCompanion(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      entity: entity ?? this.entity,
+      entityId: entityId ?? this.entityId,
+      action: action ?? this.action,
+      actorMemberId: actorMemberId ?? this.actorMemberId,
+      changedFieldsJson: changedFieldsJson ?? this.changedFieldsJson,
+      atMs: atMs ?? this.atMs,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (entity.present) {
+      map['entity'] = Variable<String>(entity.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (actorMemberId.present) {
+      map['actor_member_id'] = Variable<String>(actorMemberId.value);
+    }
+    if (changedFieldsJson.present) {
+      map['changed_fields_json'] = Variable<String>(changedFieldsJson.value);
+    }
+    if (atMs.present) {
+      map['at_ms'] = Variable<int>(atMs.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AuditLogsCompanion(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('entity: $entity, ')
+          ..write('entityId: $entityId, ')
+          ..write('action: $action, ')
+          ..write('actorMemberId: $actorMemberId, ')
+          ..write('changedFieldsJson: $changedFieldsJson, ')
+          ..write('atMs: $atMs, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ConflictRecordsTable extends ConflictRecords
+    with TableInfo<$ConflictRecordsTable, ConflictRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ConflictRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityMeta = const VerificationMeta('entity');
+  @override
+  late final GeneratedColumn<String> entity = GeneratedColumn<String>(
+    'entity',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _localUpdatedMsMeta = const VerificationMeta(
+    'localUpdatedMs',
+  );
+  @override
+  late final GeneratedColumn<int> localUpdatedMs = GeneratedColumn<int>(
+    'local_updated_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _remoteUpdatedMsMeta = const VerificationMeta(
+    'remoteUpdatedMs',
+  );
+  @override
+  late final GeneratedColumn<int> remoteUpdatedMs = GeneratedColumn<int>(
+    'remote_updated_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _winnerMeta = const VerificationMeta('winner');
+  @override
+  late final GeneratedColumn<String> winner = GeneratedColumn<String>(
+    'winner',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detectedAtMsMeta = const VerificationMeta(
+    'detectedAtMs',
+  );
+  @override
+  late final GeneratedColumn<int> detectedAtMs = GeneratedColumn<int>(
+    'detected_at_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _acknowledgedMeta = const VerificationMeta(
+    'acknowledged',
+  );
+  @override
+  late final GeneratedColumn<int> acknowledged = GeneratedColumn<int>(
+    'acknowledged',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    groupId,
+    entity,
+    entityId,
+    localUpdatedMs,
+    remoteUpdatedMs,
+    winner,
+    detectedAtMs,
+    acknowledged,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'conflict_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ConflictRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('entity')) {
+      context.handle(
+        _entityMeta,
+        entity.isAcceptableOrUnknown(data['entity']!, _entityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('local_updated_ms')) {
+      context.handle(
+        _localUpdatedMsMeta,
+        localUpdatedMs.isAcceptableOrUnknown(
+          data['local_updated_ms']!,
+          _localUpdatedMsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_localUpdatedMsMeta);
+    }
+    if (data.containsKey('remote_updated_ms')) {
+      context.handle(
+        _remoteUpdatedMsMeta,
+        remoteUpdatedMs.isAcceptableOrUnknown(
+          data['remote_updated_ms']!,
+          _remoteUpdatedMsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_remoteUpdatedMsMeta);
+    }
+    if (data.containsKey('winner')) {
+      context.handle(
+        _winnerMeta,
+        winner.isAcceptableOrUnknown(data['winner']!, _winnerMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_winnerMeta);
+    }
+    if (data.containsKey('detected_at_ms')) {
+      context.handle(
+        _detectedAtMsMeta,
+        detectedAtMs.isAcceptableOrUnknown(
+          data['detected_at_ms']!,
+          _detectedAtMsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_detectedAtMsMeta);
+    }
+    if (data.containsKey('acknowledged')) {
+      context.handle(
+        _acknowledgedMeta,
+        acknowledged.isAcceptableOrUnknown(
+          data['acknowledged']!,
+          _acknowledgedMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ConflictRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ConflictRecord(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      entity: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity'],
+      )!,
+      entityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_id'],
+      )!,
+      localUpdatedMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}local_updated_ms'],
+      )!,
+      remoteUpdatedMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}remote_updated_ms'],
+      )!,
+      winner: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}winner'],
+      )!,
+      detectedAtMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}detected_at_ms'],
+      )!,
+      acknowledged: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}acknowledged'],
+      )!,
+    );
+  }
+
+  @override
+  $ConflictRecordsTable createAlias(String alias) {
+    return $ConflictRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class ConflictRecord extends DataClass implements Insertable<ConflictRecord> {
+  final String id;
+  final String groupId;
+  final String entity;
+  final String entityId;
+  final int localUpdatedMs;
+  final int remoteUpdatedMs;
+  final String winner;
+  final int detectedAtMs;
+  final int acknowledged;
+  const ConflictRecord({
+    required this.id,
+    required this.groupId,
+    required this.entity,
+    required this.entityId,
+    required this.localUpdatedMs,
+    required this.remoteUpdatedMs,
+    required this.winner,
+    required this.detectedAtMs,
+    required this.acknowledged,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['group_id'] = Variable<String>(groupId);
+    map['entity'] = Variable<String>(entity);
+    map['entity_id'] = Variable<String>(entityId);
+    map['local_updated_ms'] = Variable<int>(localUpdatedMs);
+    map['remote_updated_ms'] = Variable<int>(remoteUpdatedMs);
+    map['winner'] = Variable<String>(winner);
+    map['detected_at_ms'] = Variable<int>(detectedAtMs);
+    map['acknowledged'] = Variable<int>(acknowledged);
+    return map;
+  }
+
+  ConflictRecordsCompanion toCompanion(bool nullToAbsent) {
+    return ConflictRecordsCompanion(
+      id: Value(id),
+      groupId: Value(groupId),
+      entity: Value(entity),
+      entityId: Value(entityId),
+      localUpdatedMs: Value(localUpdatedMs),
+      remoteUpdatedMs: Value(remoteUpdatedMs),
+      winner: Value(winner),
+      detectedAtMs: Value(detectedAtMs),
+      acknowledged: Value(acknowledged),
+    );
+  }
+
+  factory ConflictRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ConflictRecord(
+      id: serializer.fromJson<String>(json['id']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      entity: serializer.fromJson<String>(json['entity']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      localUpdatedMs: serializer.fromJson<int>(json['localUpdatedMs']),
+      remoteUpdatedMs: serializer.fromJson<int>(json['remoteUpdatedMs']),
+      winner: serializer.fromJson<String>(json['winner']),
+      detectedAtMs: serializer.fromJson<int>(json['detectedAtMs']),
+      acknowledged: serializer.fromJson<int>(json['acknowledged']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'groupId': serializer.toJson<String>(groupId),
+      'entity': serializer.toJson<String>(entity),
+      'entityId': serializer.toJson<String>(entityId),
+      'localUpdatedMs': serializer.toJson<int>(localUpdatedMs),
+      'remoteUpdatedMs': serializer.toJson<int>(remoteUpdatedMs),
+      'winner': serializer.toJson<String>(winner),
+      'detectedAtMs': serializer.toJson<int>(detectedAtMs),
+      'acknowledged': serializer.toJson<int>(acknowledged),
+    };
+  }
+
+  ConflictRecord copyWith({
+    String? id,
+    String? groupId,
+    String? entity,
+    String? entityId,
+    int? localUpdatedMs,
+    int? remoteUpdatedMs,
+    String? winner,
+    int? detectedAtMs,
+    int? acknowledged,
+  }) => ConflictRecord(
+    id: id ?? this.id,
+    groupId: groupId ?? this.groupId,
+    entity: entity ?? this.entity,
+    entityId: entityId ?? this.entityId,
+    localUpdatedMs: localUpdatedMs ?? this.localUpdatedMs,
+    remoteUpdatedMs: remoteUpdatedMs ?? this.remoteUpdatedMs,
+    winner: winner ?? this.winner,
+    detectedAtMs: detectedAtMs ?? this.detectedAtMs,
+    acknowledged: acknowledged ?? this.acknowledged,
+  );
+  ConflictRecord copyWithCompanion(ConflictRecordsCompanion data) {
+    return ConflictRecord(
+      id: data.id.present ? data.id.value : this.id,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      entity: data.entity.present ? data.entity.value : this.entity,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      localUpdatedMs: data.localUpdatedMs.present
+          ? data.localUpdatedMs.value
+          : this.localUpdatedMs,
+      remoteUpdatedMs: data.remoteUpdatedMs.present
+          ? data.remoteUpdatedMs.value
+          : this.remoteUpdatedMs,
+      winner: data.winner.present ? data.winner.value : this.winner,
+      detectedAtMs: data.detectedAtMs.present
+          ? data.detectedAtMs.value
+          : this.detectedAtMs,
+      acknowledged: data.acknowledged.present
+          ? data.acknowledged.value
+          : this.acknowledged,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ConflictRecord(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('entity: $entity, ')
+          ..write('entityId: $entityId, ')
+          ..write('localUpdatedMs: $localUpdatedMs, ')
+          ..write('remoteUpdatedMs: $remoteUpdatedMs, ')
+          ..write('winner: $winner, ')
+          ..write('detectedAtMs: $detectedAtMs, ')
+          ..write('acknowledged: $acknowledged')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    groupId,
+    entity,
+    entityId,
+    localUpdatedMs,
+    remoteUpdatedMs,
+    winner,
+    detectedAtMs,
+    acknowledged,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ConflictRecord &&
+          other.id == this.id &&
+          other.groupId == this.groupId &&
+          other.entity == this.entity &&
+          other.entityId == this.entityId &&
+          other.localUpdatedMs == this.localUpdatedMs &&
+          other.remoteUpdatedMs == this.remoteUpdatedMs &&
+          other.winner == this.winner &&
+          other.detectedAtMs == this.detectedAtMs &&
+          other.acknowledged == this.acknowledged);
+}
+
+class ConflictRecordsCompanion extends UpdateCompanion<ConflictRecord> {
+  final Value<String> id;
+  final Value<String> groupId;
+  final Value<String> entity;
+  final Value<String> entityId;
+  final Value<int> localUpdatedMs;
+  final Value<int> remoteUpdatedMs;
+  final Value<String> winner;
+  final Value<int> detectedAtMs;
+  final Value<int> acknowledged;
+  final Value<int> rowid;
+  const ConflictRecordsCompanion({
+    this.id = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.entity = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.localUpdatedMs = const Value.absent(),
+    this.remoteUpdatedMs = const Value.absent(),
+    this.winner = const Value.absent(),
+    this.detectedAtMs = const Value.absent(),
+    this.acknowledged = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ConflictRecordsCompanion.insert({
+    required String id,
+    required String groupId,
+    required String entity,
+    required String entityId,
+    required int localUpdatedMs,
+    required int remoteUpdatedMs,
+    required String winner,
+    required int detectedAtMs,
+    this.acknowledged = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       groupId = Value(groupId),
+       entity = Value(entity),
+       entityId = Value(entityId),
+       localUpdatedMs = Value(localUpdatedMs),
+       remoteUpdatedMs = Value(remoteUpdatedMs),
+       winner = Value(winner),
+       detectedAtMs = Value(detectedAtMs);
+  static Insertable<ConflictRecord> custom({
+    Expression<String>? id,
+    Expression<String>? groupId,
+    Expression<String>? entity,
+    Expression<String>? entityId,
+    Expression<int>? localUpdatedMs,
+    Expression<int>? remoteUpdatedMs,
+    Expression<String>? winner,
+    Expression<int>? detectedAtMs,
+    Expression<int>? acknowledged,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (groupId != null) 'group_id': groupId,
+      if (entity != null) 'entity': entity,
+      if (entityId != null) 'entity_id': entityId,
+      if (localUpdatedMs != null) 'local_updated_ms': localUpdatedMs,
+      if (remoteUpdatedMs != null) 'remote_updated_ms': remoteUpdatedMs,
+      if (winner != null) 'winner': winner,
+      if (detectedAtMs != null) 'detected_at_ms': detectedAtMs,
+      if (acknowledged != null) 'acknowledged': acknowledged,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ConflictRecordsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? groupId,
+    Value<String>? entity,
+    Value<String>? entityId,
+    Value<int>? localUpdatedMs,
+    Value<int>? remoteUpdatedMs,
+    Value<String>? winner,
+    Value<int>? detectedAtMs,
+    Value<int>? acknowledged,
+    Value<int>? rowid,
+  }) {
+    return ConflictRecordsCompanion(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      entity: entity ?? this.entity,
+      entityId: entityId ?? this.entityId,
+      localUpdatedMs: localUpdatedMs ?? this.localUpdatedMs,
+      remoteUpdatedMs: remoteUpdatedMs ?? this.remoteUpdatedMs,
+      winner: winner ?? this.winner,
+      detectedAtMs: detectedAtMs ?? this.detectedAtMs,
+      acknowledged: acknowledged ?? this.acknowledged,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (entity.present) {
+      map['entity'] = Variable<String>(entity.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (localUpdatedMs.present) {
+      map['local_updated_ms'] = Variable<int>(localUpdatedMs.value);
+    }
+    if (remoteUpdatedMs.present) {
+      map['remote_updated_ms'] = Variable<int>(remoteUpdatedMs.value);
+    }
+    if (winner.present) {
+      map['winner'] = Variable<String>(winner.value);
+    }
+    if (detectedAtMs.present) {
+      map['detected_at_ms'] = Variable<int>(detectedAtMs.value);
+    }
+    if (acknowledged.present) {
+      map['acknowledged'] = Variable<int>(acknowledged.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ConflictRecordsCompanion(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('entity: $entity, ')
+          ..write('entityId: $entityId, ')
+          ..write('localUpdatedMs: $localUpdatedMs, ')
+          ..write('remoteUpdatedMs: $remoteUpdatedMs, ')
+          ..write('winner: $winner, ')
+          ..write('detectedAtMs: $detectedAtMs, ')
+          ..write('acknowledged: $acknowledged, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $WishlistItemsTable extends WishlistItems
+    with TableInfo<$WishlistItemsTable, WishlistItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WishlistItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tripIdMeta = const VerificationMeta('tripId');
+  @override
+  late final GeneratedColumn<String> tripId = GeneratedColumn<String>(
+    'trip_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES trips (id)',
+    ),
+  );
+  static const VerificationMeta _cityKeyMeta = const VerificationMeta(
+    'cityKey',
+  );
+  @override
+  late final GeneratedColumn<String> cityKey = GeneratedColumn<String>(
+    'city_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _addressMeta = const VerificationMeta(
+    'address',
+  );
+  @override
+  late final GeneratedColumn<String> address = GeneratedColumn<String>(
+    'address',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("attraction"),
+  );
+  static const VerificationMeta _durationMinMeta = const VerificationMeta(
+    'durationMin',
+  );
+  @override
+  late final GeneratedColumn<int> durationMin = GeneratedColumn<int>(
+    'duration_min',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tagMeta = const VerificationMeta('tag');
+  @override
+  late final GeneratedColumn<String> tag = GeneratedColumn<String>(
+    'tag',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _guideRefMeta = const VerificationMeta(
+    'guideRef',
+  );
+  @override
+  late final GeneratedColumn<String> guideRef = GeneratedColumn<String>(
+    'guide_ref',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    tripId,
+    cityKey,
+    name,
+    address,
+    type,
+    durationMin,
+    tag,
+    guideRef,
+    note,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'wishlist_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WishlistItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('trip_id')) {
+      context.handle(
+        _tripIdMeta,
+        tripId.isAcceptableOrUnknown(data['trip_id']!, _tripIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tripIdMeta);
+    }
+    if (data.containsKey('city_key')) {
+      context.handle(
+        _cityKeyMeta,
+        cityKey.isAcceptableOrUnknown(data['city_key']!, _cityKeyMeta),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    }
+    if (data.containsKey('address')) {
+      context.handle(
+        _addressMeta,
+        address.isAcceptableOrUnknown(data['address']!, _addressMeta),
+      );
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    }
+    if (data.containsKey('duration_min')) {
+      context.handle(
+        _durationMinMeta,
+        durationMin.isAcceptableOrUnknown(
+          data['duration_min']!,
+          _durationMinMeta,
+        ),
+      );
+    }
+    if (data.containsKey('tag')) {
+      context.handle(
+        _tagMeta,
+        tag.isAcceptableOrUnknown(data['tag']!, _tagMeta),
+      );
+    }
+    if (data.containsKey('guide_ref')) {
+      context.handle(
+        _guideRefMeta,
+        guideRef.isAcceptableOrUnknown(data['guide_ref']!, _guideRefMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  WishlistItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WishlistItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      tripId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trip_id'],
+      )!,
+      cityKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}city_key'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      address: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}address'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      durationMin: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_min'],
+      ),
+      tag: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tag'],
+      ),
+      guideRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}guide_ref'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $WishlistItemsTable createAlias(String alias) {
+    return $WishlistItemsTable(attachedDatabase, alias);
+  }
+}
+
+class WishlistItem extends DataClass implements Insertable<WishlistItem> {
+  final String id;
+  final String tripId;
+  final String cityKey;
+  final String name;
+  final String address;
+  final String type;
+  final int? durationMin;
+  final String? tag;
+  final String? guideRef;
+  final String note;
+  final int sortOrder;
+  final int createdAt;
+  final int updatedAt;
+  const WishlistItem({
+    required this.id,
+    required this.tripId,
+    required this.cityKey,
+    required this.name,
+    required this.address,
+    required this.type,
+    this.durationMin,
+    this.tag,
+    this.guideRef,
+    required this.note,
+    required this.sortOrder,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['trip_id'] = Variable<String>(tripId);
+    map['city_key'] = Variable<String>(cityKey);
+    map['name'] = Variable<String>(name);
+    map['address'] = Variable<String>(address);
+    map['type'] = Variable<String>(type);
+    if (!nullToAbsent || durationMin != null) {
+      map['duration_min'] = Variable<int>(durationMin);
+    }
+    if (!nullToAbsent || tag != null) {
+      map['tag'] = Variable<String>(tag);
+    }
+    if (!nullToAbsent || guideRef != null) {
+      map['guide_ref'] = Variable<String>(guideRef);
+    }
+    map['note'] = Variable<String>(note);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  WishlistItemsCompanion toCompanion(bool nullToAbsent) {
+    return WishlistItemsCompanion(
+      id: Value(id),
+      tripId: Value(tripId),
+      cityKey: Value(cityKey),
+      name: Value(name),
+      address: Value(address),
+      type: Value(type),
+      durationMin: durationMin == null && nullToAbsent
+          ? const Value.absent()
+          : Value(durationMin),
+      tag: tag == null && nullToAbsent ? const Value.absent() : Value(tag),
+      guideRef: guideRef == null && nullToAbsent
+          ? const Value.absent()
+          : Value(guideRef),
+      note: Value(note),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory WishlistItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WishlistItem(
+      id: serializer.fromJson<String>(json['id']),
+      tripId: serializer.fromJson<String>(json['tripId']),
+      cityKey: serializer.fromJson<String>(json['cityKey']),
+      name: serializer.fromJson<String>(json['name']),
+      address: serializer.fromJson<String>(json['address']),
+      type: serializer.fromJson<String>(json['type']),
+      durationMin: serializer.fromJson<int?>(json['durationMin']),
+      tag: serializer.fromJson<String?>(json['tag']),
+      guideRef: serializer.fromJson<String?>(json['guideRef']),
+      note: serializer.fromJson<String>(json['note']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'tripId': serializer.toJson<String>(tripId),
+      'cityKey': serializer.toJson<String>(cityKey),
+      'name': serializer.toJson<String>(name),
+      'address': serializer.toJson<String>(address),
+      'type': serializer.toJson<String>(type),
+      'durationMin': serializer.toJson<int?>(durationMin),
+      'tag': serializer.toJson<String?>(tag),
+      'guideRef': serializer.toJson<String?>(guideRef),
+      'note': serializer.toJson<String>(note),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  WishlistItem copyWith({
+    String? id,
+    String? tripId,
+    String? cityKey,
+    String? name,
+    String? address,
+    String? type,
+    Value<int?> durationMin = const Value.absent(),
+    Value<String?> tag = const Value.absent(),
+    Value<String?> guideRef = const Value.absent(),
+    String? note,
+    int? sortOrder,
+    int? createdAt,
+    int? updatedAt,
+  }) => WishlistItem(
+    id: id ?? this.id,
+    tripId: tripId ?? this.tripId,
+    cityKey: cityKey ?? this.cityKey,
+    name: name ?? this.name,
+    address: address ?? this.address,
+    type: type ?? this.type,
+    durationMin: durationMin.present ? durationMin.value : this.durationMin,
+    tag: tag.present ? tag.value : this.tag,
+    guideRef: guideRef.present ? guideRef.value : this.guideRef,
+    note: note ?? this.note,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  WishlistItem copyWithCompanion(WishlistItemsCompanion data) {
+    return WishlistItem(
+      id: data.id.present ? data.id.value : this.id,
+      tripId: data.tripId.present ? data.tripId.value : this.tripId,
+      cityKey: data.cityKey.present ? data.cityKey.value : this.cityKey,
+      name: data.name.present ? data.name.value : this.name,
+      address: data.address.present ? data.address.value : this.address,
+      type: data.type.present ? data.type.value : this.type,
+      durationMin: data.durationMin.present
+          ? data.durationMin.value
+          : this.durationMin,
+      tag: data.tag.present ? data.tag.value : this.tag,
+      guideRef: data.guideRef.present ? data.guideRef.value : this.guideRef,
+      note: data.note.present ? data.note.value : this.note,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WishlistItem(')
+          ..write('id: $id, ')
+          ..write('tripId: $tripId, ')
+          ..write('cityKey: $cityKey, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('type: $type, ')
+          ..write('durationMin: $durationMin, ')
+          ..write('tag: $tag, ')
+          ..write('guideRef: $guideRef, ')
+          ..write('note: $note, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    tripId,
+    cityKey,
+    name,
+    address,
+    type,
+    durationMin,
+    tag,
+    guideRef,
+    note,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WishlistItem &&
+          other.id == this.id &&
+          other.tripId == this.tripId &&
+          other.cityKey == this.cityKey &&
+          other.name == this.name &&
+          other.address == this.address &&
+          other.type == this.type &&
+          other.durationMin == this.durationMin &&
+          other.tag == this.tag &&
+          other.guideRef == this.guideRef &&
+          other.note == this.note &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class WishlistItemsCompanion extends UpdateCompanion<WishlistItem> {
+  final Value<String> id;
+  final Value<String> tripId;
+  final Value<String> cityKey;
+  final Value<String> name;
+  final Value<String> address;
+  final Value<String> type;
+  final Value<int?> durationMin;
+  final Value<String?> tag;
+  final Value<String?> guideRef;
+  final Value<String> note;
+  final Value<int> sortOrder;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const WishlistItemsCompanion({
+    this.id = const Value.absent(),
+    this.tripId = const Value.absent(),
+    this.cityKey = const Value.absent(),
+    this.name = const Value.absent(),
+    this.address = const Value.absent(),
+    this.type = const Value.absent(),
+    this.durationMin = const Value.absent(),
+    this.tag = const Value.absent(),
+    this.guideRef = const Value.absent(),
+    this.note = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WishlistItemsCompanion.insert({
+    required String id,
+    required String tripId,
+    this.cityKey = const Value.absent(),
+    this.name = const Value.absent(),
+    this.address = const Value.absent(),
+    this.type = const Value.absent(),
+    this.durationMin = const Value.absent(),
+    this.tag = const Value.absent(),
+    this.guideRef = const Value.absent(),
+    this.note = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       tripId = Value(tripId),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<WishlistItem> custom({
+    Expression<String>? id,
+    Expression<String>? tripId,
+    Expression<String>? cityKey,
+    Expression<String>? name,
+    Expression<String>? address,
+    Expression<String>? type,
+    Expression<int>? durationMin,
+    Expression<String>? tag,
+    Expression<String>? guideRef,
+    Expression<String>? note,
+    Expression<int>? sortOrder,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (tripId != null) 'trip_id': tripId,
+      if (cityKey != null) 'city_key': cityKey,
+      if (name != null) 'name': name,
+      if (address != null) 'address': address,
+      if (type != null) 'type': type,
+      if (durationMin != null) 'duration_min': durationMin,
+      if (tag != null) 'tag': tag,
+      if (guideRef != null) 'guide_ref': guideRef,
+      if (note != null) 'note': note,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WishlistItemsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? tripId,
+    Value<String>? cityKey,
+    Value<String>? name,
+    Value<String>? address,
+    Value<String>? type,
+    Value<int?>? durationMin,
+    Value<String?>? tag,
+    Value<String?>? guideRef,
+    Value<String>? note,
+    Value<int>? sortOrder,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return WishlistItemsCompanion(
+      id: id ?? this.id,
+      tripId: tripId ?? this.tripId,
+      cityKey: cityKey ?? this.cityKey,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      type: type ?? this.type,
+      durationMin: durationMin ?? this.durationMin,
+      tag: tag ?? this.tag,
+      guideRef: guideRef ?? this.guideRef,
+      note: note ?? this.note,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (tripId.present) {
+      map['trip_id'] = Variable<String>(tripId.value);
+    }
+    if (cityKey.present) {
+      map['city_key'] = Variable<String>(cityKey.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (address.present) {
+      map['address'] = Variable<String>(address.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (durationMin.present) {
+      map['duration_min'] = Variable<int>(durationMin.value);
+    }
+    if (tag.present) {
+      map['tag'] = Variable<String>(tag.value);
+    }
+    if (guideRef.present) {
+      map['guide_ref'] = Variable<String>(guideRef.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WishlistItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('tripId: $tripId, ')
+          ..write('cityKey: $cityKey, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('type: $type, ')
+          ..write('durationMin: $durationMin, ')
+          ..write('tag: $tag, ')
+          ..write('guideRef: $guideRef, ')
+          ..write('note: $note, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SharedWishlistItemsTable extends SharedWishlistItems
+    with TableInfo<$SharedWishlistItemsTable, SharedWishlistItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SharedWishlistItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tripIdMeta = const VerificationMeta('tripId');
+  @override
+  late final GeneratedColumn<String> tripId = GeneratedColumn<String>(
+    'trip_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cityKeyMeta = const VerificationMeta(
+    'cityKey',
+  );
+  @override
+  late final GeneratedColumn<String> cityKey = GeneratedColumn<String>(
+    'city_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _addressMeta = const VerificationMeta(
+    'address',
+  );
+  @override
+  late final GeneratedColumn<String> address = GeneratedColumn<String>(
+    'address',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant("attraction"),
+  );
+  static const VerificationMeta _durationMinMeta = const VerificationMeta(
+    'durationMin',
+  );
+  @override
+  late final GeneratedColumn<int> durationMin = GeneratedColumn<int>(
+    'duration_min',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tagMeta = const VerificationMeta('tag');
+  @override
+  late final GeneratedColumn<String> tag = GeneratedColumn<String>(
+    'tag',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _guideRefMeta = const VerificationMeta(
+    'guideRef',
+  );
+  @override
+  late final GeneratedColumn<String> guideRef = GeneratedColumn<String>(
+    'guide_ref',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: Constant(0),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    tripId,
+    cityKey,
+    name,
+    address,
+    type,
+    durationMin,
+    tag,
+    guideRef,
+    note,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'shared_wishlist_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SharedWishlistItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('trip_id')) {
+      context.handle(
+        _tripIdMeta,
+        tripId.isAcceptableOrUnknown(data['trip_id']!, _tripIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tripIdMeta);
+    }
+    if (data.containsKey('city_key')) {
+      context.handle(
+        _cityKeyMeta,
+        cityKey.isAcceptableOrUnknown(data['city_key']!, _cityKeyMeta),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    }
+    if (data.containsKey('address')) {
+      context.handle(
+        _addressMeta,
+        address.isAcceptableOrUnknown(data['address']!, _addressMeta),
+      );
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    }
+    if (data.containsKey('duration_min')) {
+      context.handle(
+        _durationMinMeta,
+        durationMin.isAcceptableOrUnknown(
+          data['duration_min']!,
+          _durationMinMeta,
+        ),
+      );
+    }
+    if (data.containsKey('tag')) {
+      context.handle(
+        _tagMeta,
+        tag.isAcceptableOrUnknown(data['tag']!, _tagMeta),
+      );
+    }
+    if (data.containsKey('guide_ref')) {
+      context.handle(
+        _guideRefMeta,
+        guideRef.isAcceptableOrUnknown(data['guide_ref']!, _guideRefMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SharedWishlistItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SharedWishlistItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      tripId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trip_id'],
+      )!,
+      cityKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}city_key'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      address: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}address'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      durationMin: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_min'],
+      ),
+      tag: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tag'],
+      ),
+      guideRef: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}guide_ref'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      )!,
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SharedWishlistItemsTable createAlias(String alias) {
+    return $SharedWishlistItemsTable(attachedDatabase, alias);
+  }
+}
+
+class SharedWishlistItem extends DataClass
+    implements Insertable<SharedWishlistItem> {
+  final String id;
+  final String tripId;
+  final String cityKey;
+  final String name;
+  final String address;
+  final String type;
+  final int? durationMin;
+  final String? tag;
+  final String? guideRef;
+  final String note;
+  final int sortOrder;
+  final int createdAt;
+  final int updatedAt;
+  const SharedWishlistItem({
+    required this.id,
+    required this.tripId,
+    required this.cityKey,
+    required this.name,
+    required this.address,
+    required this.type,
+    this.durationMin,
+    this.tag,
+    this.guideRef,
+    required this.note,
+    required this.sortOrder,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['trip_id'] = Variable<String>(tripId);
+    map['city_key'] = Variable<String>(cityKey);
+    map['name'] = Variable<String>(name);
+    map['address'] = Variable<String>(address);
+    map['type'] = Variable<String>(type);
+    if (!nullToAbsent || durationMin != null) {
+      map['duration_min'] = Variable<int>(durationMin);
+    }
+    if (!nullToAbsent || tag != null) {
+      map['tag'] = Variable<String>(tag);
+    }
+    if (!nullToAbsent || guideRef != null) {
+      map['guide_ref'] = Variable<String>(guideRef);
+    }
+    map['note'] = Variable<String>(note);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SharedWishlistItemsCompanion toCompanion(bool nullToAbsent) {
+    return SharedWishlistItemsCompanion(
+      id: Value(id),
+      tripId: Value(tripId),
+      cityKey: Value(cityKey),
+      name: Value(name),
+      address: Value(address),
+      type: Value(type),
+      durationMin: durationMin == null && nullToAbsent
+          ? const Value.absent()
+          : Value(durationMin),
+      tag: tag == null && nullToAbsent ? const Value.absent() : Value(tag),
+      guideRef: guideRef == null && nullToAbsent
+          ? const Value.absent()
+          : Value(guideRef),
+      note: Value(note),
+      sortOrder: Value(sortOrder),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SharedWishlistItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SharedWishlistItem(
+      id: serializer.fromJson<String>(json['id']),
+      tripId: serializer.fromJson<String>(json['tripId']),
+      cityKey: serializer.fromJson<String>(json['cityKey']),
+      name: serializer.fromJson<String>(json['name']),
+      address: serializer.fromJson<String>(json['address']),
+      type: serializer.fromJson<String>(json['type']),
+      durationMin: serializer.fromJson<int?>(json['durationMin']),
+      tag: serializer.fromJson<String?>(json['tag']),
+      guideRef: serializer.fromJson<String?>(json['guideRef']),
+      note: serializer.fromJson<String>(json['note']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'tripId': serializer.toJson<String>(tripId),
+      'cityKey': serializer.toJson<String>(cityKey),
+      'name': serializer.toJson<String>(name),
+      'address': serializer.toJson<String>(address),
+      'type': serializer.toJson<String>(type),
+      'durationMin': serializer.toJson<int?>(durationMin),
+      'tag': serializer.toJson<String?>(tag),
+      'guideRef': serializer.toJson<String?>(guideRef),
+      'note': serializer.toJson<String>(note),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SharedWishlistItem copyWith({
+    String? id,
+    String? tripId,
+    String? cityKey,
+    String? name,
+    String? address,
+    String? type,
+    Value<int?> durationMin = const Value.absent(),
+    Value<String?> tag = const Value.absent(),
+    Value<String?> guideRef = const Value.absent(),
+    String? note,
+    int? sortOrder,
+    int? createdAt,
+    int? updatedAt,
+  }) => SharedWishlistItem(
+    id: id ?? this.id,
+    tripId: tripId ?? this.tripId,
+    cityKey: cityKey ?? this.cityKey,
+    name: name ?? this.name,
+    address: address ?? this.address,
+    type: type ?? this.type,
+    durationMin: durationMin.present ? durationMin.value : this.durationMin,
+    tag: tag.present ? tag.value : this.tag,
+    guideRef: guideRef.present ? guideRef.value : this.guideRef,
+    note: note ?? this.note,
+    sortOrder: sortOrder ?? this.sortOrder,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SharedWishlistItem copyWithCompanion(SharedWishlistItemsCompanion data) {
+    return SharedWishlistItem(
+      id: data.id.present ? data.id.value : this.id,
+      tripId: data.tripId.present ? data.tripId.value : this.tripId,
+      cityKey: data.cityKey.present ? data.cityKey.value : this.cityKey,
+      name: data.name.present ? data.name.value : this.name,
+      address: data.address.present ? data.address.value : this.address,
+      type: data.type.present ? data.type.value : this.type,
+      durationMin: data.durationMin.present
+          ? data.durationMin.value
+          : this.durationMin,
+      tag: data.tag.present ? data.tag.value : this.tag,
+      guideRef: data.guideRef.present ? data.guideRef.value : this.guideRef,
+      note: data.note.present ? data.note.value : this.note,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedWishlistItem(')
+          ..write('id: $id, ')
+          ..write('tripId: $tripId, ')
+          ..write('cityKey: $cityKey, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('type: $type, ')
+          ..write('durationMin: $durationMin, ')
+          ..write('tag: $tag, ')
+          ..write('guideRef: $guideRef, ')
+          ..write('note: $note, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    tripId,
+    cityKey,
+    name,
+    address,
+    type,
+    durationMin,
+    tag,
+    guideRef,
+    note,
+    sortOrder,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SharedWishlistItem &&
+          other.id == this.id &&
+          other.tripId == this.tripId &&
+          other.cityKey == this.cityKey &&
+          other.name == this.name &&
+          other.address == this.address &&
+          other.type == this.type &&
+          other.durationMin == this.durationMin &&
+          other.tag == this.tag &&
+          other.guideRef == this.guideRef &&
+          other.note == this.note &&
+          other.sortOrder == this.sortOrder &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SharedWishlistItemsCompanion extends UpdateCompanion<SharedWishlistItem> {
+  final Value<String> id;
+  final Value<String> tripId;
+  final Value<String> cityKey;
+  final Value<String> name;
+  final Value<String> address;
+  final Value<String> type;
+  final Value<int?> durationMin;
+  final Value<String?> tag;
+  final Value<String?> guideRef;
+  final Value<String> note;
+  final Value<int> sortOrder;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const SharedWishlistItemsCompanion({
+    this.id = const Value.absent(),
+    this.tripId = const Value.absent(),
+    this.cityKey = const Value.absent(),
+    this.name = const Value.absent(),
+    this.address = const Value.absent(),
+    this.type = const Value.absent(),
+    this.durationMin = const Value.absent(),
+    this.tag = const Value.absent(),
+    this.guideRef = const Value.absent(),
+    this.note = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SharedWishlistItemsCompanion.insert({
+    required String id,
+    required String tripId,
+    this.cityKey = const Value.absent(),
+    this.name = const Value.absent(),
+    this.address = const Value.absent(),
+    this.type = const Value.absent(),
+    this.durationMin = const Value.absent(),
+    this.tag = const Value.absent(),
+    this.guideRef = const Value.absent(),
+    this.note = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       tripId = Value(tripId),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<SharedWishlistItem> custom({
+    Expression<String>? id,
+    Expression<String>? tripId,
+    Expression<String>? cityKey,
+    Expression<String>? name,
+    Expression<String>? address,
+    Expression<String>? type,
+    Expression<int>? durationMin,
+    Expression<String>? tag,
+    Expression<String>? guideRef,
+    Expression<String>? note,
+    Expression<int>? sortOrder,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (tripId != null) 'trip_id': tripId,
+      if (cityKey != null) 'city_key': cityKey,
+      if (name != null) 'name': name,
+      if (address != null) 'address': address,
+      if (type != null) 'type': type,
+      if (durationMin != null) 'duration_min': durationMin,
+      if (tag != null) 'tag': tag,
+      if (guideRef != null) 'guide_ref': guideRef,
+      if (note != null) 'note': note,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SharedWishlistItemsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? tripId,
+    Value<String>? cityKey,
+    Value<String>? name,
+    Value<String>? address,
+    Value<String>? type,
+    Value<int?>? durationMin,
+    Value<String?>? tag,
+    Value<String?>? guideRef,
+    Value<String>? note,
+    Value<int>? sortOrder,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SharedWishlistItemsCompanion(
+      id: id ?? this.id,
+      tripId: tripId ?? this.tripId,
+      cityKey: cityKey ?? this.cityKey,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      type: type ?? this.type,
+      durationMin: durationMin ?? this.durationMin,
+      tag: tag ?? this.tag,
+      guideRef: guideRef ?? this.guideRef,
+      note: note ?? this.note,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (tripId.present) {
+      map['trip_id'] = Variable<String>(tripId.value);
+    }
+    if (cityKey.present) {
+      map['city_key'] = Variable<String>(cityKey.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (address.present) {
+      map['address'] = Variable<String>(address.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (durationMin.present) {
+      map['duration_min'] = Variable<int>(durationMin.value);
+    }
+    if (tag.present) {
+      map['tag'] = Variable<String>(tag.value);
+    }
+    if (guideRef.present) {
+      map['guide_ref'] = Variable<String>(guideRef.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SharedWishlistItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('tripId: $tripId, ')
+          ..write('cityKey: $cityKey, ')
+          ..write('name: $name, ')
+          ..write('address: $address, ')
+          ..write('type: $type, ')
+          ..write('durationMin: $durationMin, ')
+          ..write('tag: $tag, ')
+          ..write('guideRef: $guideRef, ')
+          ..write('note: $note, ')
+          ..write('sortOrder: $sortOrder, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -12598,12 +16820,22 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SharedTripItemsTable sharedTripItems = $SharedTripItemsTable(
     this,
   );
+  late final $FundsTable funds = $FundsTable(this);
+  late final $InboxItemsTable inboxItems = $InboxItemsTable(this);
+  late final $AuditLogsTable auditLogs = $AuditLogsTable(this);
+  late final $ConflictRecordsTable conflictRecords = $ConflictRecordsTable(
+    this,
+  );
+  late final $WishlistItemsTable wishlistItems = $WishlistItemsTable(this);
+  late final $SharedWishlistItemsTable sharedWishlistItems =
+      $SharedWishlistItemsTable(this);
   late final TripsDao tripsDao = TripsDao(this as AppDatabase);
   late final GroupsDao groupsDao = GroupsDao(this as AppDatabase);
   late final ExpensesDao expensesDao = ExpensesDao(this as AppDatabase);
   late final ChecklistDao checklistDao = ChecklistDao(this as AppDatabase);
   late final AlbumDao albumDao = AlbumDao(this as AppDatabase);
   late final CategoriesDao categoriesDao = CategoriesDao(this as AppDatabase);
+  late final WishlistDao wishlistDao = WishlistDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -12629,6 +16861,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     spaceEvents,
     sharedTrips,
     sharedTripItems,
+    funds,
+    inboxItems,
+    auditLogs,
+    conflictRecords,
+    wishlistItems,
+    sharedWishlistItems,
   ];
 }
 
@@ -12640,6 +16878,7 @@ typedef $$GroupsTableCreateCompanionBuilder = GroupsCompanion Function({
   Value<int?> budgetCents,
   Value<bool> archived,
   Value<int?> archivedAtMs,
+  Value<String> kind,
   required int createdAt,
   required int updatedAt,
   Value<int> rowid,
@@ -12652,6 +16891,7 @@ typedef $$GroupsTableUpdateCompanionBuilder = GroupsCompanion Function({
   Value<int?> budgetCents,
   Value<bool> archived,
   Value<int?> archivedAtMs,
+  Value<String> kind,
   Value<int> createdAt,
   Value<int> updatedAt,
   Value<int> rowid,
@@ -12716,6 +16956,43 @@ final class $$GroupsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$FundsTable, List<Fund>> _fundsRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.funds,
+    aliasName: 'groups__id__funds__group_id',
+  );
+
+  $$FundsTableProcessedTableManager get fundsRefs {
+    final manager = $$FundsTableTableManager(
+      $_db,
+      $_db.funds,
+    ).filter((f) => f.groupId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_fundsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$InboxItemsTable, List<InboxItem>>
+  _inboxItemsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.inboxItems,
+    aliasName: 'groups__id__inbox_items__group_id',
+  );
+
+  $$InboxItemsTableProcessedTableManager get inboxItemsRefs {
+    final manager = $$InboxItemsTableTableManager(
+      $_db,
+      $_db.inboxItems,
+    ).filter((f) => f.groupId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_inboxItemsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$GroupsTableFilterComposer
@@ -12759,6 +17036,11 @@ class $$GroupsTableFilterComposer
 
   ColumnFilters<int> get archivedAtMs => $composableBuilder(
     column: $table.archivedAtMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12846,6 +17128,56 @@ class $$GroupsTableFilterComposer
     );
     return f(composer);
   }
+
+  Expression<bool> fundsRefs(
+    Expression<bool> Function($$FundsTableFilterComposer f) f,
+  ) {
+    final $$FundsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.funds,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FundsTableFilterComposer(
+            $db: $db,
+            $table: $db.funds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> inboxItemsRefs(
+    Expression<bool> Function($$InboxItemsTableFilterComposer f) f,
+  ) {
+    final $$InboxItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.inboxItems,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$InboxItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.inboxItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$GroupsTableOrderingComposer
@@ -12889,6 +17221,11 @@ class $$GroupsTableOrderingComposer
 
   ColumnOrderings<int> get archivedAtMs => $composableBuilder(
     column: $table.archivedAtMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -12938,6 +17275,9 @@ class $$GroupsTableAnnotationComposer
     column: $table.archivedAtMs,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
 
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -13019,6 +17359,56 @@ class $$GroupsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> fundsRefs<T extends Object>(
+    Expression<T> Function($$FundsTableAnnotationComposer a) f,
+  ) {
+    final $$FundsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.funds,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FundsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.funds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> inboxItemsRefs<T extends Object>(
+    Expression<T> Function($$InboxItemsTableAnnotationComposer a) f,
+  ) {
+    final $$InboxItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.inboxItems,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$InboxItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.inboxItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$GroupsTableTableManager
@@ -13038,6 +17428,8 @@ class $$GroupsTableTableManager
             bool membersRefs,
             bool expensesRefs,
             bool settlementsRefs,
+            bool fundsRefs,
+            bool inboxItemsRefs,
           })
         > {
   $$GroupsTableTableManager(_$AppDatabase db, $GroupsTable table)
@@ -13060,6 +17452,7 @@ class $$GroupsTableTableManager
                 Value<int?> budgetCents = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<int?> archivedAtMs = const Value.absent(),
+                Value<String> kind = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -13071,6 +17464,7 @@ class $$GroupsTableTableManager
                 budgetCents: budgetCents,
                 archived: archived,
                 archivedAtMs: archivedAtMs,
+                kind: kind,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -13084,6 +17478,7 @@ class $$GroupsTableTableManager
                 Value<int?> budgetCents = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<int?> archivedAtMs = const Value.absent(),
+                Value<String> kind = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -13095,6 +17490,7 @@ class $$GroupsTableTableManager
                 budgetCents: budgetCents,
                 archived: archived,
                 archivedAtMs: archivedAtMs,
+                kind: kind,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -13112,6 +17508,8 @@ class $$GroupsTableTableManager
                 membersRefs = false,
                 expensesRefs = false,
                 settlementsRefs = false,
+                fundsRefs = false,
+                inboxItemsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -13119,6 +17517,8 @@ class $$GroupsTableTableManager
                     if (membersRefs) db.members,
                     if (expensesRefs) db.expenses,
                     if (settlementsRefs) db.settlements,
+                    if (fundsRefs) db.funds,
+                    if (inboxItemsRefs) db.inboxItems,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -13178,6 +17578,40 @@ class $$GroupsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (fundsRefs)
+                        await $_getPrefetchedData<Group, $GroupsTable, Fund>(
+                          currentTable: table,
+                          referencedTable: $$GroupsTableReferences
+                              ._fundsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GroupsTableReferences(db, table, p0).fundsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.groupId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (inboxItemsRefs)
+                        await $_getPrefetchedData<
+                          Group,
+                          $GroupsTable,
+                          InboxItem
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GroupsTableReferences
+                              ._inboxItemsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GroupsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).inboxItemsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.groupId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -13202,6 +17636,8 @@ typedef $$GroupsTableProcessedTableManager =
         bool membersRefs,
         bool expensesRefs,
         bool settlementsRefs,
+        bool fundsRefs,
+        bool inboxItemsRefs,
       })
     >;
 typedef $$MembersTableCreateCompanionBuilder = MembersCompanion Function({
@@ -13209,6 +17645,7 @@ typedef $$MembersTableCreateCompanionBuilder = MembersCompanion Function({
   required String groupId,
   required String name,
   Value<int> colorIndex,
+  Value<bool> archived,
   required int createdAt,
   Value<int> rowid,
 });
@@ -13217,6 +17654,7 @@ typedef $$MembersTableUpdateCompanionBuilder = MembersCompanion Function({
   Value<String> groupId,
   Value<String> name,
   Value<int> colorIndex,
+  Value<bool> archived,
   Value<int> createdAt,
   Value<int> rowid,
 });
@@ -13264,6 +17702,11 @@ class $$MembersTableFilterComposer
 
   ColumnFilters<int> get colorIndex => $composableBuilder(
     column: $table.colorIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get archived => $composableBuilder(
+    column: $table.archived,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13320,6 +17763,11 @@ class $$MembersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -13368,6 +17816,9 @@ class $$MembersTableAnnotationComposer
     column: $table.colorIndex,
     builder: (column) => column,
   );
+
+  GeneratedColumn<bool> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
 
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -13428,6 +17879,7 @@ class $$MembersTableTableManager
                 Value<String> groupId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<int> colorIndex = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MembersCompanion(
@@ -13435,6 +17887,7 @@ class $$MembersTableTableManager
                 groupId: groupId,
                 name: name,
                 colorIndex: colorIndex,
+                archived: archived,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -13444,6 +17897,7 @@ class $$MembersTableTableManager
                 required String groupId,
                 required String name,
                 Value<int> colorIndex = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
                 required int createdAt,
                 Value<int> rowid = const Value.absent(),
               }) => MembersCompanion.insert(
@@ -13451,6 +17905,7 @@ class $$MembersTableTableManager
                 groupId: groupId,
                 name: name,
                 colorIndex: colorIndex,
+                archived: archived,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -13531,6 +17986,7 @@ typedef $$TripsTableCreateCompanionBuilder = TripsCompanion Function({
   Value<String> note,
   Value<String?> groupId,
   Value<bool> archived,
+  Value<String> pace,
   required int createdAt,
   required int updatedAt,
   Value<int> rowid,
@@ -13546,6 +18002,7 @@ typedef $$TripsTableUpdateCompanionBuilder = TripsCompanion Function({
   Value<String> note,
   Value<String?> groupId,
   Value<bool> archived,
+  Value<String> pace,
   Value<int> createdAt,
   Value<int> updatedAt,
   Value<int> rowid,
@@ -13586,6 +18043,24 @@ final class $$TripsTableReferences
     ).filter((f) => f.tripId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_albumPhotosRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$WishlistItemsTable, List<WishlistItem>>
+  _wishlistItemsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.wishlistItems,
+    aliasName: 'trips__id__wishlist_items__trip_id',
+  );
+
+  $$WishlistItemsTableProcessedTableManager get wishlistItemsRefs {
+    final manager = $$WishlistItemsTableTableManager(
+      $_db,
+      $_db.wishlistItems,
+    ).filter((f) => f.tripId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_wishlistItemsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -13650,6 +18125,11 @@ class $$TripsTableFilterComposer extends Composer<_$AppDatabase, $TripsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get pace => $composableBuilder(
+    column: $table.pace,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
@@ -13701,6 +18181,31 @@ class $$TripsTableFilterComposer extends Composer<_$AppDatabase, $TripsTable> {
           }) => $$AlbumPhotosTableFilterComposer(
             $db: $db,
             $table: $db.albumPhotos,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> wishlistItemsRefs(
+    Expression<bool> Function($$WishlistItemsTableFilterComposer f) f,
+  ) {
+    final $$WishlistItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.wishlistItems,
+      getReferencedColumn: (t) => t.tripId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WishlistItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.wishlistItems,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -13770,6 +18275,11 @@ class $$TripsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get pace => $composableBuilder(
+    column: $table.pace,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -13826,6 +18336,9 @@ class $$TripsTableAnnotationComposer
   GeneratedColumn<bool> get archived =>
       $composableBuilder(column: $table.archived, builder: (column) => column);
 
+  GeneratedColumn<String> get pace =>
+      $composableBuilder(column: $table.pace, builder: (column) => column);
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -13881,6 +18394,31 @@ class $$TripsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> wishlistItemsRefs<T extends Object>(
+    Expression<T> Function($$WishlistItemsTableAnnotationComposer a) f,
+  ) {
+    final $$WishlistItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.wishlistItems,
+      getReferencedColumn: (t) => t.tripId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WishlistItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.wishlistItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TripsTableTableManager
@@ -13896,7 +18434,11 @@ class $$TripsTableTableManager
           $$TripsTableUpdateCompanionBuilder,
           (Trip, $$TripsTableReferences),
           Trip,
-          PrefetchHooks Function({bool tripItemsRefs, bool albumPhotosRefs})
+          PrefetchHooks Function({
+            bool tripItemsRefs,
+            bool albumPhotosRefs,
+            bool wishlistItemsRefs,
+          })
         > {
   $$TripsTableTableManager(_$AppDatabase db, $TripsTable table)
     : super(
@@ -13921,6 +18463,7 @@ class $$TripsTableTableManager
                 Value<String> note = const Value.absent(),
                 Value<String?> groupId = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
+                Value<String> pace = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -13935,6 +18478,7 @@ class $$TripsTableTableManager
                 note: note,
                 groupId: groupId,
                 archived: archived,
+                pace: pace,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -13951,6 +18495,7 @@ class $$TripsTableTableManager
                 Value<String> note = const Value.absent(),
                 Value<String?> groupId = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
+                Value<String> pace = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -13965,6 +18510,7 @@ class $$TripsTableTableManager
                 note: note,
                 groupId: groupId,
                 archived: archived,
+                pace: pace,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -13978,12 +18524,17 @@ class $$TripsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({tripItemsRefs = false, albumPhotosRefs = false}) {
+              ({
+                tripItemsRefs = false,
+                albumPhotosRefs = false,
+                wishlistItemsRefs = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
                     if (tripItemsRefs) db.tripItems,
                     if (albumPhotosRefs) db.albumPhotos,
+                    if (wishlistItemsRefs) db.wishlistItems,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -14026,6 +18577,27 @@ class $$TripsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (wishlistItemsRefs)
+                        await $_getPrefetchedData<
+                          Trip,
+                          $TripsTable,
+                          WishlistItem
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TripsTableReferences
+                              ._wishlistItemsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$TripsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).wishlistItemsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.tripId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -14046,7 +18618,11 @@ typedef $$TripsTableProcessedTableManager =
       $$TripsTableUpdateCompanionBuilder,
       (Trip, $$TripsTableReferences),
       Trip,
-      PrefetchHooks Function({bool tripItemsRefs, bool albumPhotosRefs})
+      PrefetchHooks Function({
+        bool tripItemsRefs,
+        bool albumPhotosRefs,
+        bool wishlistItemsRefs,
+      })
     >;
 typedef $$TripItemsTableCreateCompanionBuilder = TripItemsCompanion Function({
   required String id,
@@ -14073,6 +18649,8 @@ typedef $$TripItemsTableCreateCompanionBuilder = TripItemsCompanion Function({
   Value<double?> toLng,
   Value<String?> flightNo,
   Value<int> sortOrder,
+  Value<String?> guideRef,
+  Value<String?> backupOf,
   required int createdAt,
   required int updatedAt,
   Value<int> rowid,
@@ -14102,6 +18680,8 @@ typedef $$TripItemsTableUpdateCompanionBuilder = TripItemsCompanion Function({
   Value<double?> toLng,
   Value<String?> flightNo,
   Value<int> sortOrder,
+  Value<String?> guideRef,
+  Value<String?> backupOf,
   Value<int> createdAt,
   Value<int> updatedAt,
   Value<int> rowid,
@@ -14250,6 +18830,16 @@ class $$TripItemsTableFilterComposer
 
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get guideRef => $composableBuilder(
+    column: $table.guideRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backupOf => $composableBuilder(
+    column: $table.backupOf,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -14411,6 +19001,16 @@ class $$TripItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get guideRef => $composableBuilder(
+    column: $table.guideRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get backupOf => $composableBuilder(
+    column: $table.backupOf,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -14533,6 +19133,12 @@ class $$TripItemsTableAnnotationComposer
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
 
+  GeneratedColumn<String> get guideRef =>
+      $composableBuilder(column: $table.guideRef, builder: (column) => column);
+
+  GeneratedColumn<String> get backupOf =>
+      $composableBuilder(column: $table.backupOf, builder: (column) => column);
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -14615,6 +19221,8 @@ class $$TripItemsTableTableManager
                 Value<double?> toLng = const Value.absent(),
                 Value<String?> flightNo = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String?> guideRef = const Value.absent(),
+                Value<String?> backupOf = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -14643,6 +19251,8 @@ class $$TripItemsTableTableManager
                 toLng: toLng,
                 flightNo: flightNo,
                 sortOrder: sortOrder,
+                guideRef: guideRef,
+                backupOf: backupOf,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -14673,6 +19283,8 @@ class $$TripItemsTableTableManager
                 Value<double?> toLng = const Value.absent(),
                 Value<String?> flightNo = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String?> guideRef = const Value.absent(),
+                Value<String?> backupOf = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -14701,6 +19313,8 @@ class $$TripItemsTableTableManager
                 toLng: toLng,
                 flightNo: flightNo,
                 sortOrder: sortOrder,
+                guideRef: guideRef,
+                backupOf: backupOf,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -15355,6 +19969,8 @@ typedef $$ExpensesTableCreateCompanionBuilder = ExpensesCompanion Function({
   Value<String?> settledRoundId,
   Value<String?> tripId,
   Value<String?> tripItemId,
+  Value<String?> fundId,
+  Value<String?> payMethod,
   required int createdAt,
   Value<int> rowid,
 });
@@ -15377,6 +19993,8 @@ typedef $$ExpensesTableUpdateCompanionBuilder = ExpensesCompanion Function({
   Value<String?> settledRoundId,
   Value<String?> tripId,
   Value<String?> tripItemId,
+  Value<String?> fundId,
+  Value<String?> payMethod,
   Value<int> createdAt,
   Value<int> rowid,
 });
@@ -15494,6 +20112,16 @@ class $$ExpensesTableFilterComposer
 
   ColumnFilters<String> get tripItemId => $composableBuilder(
     column: $table.tripItemId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fundId => $composableBuilder(
+    column: $table.fundId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payMethod => $composableBuilder(
+    column: $table.payMethod,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15620,6 +20248,16 @@ class $$ExpensesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get fundId => $composableBuilder(
+    column: $table.fundId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payMethod => $composableBuilder(
+    column: $table.payMethod,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -15727,6 +20365,12 @@ class $$ExpensesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get fundId =>
+      $composableBuilder(column: $table.fundId, builder: (column) => column);
+
+  GeneratedColumn<String> get payMethod =>
+      $composableBuilder(column: $table.payMethod, builder: (column) => column);
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -15800,6 +20444,8 @@ class $$ExpensesTableTableManager
                 Value<String?> settledRoundId = const Value.absent(),
                 Value<String?> tripId = const Value.absent(),
                 Value<String?> tripItemId = const Value.absent(),
+                Value<String?> fundId = const Value.absent(),
+                Value<String?> payMethod = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ExpensesCompanion(
@@ -15821,6 +20467,8 @@ class $$ExpensesTableTableManager
                 settledRoundId: settledRoundId,
                 tripId: tripId,
                 tripItemId: tripItemId,
+                fundId: fundId,
+                payMethod: payMethod,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -15844,6 +20492,8 @@ class $$ExpensesTableTableManager
                 Value<String?> settledRoundId = const Value.absent(),
                 Value<String?> tripId = const Value.absent(),
                 Value<String?> tripItemId = const Value.absent(),
+                Value<String?> fundId = const Value.absent(),
+                Value<String?> payMethod = const Value.absent(),
                 required int createdAt,
                 Value<int> rowid = const Value.absent(),
               }) => ExpensesCompanion.insert(
@@ -15865,6 +20515,8 @@ class $$ExpensesTableTableManager
                 settledRoundId: settledRoundId,
                 tripId: tripId,
                 tripItemId: tripItemId,
+                fundId: fundId,
+                payMethod: payMethod,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -15941,6 +20593,7 @@ typedef $$SettlementsTableCreateCompanionBuilder =
       Value<String> transfersJson,
       Value<String> expenseIdsJson,
       Value<int> roundNo,
+      Value<String> strategy,
       required int createdAt,
       Value<int?> completedAt,
       Value<int> rowid,
@@ -15953,6 +20606,7 @@ typedef $$SettlementsTableUpdateCompanionBuilder =
       Value<String> transfersJson,
       Value<String> expenseIdsJson,
       Value<int> roundNo,
+      Value<String> strategy,
       Value<int> createdAt,
       Value<int?> completedAt,
       Value<int> rowid,
@@ -16011,6 +20665,11 @@ class $$SettlementsTableFilterComposer
 
   ColumnFilters<int> get roundNo => $composableBuilder(
     column: $table.roundNo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get strategy => $composableBuilder(
+    column: $table.strategy,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16082,6 +20741,11 @@ class $$SettlementsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get strategy => $composableBuilder(
+    column: $table.strategy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -16143,6 +20807,9 @@ class $$SettlementsTableAnnotationComposer
 
   GeneratedColumn<int> get roundNo =>
       $composableBuilder(column: $table.roundNo, builder: (column) => column);
+
+  GeneratedColumn<String> get strategy =>
+      $composableBuilder(column: $table.strategy, builder: (column) => column);
 
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -16210,6 +20877,7 @@ class $$SettlementsTableTableManager
                 Value<String> transfersJson = const Value.absent(),
                 Value<String> expenseIdsJson = const Value.absent(),
                 Value<int> roundNo = const Value.absent(),
+                Value<String> strategy = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int?> completedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -16220,6 +20888,7 @@ class $$SettlementsTableTableManager
                 transfersJson: transfersJson,
                 expenseIdsJson: expenseIdsJson,
                 roundNo: roundNo,
+                strategy: strategy,
                 createdAt: createdAt,
                 completedAt: completedAt,
                 rowid: rowid,
@@ -16232,6 +20901,7 @@ class $$SettlementsTableTableManager
                 Value<String> transfersJson = const Value.absent(),
                 Value<String> expenseIdsJson = const Value.absent(),
                 Value<int> roundNo = const Value.absent(),
+                Value<String> strategy = const Value.absent(),
                 required int createdAt,
                 Value<int?> completedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -16242,6 +20912,7 @@ class $$SettlementsTableTableManager
                 transfersJson: transfersJson,
                 expenseIdsJson: expenseIdsJson,
                 roundNo: roundNo,
+                strategy: strategy,
                 createdAt: createdAt,
                 completedAt: completedAt,
                 rowid: rowid,
@@ -19026,6 +23697,7 @@ typedef $$SharedTripsTableCreateCompanionBuilder =
       Value<String> note,
       Value<String?> groupId,
       Value<bool> archived,
+      Value<String> pace,
       required int createdAt,
       required int updatedAt,
       Value<int> rowid,
@@ -19042,6 +23714,7 @@ typedef $$SharedTripsTableUpdateCompanionBuilder =
       Value<String> note,
       Value<String?> groupId,
       Value<bool> archived,
+      Value<String> pace,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -19103,6 +23776,11 @@ class $$SharedTripsTableFilterComposer
 
   ColumnFilters<bool> get archived => $composableBuilder(
     column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pace => $composableBuilder(
+    column: $table.pace,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19176,6 +23854,11 @@ class $$SharedTripsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get pace => $composableBuilder(
+    column: $table.pace,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -19232,6 +23915,9 @@ class $$SharedTripsTableAnnotationComposer
   GeneratedColumn<bool> get archived =>
       $composableBuilder(column: $table.archived, builder: (column) => column);
 
+  GeneratedColumn<String> get pace =>
+      $composableBuilder(column: $table.pace, builder: (column) => column);
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -19280,6 +23966,7 @@ class $$SharedTripsTableTableManager
                 Value<String> note = const Value.absent(),
                 Value<String?> groupId = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
+                Value<String> pace = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -19294,6 +23981,7 @@ class $$SharedTripsTableTableManager
                 note: note,
                 groupId: groupId,
                 archived: archived,
+                pace: pace,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -19310,6 +23998,7 @@ class $$SharedTripsTableTableManager
                 Value<String> note = const Value.absent(),
                 Value<String?> groupId = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
+                Value<String> pace = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -19324,6 +24013,7 @@ class $$SharedTripsTableTableManager
                 note: note,
                 groupId: groupId,
                 archived: archived,
+                pace: pace,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -19388,6 +24078,8 @@ typedef $$SharedTripItemsTableCreateCompanionBuilder =
       Value<double?> toLng,
       Value<String?> flightNo,
       Value<int> sortOrder,
+      Value<String?> guideRef,
+      Value<String?> backupOf,
       required int createdAt,
       required int updatedAt,
       Value<int> rowid,
@@ -19418,6 +24110,8 @@ typedef $$SharedTripItemsTableUpdateCompanionBuilder =
       Value<double?> toLng,
       Value<String?> flightNo,
       Value<int> sortOrder,
+      Value<String?> guideRef,
+      Value<String?> backupOf,
       Value<int> createdAt,
       Value<int> updatedAt,
       Value<int> rowid,
@@ -19549,6 +24243,16 @@ class $$SharedTripItemsTableFilterComposer
 
   ColumnFilters<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get guideRef => $composableBuilder(
+    column: $table.guideRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get backupOf => $composableBuilder(
+    column: $table.backupOf,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19692,6 +24396,16 @@ class $$SharedTripItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get guideRef => $composableBuilder(
+    column: $table.guideRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get backupOf => $composableBuilder(
+    column: $table.backupOf,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -19794,6 +24508,12 @@ class $$SharedTripItemsTableAnnotationComposer
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
 
+  GeneratedColumn<String> get guideRef =>
+      $composableBuilder(column: $table.guideRef, builder: (column) => column);
+
+  GeneratedColumn<String> get backupOf =>
+      $composableBuilder(column: $table.backupOf, builder: (column) => column);
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -19862,6 +24582,8 @@ class $$SharedTripItemsTableTableManager
                 Value<double?> toLng = const Value.absent(),
                 Value<String?> flightNo = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String?> guideRef = const Value.absent(),
+                Value<String?> backupOf = const Value.absent(),
                 Value<int> createdAt = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -19890,6 +24612,8 @@ class $$SharedTripItemsTableTableManager
                 toLng: toLng,
                 flightNo: flightNo,
                 sortOrder: sortOrder,
+                guideRef: guideRef,
+                backupOf: backupOf,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -19920,6 +24644,8 @@ class $$SharedTripItemsTableTableManager
                 Value<double?> toLng = const Value.absent(),
                 Value<String?> flightNo = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<String?> guideRef = const Value.absent(),
+                Value<String?> backupOf = const Value.absent(),
                 required int createdAt,
                 required int updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -19948,6 +24674,8 @@ class $$SharedTripItemsTableTableManager
                 toLng: toLng,
                 flightNo: flightNo,
                 sortOrder: sortOrder,
+                guideRef: guideRef,
+                backupOf: backupOf,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -19984,6 +24712,2209 @@ typedef $$SharedTripItemsTableProcessedTableManager =
         BaseReferences<_$AppDatabase, $SharedTripItemsTable, SharedTripItem>,
       ),
       SharedTripItem,
+      PrefetchHooks Function()
+    >;
+typedef $$FundsTableCreateCompanionBuilder = FundsCompanion Function({
+  required String id,
+  required String groupId,
+  required String name,
+  required String managerMemberId,
+  Value<int?> targetCents,
+  Value<String> status,
+  required int createdAt,
+  required int updatedAt,
+  Value<int> rowid,
+});
+typedef $$FundsTableUpdateCompanionBuilder = FundsCompanion Function({
+  Value<String> id,
+  Value<String> groupId,
+  Value<String> name,
+  Value<String> managerMemberId,
+  Value<int?> targetCents,
+  Value<String> status,
+  Value<int> createdAt,
+  Value<int> updatedAt,
+  Value<int> rowid,
+});
+
+final class $$FundsTableReferences
+    extends BaseReferences<_$AppDatabase, $FundsTable, Fund> {
+  $$FundsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GroupsTable _groupIdTable(_$AppDatabase db) =>
+      db.groups.createAlias('funds__group_id__groups__id');
+
+  $$GroupsTableProcessedTableManager get groupId {
+    final $_column = $_itemColumn<String>('group_id')!;
+
+    final manager = $$GroupsTableTableManager(
+      $_db,
+      $_db.groups,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_groupIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$FundsTableFilterComposer extends Composer<_$AppDatabase, $FundsTable> {
+  $$FundsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get managerMemberId => $composableBuilder(
+    column: $table.managerMemberId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get targetCents => $composableBuilder(
+    column: $table.targetCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$GroupsTableFilterComposer get groupId {
+    final $$GroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FundsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FundsTable> {
+  $$FundsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get managerMemberId => $composableBuilder(
+    column: $table.managerMemberId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get targetCents => $composableBuilder(
+    column: $table.targetCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$GroupsTableOrderingComposer get groupId {
+    final $$GroupsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableOrderingComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FundsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FundsTable> {
+  $$FundsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get managerMemberId => $composableBuilder(
+    column: $table.managerMemberId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get targetCents => $composableBuilder(
+    column: $table.targetCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$GroupsTableAnnotationComposer get groupId {
+    final $$GroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FundsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FundsTable,
+          Fund,
+          $$FundsTableFilterComposer,
+          $$FundsTableOrderingComposer,
+          $$FundsTableAnnotationComposer,
+          $$FundsTableCreateCompanionBuilder,
+          $$FundsTableUpdateCompanionBuilder,
+          (Fund, $$FundsTableReferences),
+          Fund,
+          PrefetchHooks Function({bool groupId})
+        > {
+  $$FundsTableTableManager(_$AppDatabase db, $FundsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FundsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FundsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FundsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> managerMemberId = const Value.absent(),
+                Value<int?> targetCents = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FundsCompanion(
+                id: id,
+                groupId: groupId,
+                name: name,
+                managerMemberId: managerMemberId,
+                targetCents: targetCents,
+                status: status,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String groupId,
+                required String name,
+                required String managerMemberId,
+                Value<int?> targetCents = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => FundsCompanion.insert(
+                id: id,
+                groupId: groupId,
+                name: name,
+                managerMemberId: managerMemberId,
+                targetCents: targetCents,
+                status: status,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$FundsTable, Fund>(table),
+                  $$FundsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({groupId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (groupId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.groupId,
+                        referencedTable: $$FundsTableReferences._groupIdTable(
+                          db,
+                        ),
+                        referencedColumn: $$FundsTableReferences
+                            ._groupIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$FundsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FundsTable,
+      Fund,
+      $$FundsTableFilterComposer,
+      $$FundsTableOrderingComposer,
+      $$FundsTableAnnotationComposer,
+      $$FundsTableCreateCompanionBuilder,
+      $$FundsTableUpdateCompanionBuilder,
+      (Fund, $$FundsTableReferences),
+      Fund,
+      PrefetchHooks Function({bool groupId})
+    >;
+typedef $$InboxItemsTableCreateCompanionBuilder = InboxItemsCompanion Function({
+  required String id,
+  required String groupId,
+  Value<int> amountCents,
+  Value<String?> note,
+  required int capturedAt,
+  Value<String> source,
+  Value<String> status,
+  Value<String?> convertedExpenseId,
+  required int createdAt,
+  required int updatedAt,
+  Value<int> rowid,
+});
+typedef $$InboxItemsTableUpdateCompanionBuilder = InboxItemsCompanion Function({
+  Value<String> id,
+  Value<String> groupId,
+  Value<int> amountCents,
+  Value<String?> note,
+  Value<int> capturedAt,
+  Value<String> source,
+  Value<String> status,
+  Value<String?> convertedExpenseId,
+  Value<int> createdAt,
+  Value<int> updatedAt,
+  Value<int> rowid,
+});
+
+final class $$InboxItemsTableReferences
+    extends BaseReferences<_$AppDatabase, $InboxItemsTable, InboxItem> {
+  $$InboxItemsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GroupsTable _groupIdTable(_$AppDatabase db) =>
+      db.groups.createAlias('inbox_items__group_id__groups__id');
+
+  $$GroupsTableProcessedTableManager get groupId {
+    final $_column = $_itemColumn<String>('group_id')!;
+
+    final manager = $$GroupsTableTableManager(
+      $_db,
+      $_db.groups,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_groupIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$InboxItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $InboxItemsTable> {
+  $$InboxItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get convertedExpenseId => $composableBuilder(
+    column: $table.convertedExpenseId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$GroupsTableFilterComposer get groupId {
+    final $$GroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$InboxItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $InboxItemsTable> {
+  $$InboxItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get convertedExpenseId => $composableBuilder(
+    column: $table.convertedExpenseId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$GroupsTableOrderingComposer get groupId {
+    final $$GroupsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableOrderingComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$InboxItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $InboxItemsTable> {
+  $$InboxItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get amountCents => $composableBuilder(
+    column: $table.amountCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<int> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get convertedExpenseId => $composableBuilder(
+    column: $table.convertedExpenseId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$GroupsTableAnnotationComposer get groupId {
+    final $$GroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$InboxItemsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $InboxItemsTable,
+          InboxItem,
+          $$InboxItemsTableFilterComposer,
+          $$InboxItemsTableOrderingComposer,
+          $$InboxItemsTableAnnotationComposer,
+          $$InboxItemsTableCreateCompanionBuilder,
+          $$InboxItemsTableUpdateCompanionBuilder,
+          (InboxItem, $$InboxItemsTableReferences),
+          InboxItem,
+          PrefetchHooks Function({bool groupId})
+        > {
+  $$InboxItemsTableTableManager(_$AppDatabase db, $InboxItemsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$InboxItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$InboxItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$InboxItemsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<int> amountCents = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<int> capturedAt = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> convertedExpenseId = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => InboxItemsCompanion(
+                id: id,
+                groupId: groupId,
+                amountCents: amountCents,
+                note: note,
+                capturedAt: capturedAt,
+                source: source,
+                status: status,
+                convertedExpenseId: convertedExpenseId,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String groupId,
+                Value<int> amountCents = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                required int capturedAt,
+                Value<String> source = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> convertedExpenseId = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => InboxItemsCompanion.insert(
+                id: id,
+                groupId: groupId,
+                amountCents: amountCents,
+                note: note,
+                capturedAt: capturedAt,
+                source: source,
+                status: status,
+                convertedExpenseId: convertedExpenseId,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$InboxItemsTable, InboxItem>(table),
+                  $$InboxItemsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({groupId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (groupId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.groupId,
+                        referencedTable: $$InboxItemsTableReferences
+                            ._groupIdTable(db),
+                        referencedColumn: $$InboxItemsTableReferences
+                            ._groupIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$InboxItemsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $InboxItemsTable,
+      InboxItem,
+      $$InboxItemsTableFilterComposer,
+      $$InboxItemsTableOrderingComposer,
+      $$InboxItemsTableAnnotationComposer,
+      $$InboxItemsTableCreateCompanionBuilder,
+      $$InboxItemsTableUpdateCompanionBuilder,
+      (InboxItem, $$InboxItemsTableReferences),
+      InboxItem,
+      PrefetchHooks Function({bool groupId})
+    >;
+typedef $$AuditLogsTableCreateCompanionBuilder = AuditLogsCompanion Function({
+  required String id,
+  required String groupId,
+  required String entity,
+  required String entityId,
+  required String action,
+  Value<String?> actorMemberId,
+  Value<String> changedFieldsJson,
+  required int atMs,
+  Value<int> rowid,
+});
+typedef $$AuditLogsTableUpdateCompanionBuilder = AuditLogsCompanion Function({
+  Value<String> id,
+  Value<String> groupId,
+  Value<String> entity,
+  Value<String> entityId,
+  Value<String> action,
+  Value<String?> actorMemberId,
+  Value<String> changedFieldsJson,
+  Value<int> atMs,
+  Value<int> rowid,
+});
+
+class $$AuditLogsTableFilterComposer
+    extends Composer<_$AppDatabase, $AuditLogsTable> {
+  $$AuditLogsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entity => $composableBuilder(
+    column: $table.entity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorMemberId => $composableBuilder(
+    column: $table.actorMemberId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get changedFieldsJson => $composableBuilder(
+    column: $table.changedFieldsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get atMs => $composableBuilder(
+    column: $table.atMs,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AuditLogsTableOrderingComposer
+    extends Composer<_$AppDatabase, $AuditLogsTable> {
+  $$AuditLogsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entity => $composableBuilder(
+    column: $table.entity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorMemberId => $composableBuilder(
+    column: $table.actorMemberId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get changedFieldsJson => $composableBuilder(
+    column: $table.changedFieldsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get atMs => $composableBuilder(
+    column: $table.atMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AuditLogsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AuditLogsTable> {
+  $$AuditLogsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get groupId =>
+      $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<String> get entity =>
+      $composableBuilder(column: $table.entity, builder: (column) => column);
+
+  GeneratedColumn<String> get entityId =>
+      $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<String> get action =>
+      $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<String> get actorMemberId => $composableBuilder(
+    column: $table.actorMemberId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get changedFieldsJson => $composableBuilder(
+    column: $table.changedFieldsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get atMs =>
+      $composableBuilder(column: $table.atMs, builder: (column) => column);
+}
+
+class $$AuditLogsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AuditLogsTable,
+          AuditLog,
+          $$AuditLogsTableFilterComposer,
+          $$AuditLogsTableOrderingComposer,
+          $$AuditLogsTableAnnotationComposer,
+          $$AuditLogsTableCreateCompanionBuilder,
+          $$AuditLogsTableUpdateCompanionBuilder,
+          (AuditLog, BaseReferences<_$AppDatabase, $AuditLogsTable, AuditLog>),
+          AuditLog,
+          PrefetchHooks Function()
+        > {
+  $$AuditLogsTableTableManager(_$AppDatabase db, $AuditLogsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AuditLogsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AuditLogsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AuditLogsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<String> entity = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<String> action = const Value.absent(),
+                Value<String?> actorMemberId = const Value.absent(),
+                Value<String> changedFieldsJson = const Value.absent(),
+                Value<int> atMs = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AuditLogsCompanion(
+                id: id,
+                groupId: groupId,
+                entity: entity,
+                entityId: entityId,
+                action: action,
+                actorMemberId: actorMemberId,
+                changedFieldsJson: changedFieldsJson,
+                atMs: atMs,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String groupId,
+                required String entity,
+                required String entityId,
+                required String action,
+                Value<String?> actorMemberId = const Value.absent(),
+                Value<String> changedFieldsJson = const Value.absent(),
+                required int atMs,
+                Value<int> rowid = const Value.absent(),
+              }) => AuditLogsCompanion.insert(
+                id: id,
+                groupId: groupId,
+                entity: entity,
+                entityId: entityId,
+                action: action,
+                actorMemberId: actorMemberId,
+                changedFieldsJson: changedFieldsJson,
+                atMs: atMs,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$AuditLogsTable, AuditLog>(table),
+                  BaseReferences<_$AppDatabase, $AuditLogsTable, AuditLog>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AuditLogsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AuditLogsTable,
+      AuditLog,
+      $$AuditLogsTableFilterComposer,
+      $$AuditLogsTableOrderingComposer,
+      $$AuditLogsTableAnnotationComposer,
+      $$AuditLogsTableCreateCompanionBuilder,
+      $$AuditLogsTableUpdateCompanionBuilder,
+      (AuditLog, BaseReferences<_$AppDatabase, $AuditLogsTable, AuditLog>),
+      AuditLog,
+      PrefetchHooks Function()
+    >;
+typedef $$ConflictRecordsTableCreateCompanionBuilder =
+    ConflictRecordsCompanion Function({
+      required String id,
+      required String groupId,
+      required String entity,
+      required String entityId,
+      required int localUpdatedMs,
+      required int remoteUpdatedMs,
+      required String winner,
+      required int detectedAtMs,
+      Value<int> acknowledged,
+      Value<int> rowid,
+    });
+typedef $$ConflictRecordsTableUpdateCompanionBuilder =
+    ConflictRecordsCompanion Function({
+      Value<String> id,
+      Value<String> groupId,
+      Value<String> entity,
+      Value<String> entityId,
+      Value<int> localUpdatedMs,
+      Value<int> remoteUpdatedMs,
+      Value<String> winner,
+      Value<int> detectedAtMs,
+      Value<int> acknowledged,
+      Value<int> rowid,
+    });
+
+class $$ConflictRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $ConflictRecordsTable> {
+  $$ConflictRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entity => $composableBuilder(
+    column: $table.entity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get localUpdatedMs => $composableBuilder(
+    column: $table.localUpdatedMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get remoteUpdatedMs => $composableBuilder(
+    column: $table.remoteUpdatedMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get winner => $composableBuilder(
+    column: $table.winner,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get detectedAtMs => $composableBuilder(
+    column: $table.detectedAtMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get acknowledged => $composableBuilder(
+    column: $table.acknowledged,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ConflictRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ConflictRecordsTable> {
+  $$ConflictRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get groupId => $composableBuilder(
+    column: $table.groupId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entity => $composableBuilder(
+    column: $table.entity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get localUpdatedMs => $composableBuilder(
+    column: $table.localUpdatedMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get remoteUpdatedMs => $composableBuilder(
+    column: $table.remoteUpdatedMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get winner => $composableBuilder(
+    column: $table.winner,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get detectedAtMs => $composableBuilder(
+    column: $table.detectedAtMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get acknowledged => $composableBuilder(
+    column: $table.acknowledged,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ConflictRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ConflictRecordsTable> {
+  $$ConflictRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get groupId =>
+      $composableBuilder(column: $table.groupId, builder: (column) => column);
+
+  GeneratedColumn<String> get entity =>
+      $composableBuilder(column: $table.entity, builder: (column) => column);
+
+  GeneratedColumn<String> get entityId =>
+      $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<int> get localUpdatedMs => $composableBuilder(
+    column: $table.localUpdatedMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get remoteUpdatedMs => $composableBuilder(
+    column: $table.remoteUpdatedMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get winner =>
+      $composableBuilder(column: $table.winner, builder: (column) => column);
+
+  GeneratedColumn<int> get detectedAtMs => $composableBuilder(
+    column: $table.detectedAtMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get acknowledged => $composableBuilder(
+    column: $table.acknowledged,
+    builder: (column) => column,
+  );
+}
+
+class $$ConflictRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ConflictRecordsTable,
+          ConflictRecord,
+          $$ConflictRecordsTableFilterComposer,
+          $$ConflictRecordsTableOrderingComposer,
+          $$ConflictRecordsTableAnnotationComposer,
+          $$ConflictRecordsTableCreateCompanionBuilder,
+          $$ConflictRecordsTableUpdateCompanionBuilder,
+          (
+            ConflictRecord,
+            BaseReferences<
+              _$AppDatabase,
+              $ConflictRecordsTable,
+              ConflictRecord
+            >,
+          ),
+          ConflictRecord,
+          PrefetchHooks Function()
+        > {
+  $$ConflictRecordsTableTableManager(
+    _$AppDatabase db,
+    $ConflictRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ConflictRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ConflictRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ConflictRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<String> entity = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<int> localUpdatedMs = const Value.absent(),
+                Value<int> remoteUpdatedMs = const Value.absent(),
+                Value<String> winner = const Value.absent(),
+                Value<int> detectedAtMs = const Value.absent(),
+                Value<int> acknowledged = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ConflictRecordsCompanion(
+                id: id,
+                groupId: groupId,
+                entity: entity,
+                entityId: entityId,
+                localUpdatedMs: localUpdatedMs,
+                remoteUpdatedMs: remoteUpdatedMs,
+                winner: winner,
+                detectedAtMs: detectedAtMs,
+                acknowledged: acknowledged,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String groupId,
+                required String entity,
+                required String entityId,
+                required int localUpdatedMs,
+                required int remoteUpdatedMs,
+                required String winner,
+                required int detectedAtMs,
+                Value<int> acknowledged = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ConflictRecordsCompanion.insert(
+                id: id,
+                groupId: groupId,
+                entity: entity,
+                entityId: entityId,
+                localUpdatedMs: localUpdatedMs,
+                remoteUpdatedMs: remoteUpdatedMs,
+                winner: winner,
+                detectedAtMs: detectedAtMs,
+                acknowledged: acknowledged,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ConflictRecordsTable, ConflictRecord>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ConflictRecordsTable,
+                    ConflictRecord
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ConflictRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ConflictRecordsTable,
+      ConflictRecord,
+      $$ConflictRecordsTableFilterComposer,
+      $$ConflictRecordsTableOrderingComposer,
+      $$ConflictRecordsTableAnnotationComposer,
+      $$ConflictRecordsTableCreateCompanionBuilder,
+      $$ConflictRecordsTableUpdateCompanionBuilder,
+      (
+        ConflictRecord,
+        BaseReferences<_$AppDatabase, $ConflictRecordsTable, ConflictRecord>,
+      ),
+      ConflictRecord,
+      PrefetchHooks Function()
+    >;
+typedef $$WishlistItemsTableCreateCompanionBuilder =
+    WishlistItemsCompanion Function({
+      required String id,
+      required String tripId,
+      Value<String> cityKey,
+      Value<String> name,
+      Value<String> address,
+      Value<String> type,
+      Value<int?> durationMin,
+      Value<String?> tag,
+      Value<String?> guideRef,
+      Value<String> note,
+      Value<int> sortOrder,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$WishlistItemsTableUpdateCompanionBuilder =
+    WishlistItemsCompanion Function({
+      Value<String> id,
+      Value<String> tripId,
+      Value<String> cityKey,
+      Value<String> name,
+      Value<String> address,
+      Value<String> type,
+      Value<int?> durationMin,
+      Value<String?> tag,
+      Value<String?> guideRef,
+      Value<String> note,
+      Value<int> sortOrder,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$WishlistItemsTableReferences
+    extends BaseReferences<_$AppDatabase, $WishlistItemsTable, WishlistItem> {
+  $$WishlistItemsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $TripsTable _tripIdTable(_$AppDatabase db) =>
+      db.trips.createAlias('wishlist_items__trip_id__trips__id');
+
+  $$TripsTableProcessedTableManager get tripId {
+    final $_column = $_itemColumn<String>('trip_id')!;
+
+    final manager = $$TripsTableTableManager(
+      $_db,
+      $_db.trips,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_tripIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$WishlistItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $WishlistItemsTable> {
+  $$WishlistItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cityKey => $composableBuilder(
+    column: $table.cityKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMin => $composableBuilder(
+    column: $table.durationMin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tag => $composableBuilder(
+    column: $table.tag,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get guideRef => $composableBuilder(
+    column: $table.guideRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$TripsTableFilterComposer get tripId {
+    final $$TripsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tripId,
+      referencedTable: $db.trips,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TripsTableFilterComposer(
+            $db: $db,
+            $table: $db.trips,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WishlistItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $WishlistItemsTable> {
+  $$WishlistItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cityKey => $composableBuilder(
+    column: $table.cityKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMin => $composableBuilder(
+    column: $table.durationMin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tag => $composableBuilder(
+    column: $table.tag,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get guideRef => $composableBuilder(
+    column: $table.guideRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$TripsTableOrderingComposer get tripId {
+    final $$TripsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tripId,
+      referencedTable: $db.trips,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TripsTableOrderingComposer(
+            $db: $db,
+            $table: $db.trips,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WishlistItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WishlistItemsTable> {
+  $$WishlistItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get cityKey =>
+      $composableBuilder(column: $table.cityKey, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get address =>
+      $composableBuilder(column: $table.address, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<int> get durationMin => $composableBuilder(
+    column: $table.durationMin,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tag =>
+      $composableBuilder(column: $table.tag, builder: (column) => column);
+
+  GeneratedColumn<String> get guideRef =>
+      $composableBuilder(column: $table.guideRef, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$TripsTableAnnotationComposer get tripId {
+    final $$TripsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tripId,
+      referencedTable: $db.trips,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TripsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.trips,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WishlistItemsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $WishlistItemsTable,
+          WishlistItem,
+          $$WishlistItemsTableFilterComposer,
+          $$WishlistItemsTableOrderingComposer,
+          $$WishlistItemsTableAnnotationComposer,
+          $$WishlistItemsTableCreateCompanionBuilder,
+          $$WishlistItemsTableUpdateCompanionBuilder,
+          (WishlistItem, $$WishlistItemsTableReferences),
+          WishlistItem,
+          PrefetchHooks Function({bool tripId})
+        > {
+  $$WishlistItemsTableTableManager(_$AppDatabase db, $WishlistItemsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WishlistItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WishlistItemsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WishlistItemsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> tripId = const Value.absent(),
+                Value<String> cityKey = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> address = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<int?> durationMin = const Value.absent(),
+                Value<String?> tag = const Value.absent(),
+                Value<String?> guideRef = const Value.absent(),
+                Value<String> note = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WishlistItemsCompanion(
+                id: id,
+                tripId: tripId,
+                cityKey: cityKey,
+                name: name,
+                address: address,
+                type: type,
+                durationMin: durationMin,
+                tag: tag,
+                guideRef: guideRef,
+                note: note,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String tripId,
+                Value<String> cityKey = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> address = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<int?> durationMin = const Value.absent(),
+                Value<String?> tag = const Value.absent(),
+                Value<String?> guideRef = const Value.absent(),
+                Value<String> note = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => WishlistItemsCompanion.insert(
+                id: id,
+                tripId: tripId,
+                cityKey: cityKey,
+                name: name,
+                address: address,
+                type: type,
+                durationMin: durationMin,
+                tag: tag,
+                guideRef: guideRef,
+                note: note,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$WishlistItemsTable, WishlistItem>(table),
+                  $$WishlistItemsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({tripId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (tripId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.tripId,
+                        referencedTable: $$WishlistItemsTableReferences
+                            ._tripIdTable(db),
+                        referencedColumn: $$WishlistItemsTableReferences
+                            ._tripIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$WishlistItemsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $WishlistItemsTable,
+      WishlistItem,
+      $$WishlistItemsTableFilterComposer,
+      $$WishlistItemsTableOrderingComposer,
+      $$WishlistItemsTableAnnotationComposer,
+      $$WishlistItemsTableCreateCompanionBuilder,
+      $$WishlistItemsTableUpdateCompanionBuilder,
+      (WishlistItem, $$WishlistItemsTableReferences),
+      WishlistItem,
+      PrefetchHooks Function({bool tripId})
+    >;
+typedef $$SharedWishlistItemsTableCreateCompanionBuilder =
+    SharedWishlistItemsCompanion Function({
+      required String id,
+      required String tripId,
+      Value<String> cityKey,
+      Value<String> name,
+      Value<String> address,
+      Value<String> type,
+      Value<int?> durationMin,
+      Value<String?> tag,
+      Value<String?> guideRef,
+      Value<String> note,
+      Value<int> sortOrder,
+      required int createdAt,
+      required int updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SharedWishlistItemsTableUpdateCompanionBuilder =
+    SharedWishlistItemsCompanion Function({
+      Value<String> id,
+      Value<String> tripId,
+      Value<String> cityKey,
+      Value<String> name,
+      Value<String> address,
+      Value<String> type,
+      Value<int?> durationMin,
+      Value<String?> tag,
+      Value<String?> guideRef,
+      Value<String> note,
+      Value<int> sortOrder,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$SharedWishlistItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $SharedWishlistItemsTable> {
+  $$SharedWishlistItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tripId => $composableBuilder(
+    column: $table.tripId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cityKey => $composableBuilder(
+    column: $table.cityKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMin => $composableBuilder(
+    column: $table.durationMin,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tag => $composableBuilder(
+    column: $table.tag,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get guideRef => $composableBuilder(
+    column: $table.guideRef,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SharedWishlistItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SharedWishlistItemsTable> {
+  $$SharedWishlistItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tripId => $composableBuilder(
+    column: $table.tripId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cityKey => $composableBuilder(
+    column: $table.cityKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMin => $composableBuilder(
+    column: $table.durationMin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tag => $composableBuilder(
+    column: $table.tag,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get guideRef => $composableBuilder(
+    column: $table.guideRef,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+    column: $table.sortOrder,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SharedWishlistItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SharedWishlistItemsTable> {
+  $$SharedWishlistItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get tripId =>
+      $composableBuilder(column: $table.tripId, builder: (column) => column);
+
+  GeneratedColumn<String> get cityKey =>
+      $composableBuilder(column: $table.cityKey, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get address =>
+      $composableBuilder(column: $table.address, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<int> get durationMin => $composableBuilder(
+    column: $table.durationMin,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tag =>
+      $composableBuilder(column: $table.tag, builder: (column) => column);
+
+  GeneratedColumn<String> get guideRef =>
+      $composableBuilder(column: $table.guideRef, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SharedWishlistItemsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SharedWishlistItemsTable,
+          SharedWishlistItem,
+          $$SharedWishlistItemsTableFilterComposer,
+          $$SharedWishlistItemsTableOrderingComposer,
+          $$SharedWishlistItemsTableAnnotationComposer,
+          $$SharedWishlistItemsTableCreateCompanionBuilder,
+          $$SharedWishlistItemsTableUpdateCompanionBuilder,
+          (
+            SharedWishlistItem,
+            BaseReferences<
+              _$AppDatabase,
+              $SharedWishlistItemsTable,
+              SharedWishlistItem
+            >,
+          ),
+          SharedWishlistItem,
+          PrefetchHooks Function()
+        > {
+  $$SharedWishlistItemsTableTableManager(
+    _$AppDatabase db,
+    $SharedWishlistItemsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SharedWishlistItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SharedWishlistItemsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$SharedWishlistItemsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> tripId = const Value.absent(),
+                Value<String> cityKey = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> address = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<int?> durationMin = const Value.absent(),
+                Value<String?> tag = const Value.absent(),
+                Value<String?> guideRef = const Value.absent(),
+                Value<String> note = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SharedWishlistItemsCompanion(
+                id: id,
+                tripId: tripId,
+                cityKey: cityKey,
+                name: name,
+                address: address,
+                type: type,
+                durationMin: durationMin,
+                tag: tag,
+                guideRef: guideRef,
+                note: note,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String tripId,
+                Value<String> cityKey = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> address = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<int?> durationMin = const Value.absent(),
+                Value<String?> tag = const Value.absent(),
+                Value<String?> guideRef = const Value.absent(),
+                Value<String> note = const Value.absent(),
+                Value<int> sortOrder = const Value.absent(),
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SharedWishlistItemsCompanion.insert(
+                id: id,
+                tripId: tripId,
+                cityKey: cityKey,
+                name: name,
+                address: address,
+                type: type,
+                durationMin: durationMin,
+                tag: tag,
+                guideRef: guideRef,
+                note: note,
+                sortOrder: sortOrder,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SharedWishlistItemsTable, SharedWishlistItem>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SharedWishlistItemsTable,
+                    SharedWishlistItem
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SharedWishlistItemsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SharedWishlistItemsTable,
+      SharedWishlistItem,
+      $$SharedWishlistItemsTableFilterComposer,
+      $$SharedWishlistItemsTableOrderingComposer,
+      $$SharedWishlistItemsTableAnnotationComposer,
+      $$SharedWishlistItemsTableCreateCompanionBuilder,
+      $$SharedWishlistItemsTableUpdateCompanionBuilder,
+      (
+        SharedWishlistItem,
+        BaseReferences<
+          _$AppDatabase,
+          $SharedWishlistItemsTable,
+          SharedWishlistItem
+        >,
+      ),
+      SharedWishlistItem,
       PrefetchHooks Function()
     >;
 
@@ -20030,4 +26961,16 @@ class $AppDatabaseManager {
       $$SharedTripsTableTableManager(_db, _db.sharedTrips);
   $$SharedTripItemsTableTableManager get sharedTripItems =>
       $$SharedTripItemsTableTableManager(_db, _db.sharedTripItems);
+  $$FundsTableTableManager get funds =>
+      $$FundsTableTableManager(_db, _db.funds);
+  $$InboxItemsTableTableManager get inboxItems =>
+      $$InboxItemsTableTableManager(_db, _db.inboxItems);
+  $$AuditLogsTableTableManager get auditLogs =>
+      $$AuditLogsTableTableManager(_db, _db.auditLogs);
+  $$ConflictRecordsTableTableManager get conflictRecords =>
+      $$ConflictRecordsTableTableManager(_db, _db.conflictRecords);
+  $$WishlistItemsTableTableManager get wishlistItems =>
+      $$WishlistItemsTableTableManager(_db, _db.wishlistItems);
+  $$SharedWishlistItemsTableTableManager get sharedWishlistItems =>
+      $$SharedWishlistItemsTableTableManager(_db, _db.sharedWishlistItems);
 }

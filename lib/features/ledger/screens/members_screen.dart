@@ -27,6 +27,8 @@ class MembersScreen extends ConsumerWidget {
     // 用已解析的当前团取 id：比裸 activeGroupId 流更稳，
     // 避免刚建团/切团后流尚未同步导致 FAB 禁用或页面异常。
     final groupId = ref.watch(activeGroupProvider).value?.id;
+    // S4：个人账本成员固定为「我」，隐藏添加成员入口与邀请入口。
+    final personal = ref.watch(activeGroupProvider).value?.isPersonal ?? false;
     final expenses = ref.watch(expensesProvider).value ?? const <ExpenseRecord>[];
 
     return Scaffold(
@@ -61,7 +63,7 @@ class MembersScreen extends ConsumerWidget {
                     data: (list) {
                       if (list.isEmpty) {
                         return ListView(children: [
-                          _InviteTile(groupId: groupId),
+                          if (!personal) _InviteTile(groupId: groupId),
                           const EmptyState(
                             emoji: '👥',
                             title: '还没有成员',
@@ -80,7 +82,7 @@ class MembersScreen extends ConsumerWidget {
                           ),
                         ),
                         children: [
-                          _InviteTile(groupId: groupId),
+                          if (!personal) _InviteTile(groupId: groupId),
                           StaggerIn(index: 0, child: PalettePreview()),
                           const SizedBox(height: Spacing.lg),
                           for (var i = 0; i < list.length; i++)
@@ -97,21 +99,22 @@ class MembersScreen extends ConsumerWidget {
                     },
                   ),
           ),
-          Positioned(
-            right: Spacing.xl,
-            bottom: AppBottomLayout.withSafeArea(
-              context,
-              AppBottomLayout.actionButtonOffset,
+          if (!personal)
+            Positioned(
+              right: Spacing.xl,
+              bottom: AppBottomLayout.withSafeArea(
+                context,
+                AppBottomLayout.actionButtonOffset,
+              ),
+              child: FloatingActionButton.extended(
+                heroTag: 'fab-member-add',
+                onPressed: groupId == null
+                    ? null
+                    : () => _addMemberSheet(context, ref, groupId),
+                icon: const Icon(Icons.person_add_alt_rounded),
+                label: const Text('加成员'),
+              ),
             ),
-            child: FloatingActionButton.extended(
-              heroTag: 'fab-member-add',
-              onPressed: groupId == null
-                  ? null
-                  : () => _addMemberSheet(context, ref, groupId),
-              icon: const Icon(Icons.person_add_alt_rounded),
-              label: const Text('加成员'),
-            ),
-          ),
         ],
       ),
     );
@@ -270,6 +273,7 @@ class MemberRow extends ConsumerWidget {
 
   Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
     HapticFeedback.selectionClick();
+    final hasHistory = expenseCount > 0;
     await showDraggableSheet<void>(
       context: context,
       initialChildSize: 0.34,
@@ -282,9 +286,11 @@ class MemberRow extends ConsumerWidget {
           children: [
             Text('移除 ' + member.name + '？', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: Spacing.sm),
-            Text(expenseCount > 0
-                ? 'TA 参与 ' + expenseCount.toString() + ' 笔账单，直接移除会让这些账对不上号。'
-                : '移除后 TA 名下没有历史包袱。',
+            // S2 G1：有历史账单时物理删除被仓储拒绝，引导到软删除（保留历史）。
+            Text(hasHistory
+                ? 'TA 参与 ' + expenseCount.toString() +
+                    ' 笔账单。为保住历史账目，将采用「移除成员（保留历史）」：TA 不再出现在记账选择里，历史账单与结算结果不变。'
+                : '移除后 TA 名下没有历史包袱，可直接删除。',
                 style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: Spacing.lg),
             Row(
@@ -303,21 +309,23 @@ class MemberRow extends ConsumerWidget {
                         foregroundColor: Theme.of(context).colorScheme.onError),
                     onPressed: () async {
                       Navigator.of(sheetContext).pop();
+                      final messenger = ScaffoldMessenger.of(context);
                       try {
-                        await removeMember(ref, member.id);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(content: Text('已移除 ' + member.name)));
+                        if (hasHistory) {
+                          await archiveMember(ref, member.id);
+                          messenger.showSnackBar(
+                              SnackBar(content: Text('已移除 ' + member.name + '（保留历史）')));
+                        } else {
+                          await removeMember(ref, member.id);
+                          messenger.showSnackBar(
+                              SnackBar(content: Text('已移除 ' + member.name)));
                         }
-                      } on StateError {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('该成员已参与 ' + expenseCount.toString() + ' 笔账单，不能删除'),
-                          ));
-                        }
+                      } on StateError catch (e) {
+                        // 兜底：公款池管理人等约束 → 明确提示，不静默失败。
+                        messenger.showSnackBar(SnackBar(content: Text(e.message)));
                       }
                     },
-                    child: const Text('移除'),
+                    child: Text(hasHistory ? '移除（保留历史）' : '移除'),
                   ),
                 ),
               ],

@@ -17,9 +17,11 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../theme/tokens.dart';
 import 'screens/expense_edit_screen.dart';
 import 'screens/expense_csv_import_screen.dart';
+import 'ledger_access.dart';
 import 'ledger_models.dart';
 import 'ledger_providers.dart';
 import 'widgets/category_icon_box.dart';
+import 'widgets/conflict_badge.dart';
 import 'screens/settle_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/budget_screen.dart';
@@ -122,6 +124,11 @@ class _DesktopLedgerWorkbenchState extends ConsumerState<DesktopLedgerWorkbench>
 
   Widget _buildMaster(String? gid) {
     final scheme = Theme.of(context).colorScheme;
+    // V2.7.1 S7 · E2（宿主 B）：viewer 只读态 —— 写入口整块不渲染（隐藏不置灰）。
+    final canWrite = (gid == null || gid.isEmpty)
+        ? true
+        : (ref.watch(ledgerAccessProvider(gid)).value ?? LedgerAccess.owner)
+            .canWrite;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -152,11 +159,12 @@ class _DesktopLedgerWorkbenchState extends ConsumerState<DesktopLedgerWorkbench>
                 ),
               ),
               const SizedBox(width: Spacing.sm),
-              ElevatedButton.icon(
-                onPressed: _newExpense,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('记一笔'),
-              ),
+              if (canWrite)
+                ElevatedButton.icon(
+                  onPressed: _newExpense,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('记一笔'),
+                ),
             ],
           ),
         ),
@@ -167,7 +175,10 @@ class _DesktopLedgerWorkbenchState extends ConsumerState<DesktopLedgerWorkbench>
             padding: const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: Spacing.sm),
             children: [
               for (final (k, v) in [
-                ('', '全部'), ('csv', '导入账单'), ('settle', '结算'), ('stats', '统计'), ('budget', '预算'), ('members', '成员'),
+                ('', '全部'),
+                // viewer 隐藏「导入账单」（导入=写入口）；结算/统计/预算/成员为只读视图入口，保留。
+                if (canWrite) ('csv', '导入账单'),
+                ('settle', '结算'), ('stats', '统计'), ('budget', '预算'), ('members', '成员'),
               ])
                 Padding(
                   padding: const EdgeInsets.only(right: Spacing.sm),
@@ -703,6 +714,10 @@ class _ExpenseDetailPane extends ConsumerWidget {
       return const EmptyState(emoji: '🗂️', title: '账单不存在', message: '可能已被删除');
     }
     final members = ref.watch(_MembersLite.provider);
+    // V2.7.1 S7 · E2（宿主 B）：只读判定（未知角色按可写处理，RLS 兜底）。
+    final canWrite =
+        (ref.watch(ledgerAccessProvider(e.groupId)).value ?? LedgerAccess.owner)
+            .canWrite;
     final categories = ref.watch(categoriesProvider).value ?? const <CategoryView>[];
     String icon = '🏷️';
     for (final c in categories) {
@@ -728,8 +743,16 @@ class _ExpenseDetailPane extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                      ),
+                      // S12.2：该账单存在未确认冲突时显示小标记（仅提示）。
+                      ConflictDot(entityId: e.id, size: 16),
+                    ],
+                  ),
                   const SizedBox(height: 4),
                   Text('$catName · ${fmtMenuDate(e.dateEpochDay)}', style: TextStyle(color: scheme.onSurfaceVariant)),
                 ],
@@ -747,22 +770,24 @@ class _ExpenseDetailPane extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: Spacing.xl),
-        Wrap(
-          spacing: Spacing.sm,
-          children: [
-            ActionChip(avatar: const Icon(Icons.edit_rounded, size: 16), label: const Text('编辑'),
-                onPressed: () => onEdit(e.id)),
-            ActionChip(avatar: const Icon(Icons.delete_outline_rounded, size: 16),
-                label: const Text('删除'), backgroundColor: scheme.errorContainer,
-                labelStyle: TextStyle(color: scheme.onErrorContainer),
-                onPressed: () async {
-                  await deleteExpense(ref, e.id);
-                }),
-            ActionChip(avatar: const Icon(Icons.add_rounded, size: 16), label: const Text('新增一笔'),
-                onPressed: () =>
-                    openAsDialog(context, const ExpenseEditScreen(initialId: null), width: 800)),
-          ],
-        ),
+        // V2.7.1 S7 · E2（宿主 B）：viewer 只读态 —— 编辑/删除/新增不渲染。
+        if (canWrite)
+          Wrap(
+            spacing: Spacing.sm,
+            children: [
+              ActionChip(avatar: const Icon(Icons.edit_rounded, size: 16), label: const Text('编辑'),
+                  onPressed: () => onEdit(e.id)),
+              ActionChip(avatar: const Icon(Icons.delete_outline_rounded, size: 16),
+                  label: const Text('删除'), backgroundColor: scheme.errorContainer,
+                  labelStyle: TextStyle(color: scheme.onErrorContainer),
+                  onPressed: () async {
+                    await deleteExpense(ref, e.id);
+                  }),
+              ActionChip(avatar: const Icon(Icons.add_rounded, size: 16), label: const Text('新增一笔'),
+                  onPressed: () =>
+                      openAsDialog(context, const ExpenseEditScreen(initialId: null), width: 800)),
+            ],
+          ),
         const SizedBox(height: Spacing.xl),
         if ((e.note ?? '').isNotEmpty)
           Padding(

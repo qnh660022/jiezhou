@@ -30,6 +30,9 @@ List<ShareEntry> splitShares({
       return _splitEqual(totalCents, ids);
     case ShareMode.portions:
       return _splitPortions(totalCents, ids, portions);
+    case ShareMode.percent:
+      // 语义重载：percent 模式下 [portions] 是万分比 bp 表（10000 = 100%）。
+      return _splitPercent(totalCents, ids, portions);
     case ShareMode.custom:
       return _splitCustom(totalCents, ids, customShares);
   }
@@ -136,3 +139,106 @@ List<ShareEntry> _splitCustom(
   }
   return List.of(customShares);
 }
+
+// ===========================================================================
+// 百分比分摊（S3）：bp = 万分比基点，10000 = 100%。
+//
+// 【语义重载】percent 模式下 `portionsJson` 存的是 bp 整数表（不是份数）：
+//   {"<memberId>": <bp>}，归一后 Σbp 恒等于 10000。全流程只用整数运算。
+// ===========================================================================
+
+/// 归一化百分比到 bp：剔除 bp<=0，按比例缩放到 Σ==10000（自动归一，不报错）。
+///
+/// 结果为空集时返回空 Map（调用方回退 equal，与 portions「全 0 回退 equal」同口径）。
+Map<String, int> normalizePercentToBp(Map<String, int> raw) {
+  final valid = <String, int>{
+    for (final e in raw.entries)
+      if (e.value > 0) e.key: e.value,
+  };
+  if (valid.isEmpty) return const {};
+  final total = valid.values.fold<int>(0, (a, b) => a + b);
+  if (total <= 0) return const {};
+  final base = <String, int>{};
+  final rem = <String, int>{};
+  var assigned = 0;
+  for (final e in valid.entries) {
+    final exact = e.value * 10000;
+    final b = exact ~/ total;
+    base[e.key] = b;
+    rem[e.key] = exact % total;
+    assigned += b;
+  }
+  var deficit = 10000 - assigned;
+  final order = valid.keys.toList()
+    ..sort((a, b) {
+      final r = rem[b]!.compareTo(rem[a]!);
+      return r != 0 ? r : a.compareTo(b);
+    });
+  var i = 0;
+  while (deficit > 0) {
+    final id = order[i % order.length];
+    base[id] = base[id]! + 1;
+    deficit--;
+    i++;
+  }
+  return base;
+}
+
+/// 按 bp 表分摊 [totalCents]，断言 Σ结果 == totalCents（含负数场景）。
+///
+/// 要求 [percents] 已归一（Σ==10000）；未归一请先调 [normalizePercentToBp]。
+List<ShareEntry> splitByPercent(int totalCents, Map<String, int> percents) {
+  final active = <String, int>{
+    for (final e in percents.entries)
+      if (e.value > 0) e.key: e.value,
+  };
+  if (active.isEmpty) return const [];
+  final sign = totalCents.isNegative ? -1 : 1;
+  final abs = totalCents.abs();
+  final base = <String, int>{};
+  final rem = <String, int>{};
+  var assigned = 0;
+  for (final e in active.entries) {
+    final exact = abs * e.value;
+    final b = exact ~/ 10000;
+    base[e.key] = b;
+    rem[e.key] = exact % 10000;
+    assigned += b;
+  }
+  var deficit = abs - assigned;
+  final order = active.keys.toList()
+    ..sort((a, b) {
+      final r = rem[b]!.compareTo(rem[a]!);
+      return r != 0 ? r : a.compareTo(b);
+    });
+  var i = 0;
+  while (deficit > 0) {
+    final id = order[i % order.length];
+    base[id] = base[id]! + 1;
+    deficit--;
+    i++;
+  }
+  return [
+    for (final id in active.keys) ShareEntry(memberId: id, cents: sign * base[id]!),
+  ];
+}
+
+/// percent 模式内部分摊：先按 [ids] 过滤有效成员 → 归一 → 分摊 →
+/// 未参与成员按 0 补齐（保证返回顺序与 [ids] 一致）。
+List<ShareEntry> _splitPercent(
+    int totalCents, List<String> ids, Map<String, int> percents) {
+  final valid = <String, int>{
+    for (final id in ids)
+      if ((percents[id] ?? 0) > 0) id: percents[id]!,
+  };
+  if (valid.isEmpty) return _splitEqual(totalCents, ids); // 全 0/全空 → equal
+  final bp = normalizePercentToBp(valid);
+  final amounts = {for (final e in splitByPercent(totalCents, bp)) e.memberId: e.cents};
+  return [
+    for (final id in ids) ShareEntry(memberId: id, cents: amounts[id] ?? 0),
+  ];
+}
+
+/// 按份额数据结构的稳定性校验（供测试与保存前自检）：Σ 必须恰为 [totalCents]。
+bool percentSplitBalanced(List<ShareEntry> shares, int totalCents) =>
+    shares.fold<int>(0, (a, e) => a + e.cents) == totalCents;

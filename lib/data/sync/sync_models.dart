@@ -17,8 +17,13 @@ enum SyncEntity {
   tripItems('trip_items_sync'),
   groups('groups_sync'),
   members('members_sync'),
+  // V2.7.1：公款池 / 记账收件箱（均随团开关，父实体 group/members 先行）
+  funds('funds_sync'),
+  inboxItems('inbox_items_sync'),
   expenses('expenses_sync'),
   settlements('settlements_sync'),
+  // V2.7.2：想去池（随行程开关，父实体 trips/tripItems 先行）
+  wishlistItems('wishlist_items_sync'),
   categories('categories_sync');
 
   const SyncEntity(this.cloudTable);
@@ -35,10 +40,17 @@ enum SyncEntity {
     SyncEntity.spaceEvents,
     SyncEntity.groups,
     SyncEntity.members,
+    // V2.7.1：funds 先于 expenses（expenses.fund_id 引用 funds 行），
+    // inbox_items 与 funds 同级，均属账本域。
+    SyncEntity.funds,
+    SyncEntity.inboxItems,
     SyncEntity.expenses,
     SyncEntity.settlements,
     SyncEntity.trips,
     SyncEntity.tripItems,
+    // V2.7.2：想去池在行程项之后拉（行内 trip_id 引用行程，LWW 无外键强约束，
+    // 但保持父先子后的一致读序）
+    SyncEntity.wishlistItems,
     SyncEntity.categories,
   ];
 
@@ -62,6 +74,14 @@ enum SyncEntity {
         SyncEntity.spaces => 'travel_spaces',
         SyncEntity.spaceMembers => 'space_members',
         SyncEntity.spaceEvents => 'space_events',
+        // V2.7.1 显式映射，不做隐式依赖：inboxItems 的枚举名是 `inboxItems`
+        // 而全仓本地键是 `inbox_items`（H10 同款静默丢数据风险）；funds 的
+        // name 恰为 'funds'，仍显式写出以钉死契约。
+        SyncEntity.inboxItems => 'inbox_items',
+        SyncEntity.funds => 'funds',
+        // V2.7.2：枚举名是 `wishlistItems`，本地表名/全仓写路径键是
+        // `wishlist_items`——不映射将复现 H10 同款静默丢数据。
+        SyncEntity.wishlistItems => 'wishlist_items',
         _ => name,
       };
 
@@ -76,8 +96,11 @@ enum SyncEntity {
   }
 
   /// 该实体是否走「受邀协作镜像表」（拉下来的行不属于我，落镜像而非业务表）。
+  /// V2.7.2：wishlistItems 与 trips/tripItems 同走受邀镜像（SharedWishlistItems）。
   bool get isCollabMirror =>
-      this == SyncEntity.trips || this == SyncEntity.tripItems;
+      this == SyncEntity.trips ||
+      this == SyncEntity.tripItems ||
+      this == SyncEntity.wishlistItems;
 }
 
 /// 上行操作语义：本地行当前存在 → upsert；已被删除 → delete（云端标 deleted=true）。

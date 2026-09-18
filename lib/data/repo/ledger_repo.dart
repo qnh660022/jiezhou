@@ -8,11 +8,13 @@ import "../db/database.dart" hide Settlement;
 import "../../core/date_utils.dart";
 import "../../core/uid.dart";
 import "../../domain/models.dart";
+import "../../domain/settle_strategy.dart";
 import "../../domain/share_splitter.dart";
 import "../../domain/group_backup.dart";
 import "../../domain/full_backup.dart";
 import "../../export/backup_format.dart";
 import "prefs_repo.dart";
+import "observability_repo.dart";
 import "../sync/sync_outbox_service.dart";
 
 class LedgerRepository {
@@ -23,6 +25,18 @@ class LedgerRepository {
   /// 激活团 id 内存缓存；仓库为 Provider 级单例，与 UI 生命周期一致，
   /// broadcast 控制器随仓库常驻（不随页面 dispose）。
   String? _activeGroupId;
+
+  /// S4：未知账本类型的降级日志钩子（App 层可挂到 debugPrint；默认静默）。
+  static void Function(String message)? onUnknownKind;
+
+  /// S4：账本类型归一。`travel` / `personal` / `loan`（解析层预留）原样保留；
+  /// 其余未知值一律降级为 `travel` 并记一次日志（**不得崩溃**）。
+  static String _normalizeKind(String raw) {
+    final k = raw.trim().toLowerCase();
+    if (k == 'travel' || k == 'personal' || k == 'loan') return k;
+    onUnknownKind?.call('未知账本类型「$raw」已按 travel 处理');
+    return 'travel';
+  }
   bool _activeGroupLoaded = false;
   final StreamController<String?> _activeGroupCtl = StreamController<String?>.broadcast();
 
@@ -38,11 +52,45 @@ class LedgerRepository {
   // === 团 ===
   Stream<List<Group>> watchGroups() => (db.select(db.groups)..orderBy([(g)=>OrderingTerm.desc(g.createdAt)])).watch();
   Future<Group?> getGroup(String id) async { final l=await (db.select(db.groups)..where((g)=>g.id.equals(id))).get(); return l.firstOrNull; }
-  Future<Group> addGroup(String name, String icon) async { final id=newId("group"); final now=DateTime.now().millisecondsSinceEpoch; await db.into(db.groups).insert(GroupsCompanion(id:Value(id),name:Value(name),icon:Value(icon),createdAt:Value(now),updatedAt:Value(now))); SyncOutboxService.notifyWrite("groups", id); return (await getGroup(id))!; }
-  Future<void> updateGroup(String id, String name, String icon) async { await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(name:Value(name),icon:Value(icon),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("groups", id); }
+  Future<Group> addGroup(String name, String icon, {String kind = 'travel'}) async {
+    final id = newId("group");
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final k = _normalizeKind(kind);
+    // S4：个人账本 owner 即唯一成员（固定「我」），保证记账/统计开箱可用。
+    final ownerMemberId = k == 'personal' ? newId("member") : null;
+    await db.transaction(() async {
+      await db.into(db.groups).insert(GroupsCompanion(id:Value(id),name:Value(name),icon:Value(icon),kind:Value(k),createdAt:Value(now),updatedAt:Value(now)));
+      if (ownerMemberId != null) {
+        await db.into(db.members).insert(MembersCompanion(
+          id: Value(ownerMemberId), groupId: Value(id), name: const Value('我'),
+          colorIndex: const Value(0), createdAt: Value(now),
+        ));
+      }
+    });
+    SyncOutboxService.notifyWrite("groups", id);
+    if (ownerMemberId != null) SyncOutboxService.notifyWrite("members", ownerMemberId);
+    await _audit(id, AuditEntity.group, id, AuditAction.create, fields: {
+      'name': name,
+      'icon': icon,
+      'kind': k,
+    });
+    return (await getGroup(id))!;
+  }
+  Future<void> updateGroup(String id, String name, String icon) async {
+    await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(name:Value(name),icon:Value(icon),updatedAt:Value(DateTime.now().millisecondsSinceEpoch)));
+    SyncOutboxService.notifyWrite("groups", id);
+    await _audit(id, AuditEntity.group, id, AuditAction.update,
+        fields: {'name': name, 'icon': icon});
+  }
 
   /// 结束团（软归档）：只打标记，数据全部保留可改，可随时恢复。
-  Future<void> archiveGroup(String id, bool archived) async { await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(archived:Value(archived),archivedAtMs:Value(archived ? DateTime.now().millisecondsSinceEpoch : null),updatedAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("groups", id); }
+  Future<void> archiveGroup(String id, bool archived) async {
+    await (db.update(db.groups)..where((g)=>g.id.equals(id))).write(GroupsCompanion(archived:Value(archived),archivedAtMs:Value(archived ? DateTime.now().millisecondsSinceEpoch : null),updatedAt:Value(DateTime.now().millisecondsSinceEpoch)));
+    SyncOutboxService.notifyWrite("groups", id);
+    await _audit(id, AuditEntity.group, id,
+        archived ? AuditAction.archive : AuditAction.restore,
+        fields: {'archived': archived});
+  }
   /// 删团级联：事务内依次清理 账单→结算→成员→团，并把关联行程的 groupId 置 null。
   ///
   /// 若删除的正是当前激活团：自动切换到剩余团中 createdAt 最新的一个（走 setActiveGroup
@@ -59,11 +107,29 @@ class LedgerRepository {
         await (db.select(db.expenses)..where((e) => e.groupId.equals(id))).get();
     final childSettlements =
         await (db.select(db.settlements)..where((s) => s.groupId.equals(id))).get();
+    // V2.7.1：公款池与收件箱同为团级实体，删团需级联清理并发行墓碑。
+    final childFunds =
+        await (db.select(db.funds)..where((f) => f.groupId.equals(id))).get();
+    final childInbox =
+        await (db.select(db.inboxItems)..where((i) => i.groupId.equals(id))).get();
     final linkedTrips =
         await (db.select(db.trips)..where((t) => t.groupId.equals(id))).get();
+    final doomed = await getGroup(id);
+    // S12.3：删团本身是记录点之一。写在事务前（记录「谁删了这个团」这一事实），
+    // 该行随后成为本地孤儿（团已不存在，UI 不再可达），仅本地、受 2000 条裁剪约束。
+    await _audit(id, AuditEntity.group, id, AuditAction.delete, fields: {
+      'name': doomed?.name ?? '',
+      'members': childMembers.length,
+      'expenses': childExpenses.length,
+      'settlements': childSettlements.length,
+      'funds': childFunds.length,
+      'inbox': childInbox.length,
+    });
     await db.transaction(() async {
       await (db.delete(db.expenses)..where((e)=>e.groupId.equals(id))).go();
       await (db.delete(db.settlements)..where((s)=>s.groupId.equals(id))).go();
+      await (db.delete(db.funds)..where((f)=>f.groupId.equals(id))).go();
+      await (db.delete(db.inboxItems)..where((i)=>i.groupId.equals(id))).go();
       await (db.delete(db.members)..where((m)=>m.groupId.equals(id))).go();
       await (db.update(db.trips)..where((t)=>t.groupId.equals(id))).write(TripsCompanion(groupId:Value(null)));
       await (db.delete(db.groups)..where((g)=>g.id.equals(id))).go();
@@ -72,6 +138,8 @@ class LedgerRepository {
     // 读不到本地行，会被判成「已删除」而误发墓碑。
     SyncOutboxService.notifyWrite("groups", id, op: "delete");
     _notifyDelete("members", childMembers.map((m) => m.id));
+    _notifyDelete("funds", childFunds.map((f) => f.id));
+    _notifyDelete("inbox_items", childInbox.map((i) => i.id));
     _notifyDelete("expenses", childExpenses.map((e) => e.id));
     _notifyDelete("settlements", childSettlements.map((s) => s.id));
     for (final t in linkedTrips) {
@@ -102,6 +170,33 @@ class LedgerRepository {
       SyncOutboxService.notifyWrite(entity, id);
     }
   }
+
+  // === S12.3 审计轨迹（**仅本地**；不登记 SyncEntity、不上云、不进备份） ===
+  //
+  // 记录点全部收口在本仓储（规格 §S12.3）：团 / 成员 / 账单 / 结算 / 公款池 /
+  // 收件箱 / 分类的增删改，以及批量导入的「一条汇总」。字段表只放「字段名 →
+  // 被改后的值」，由 recordAudit 做截断与限量，绝不保存完整快照。
+  /// 写一条审计（失败不阻断业务：审计是旁路能力，绝不能因它让记账失败）。
+  Future<void> _audit(
+    String groupId,
+    String entity,
+    String entityId,
+    String action, {
+    Map<String, Object?> fields = const {},
+  }) async {
+    try {
+      await recordAudit(
+        db,
+        groupId: groupId,
+        entity: entity,
+        entityId: entityId,
+        action: action,
+        changedFields: fields,
+      );
+    } catch (_) {
+      // 审计写失败一律吞掉（隐私边界/磁盘异常都不应影响主流程）。
+    }
+  }
   /// 切换激活团：先更新内存缓存 → 持久化 → 广播给监听者
   Future<void> setActiveGroup(String? id) async {
     _activeGroupId = id;
@@ -123,13 +218,99 @@ class LedgerRepository {
   // === 成员 ===
   Stream<List<Member>> watchMembers(String gid) => (db.select(db.members)..where((m)=>m.groupId.equals(gid))..orderBy([(m)=>OrderingTerm.asc(m.createdAt)])).watch();
   Future<List<Member>> getMembers(String gid) => (db.select(db.members)..where((m)=>m.groupId.equals(gid))).get();
-  Future<String> addMember(String gid, String name) async { final id=newId("member"); final count=await (db.selectOnly(db.members)..where(db.members.groupId.equals(gid))..addColumns([db.members.id.count()])).getSingle(); final idx=(count.read(db.members.id.count())??0)%8; await db.into(db.members).insert(MembersCompanion(id:Value(id),groupId:Value(gid),name:Value(name),colorIndex:Value(idx),createdAt:Value(DateTime.now().millisecondsSinceEpoch))); SyncOutboxService.notifyWrite("members", id); return id; }
+  Future<String> addMember(String gid, String name) async {
+    final id = newId("member");
+    final count = await (db.selectOnly(db.members)..where(db.members.groupId.equals(gid))..addColumns([db.members.id.count()])).getSingle();
+    final idx = (count.read(db.members.id.count()) ?? 0) % 8;
+    await db.into(db.members).insert(MembersCompanion(
+      id: Value(id),
+      groupId: Value(gid),
+      name: Value(name),
+      colorIndex: Value(idx),
+      createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+    ));
+    SyncOutboxService.notifyWrite("members", id);
+    await _audit(gid, AuditEntity.member, id, AuditAction.create,
+        fields: {'name': name});
+    return id;
+  }
   Future<void> renameMember(String mid, String name) async {
+    final rows = await (db.select(db.members)..where((m) => m.id.equals(mid))).get();
     await (db.update(db.members)..where((m)=>m.id.equals(mid))).write(MembersCompanion(name:Value(name)));
     SyncOutboxService.notifyWrite("members", mid);
+    if (rows.isNotEmpty) {
+      await _audit(rows.first.groupId, AuditEntity.member, mid,
+          AuditAction.update, fields: {'name': name});
+    }
   }
-  Future<void> deleteMember(String mid) async { await (db.delete(db.members)..where((m)=>m.id.equals(mid))).go(); SyncOutboxService.notifyWrite("members", mid, op: "delete"); }
-  Future<bool> isMemberReferenced(String mid) async { final exps=await (db.select(db.expenses)..where((e)=>e.payersJson.like("%$mid%")|e.sharesJson.like("%$mid%"))).get(); return exps.isNotEmpty; }
+
+  /// S2 G1 软删除：置 `archived = true`。行仍在、姓名可查，历史账单照常参与净额。
+  ///
+  /// LWW 口径：Members 表无 updatedAt 列，同步层以 createdAt 承载 `updated_ms`；
+  /// 本方法**不改 createdAt**（改它会篡改该行时间语义），只靠 `notifyWrite`
+  /// 以「入队事件时点」上行——对端按更新的 updated_ms 合并即生效。
+  Future<void> archiveMember(String mid) async {
+    final rows = await (db.select(db.members)..where((m) => m.id.equals(mid))).get();
+    if (rows.isEmpty) return;
+    if (await _isFundManager(mid)) {
+      throw StateError('该成员是公款池管理人，请先转移管理人后再移除');
+    }
+    await (db.update(db.members)..where((m) => m.id.equals(mid)))
+        .write(const MembersCompanion(archived: Value(true)));
+    SyncOutboxService.notifyWrite("members", mid);
+    await _audit(rows.first.groupId, AuditEntity.member, mid, AuditAction.archive,
+        fields: {'name': rows.first.name});
+  }
+
+  /// S2 G1 物理删除：**仅**当该成员未被任何账单引用且非公款池管理人时允许。
+  /// 有引用 → 抛带明确文案的 [StateError]，提示改用「移除成员（保留历史）」。
+  Future<void> deleteMember(String mid) async {
+    final rows = await (db.select(db.members)..where((m) => m.id.equals(mid))).get();
+    final name = rows.isEmpty ? mid : rows.first.name;
+    final refs = await countMemberReferences(mid);
+    if (refs > 0) {
+      throw StateError('「$name」已参与 $refs 笔账单，无法删除；请改用「移除成员（保留历史）」');
+    }
+    if (await _isFundManager(mid)) {
+      throw StateError('「$name」是公款池管理人，请先转移管理人后再移除');
+    }
+    await (db.delete(db.members)..where((m) => m.id.equals(mid))).go();
+    SyncOutboxService.notifyWrite("members", mid, op: "delete");
+    if (rows.isNotEmpty) {
+      await _audit(rows.first.groupId, AuditEntity.member, mid,
+          AuditAction.delete, fields: {'name': name});
+    }
+  }
+
+  /// S2 G1 结构化引用判定：解析 `payersJson` / `sharesJson` 为数组后逐项比对
+  /// `memberId`，**彻底移除 `LIKE '%id%'`**（`member_1` 与 `member_10` 互为子串
+  /// 时曾误报）。解析失败按「存在引用」处理（宁可拦不可漏）。
+  Future<bool> isMemberReferenced(String mid) async =>
+      (await countMemberReferences(mid)) > 0;
+
+  /// 引用计数（S2 G1）：含该 memberId 的账单笔数（同团范围内扫描）。
+  Future<int> countMemberReferences(String mid) async {
+    final m = await (db.select(db.members)..where((x) => x.id.equals(mid))).getSingleOrNull();
+    final query = db.select(db.expenses);
+    if (m != null) query.where((e) => e.groupId.equals(m.groupId));
+    final exps = await query.get();
+    var count = 0;
+    for (final e in exps) {
+      if (_jsonReferencesMember(e.payersJson, mid) ||
+          _jsonReferencesMember(e.sharesJson, mid)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /// 是否公款池管理人（S8 联动：管理人不可被删除/归档，除非先转移）。
+  Future<bool> _isFundManager(String mid) async {
+    final rows = await (db.select(db.funds)
+          ..where((f) => f.managerMemberId.equals(mid) & f.status.equals('open')))
+        .get();
+    return rows.isNotEmpty;
+  }
 
   // === 账单 ===
   Stream<List<Expense>> watchExpenses(String gid) => (db.select(db.expenses)..where((e)=>e.groupId.equals(gid))..orderBy([(e)=>OrderingTerm.desc(e.dateEpochDay),(e)=>OrderingTerm.desc(e.createdAt)])).watch();
@@ -139,7 +320,46 @@ class LedgerRepository {
   Stream<List<Expense>> watchByTripItem(String itemId) => (db.select(db.expenses)..where((e)=>e.tripItemId.equals(itemId))..orderBy([(e)=>OrderingTerm.desc(e.createdAt)])).watch();
   /// 安排关联账单一次性查询（仲裁/同步用）：按 createdAt 降序，首条即最新关联账单
   Future<List<Expense>> getLinkedBills(String itemId) => (db.select(db.expenses)..where((e)=>e.tripItemId.equals(itemId))..orderBy([(e)=>OrderingTerm.desc(e.createdAt)])).get();
-  Future<void> addExpense(ExpensesCompanion e) async { await db.into(db.expenses).insert(e); SyncOutboxService.notifyWrite("expenses", e.id.value); }
+  Future<void> addExpense(ExpensesCompanion e) async {
+    await db.into(db.expenses).insert(e);
+    SyncOutboxService.notifyWrite("expenses", e.id.value);
+    await _audit(e.groupId.value, AuditEntity.expense, e.id.value,
+        AuditAction.create,
+        fields: {
+          'title': e.title.value,
+          'amountCents': e.amountCents.value,
+        });
+  }
+
+  /// 从「显式赋值过的列」提取字段名 → 新值，供 S12 审计使用。
+  ///
+  /// 只含 present 的列，天然满足「只记变更字段」；值为 null（显式清空）的列
+  /// 不记录——审计的价值在「改成了什么」，而不是「清空了哪个字段」。
+  Map<String, Object?> _presentFields(List<(String, Value?)> cols) => {
+        for (final (name, v) in cols)
+          if (v != null && v.present && v.value != null) name: v.value,
+      };
+
+  /// 账单编辑可能改动的列（审计用白名单，避免把 id/groupId 等噪音写进去）。
+  List<(String, Value?)> _expenseAuditColumns(ExpensesCompanion e) => [
+        ('title', e.title),
+        ('dateEpochDay', e.dateEpochDay),
+        ('categoryKey', e.categoryKey),
+        ('type', e.type),
+        ('amountCents', e.amountCents),
+        ('currency', e.currency),
+        ('rate', e.rate),
+        ('payersJson', e.payersJson),
+        ('sharesJson', e.sharesJson),
+        ('shareMode', e.shareMode),
+        ('portionsJson', e.portionsJson),
+        ('note', e.note),
+        ('settledRoundId', e.settledRoundId),
+        ('tripId', e.tripId),
+        ('tripItemId', e.tripItemId),
+        ('fundId', e.fundId),
+        ('payMethod', e.payMethod),
+      ];
 
   /// 一键入账：由安排预填生成账单并双向关联（tripId+tripItemId 落库）。
   ///
@@ -179,6 +399,13 @@ class LedgerRepository {
       createdAt: Value(DateTime.now().millisecondsSinceEpoch),
     ));
     SyncOutboxService.notifyWrite("expenses", id);
+    // S12.3：一键入账路径同属账单新增记录点（标明来源，便于区分手工记账）。
+    await _audit(groupId, AuditEntity.expense, id, AuditAction.create, fields: {
+      'title': item.name,
+      'amountCents': cents,
+      'tripItemId': item.id,
+      'from': 'trip_item',
+    });
     return id;
   }
 
@@ -193,9 +420,33 @@ class LedgerRepository {
     }
   }
 
-  Future<void> updateExpense(String id, ExpensesCompanion e) async { await (db.update(db.expenses)..where((x)=>x.id.equals(id))).write(e); SyncOutboxService.notifyWrite("expenses", id); }
-  Future<void> deleteExpense(String id) async { await (db.delete(db.expenses)..where((e)=>e.id.equals(id))).go(); SyncOutboxService.notifyWrite("expenses", id, op: "delete"); }
-  Future<void> setExpenseSettled(String eid, bool settled) async { if(settled) { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value("manual"))); } else { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value(null))); } SyncOutboxService.notifyWrite("expenses", eid); }
+  Future<void> updateExpense(String id, ExpensesCompanion e) async {
+    await (db.update(db.expenses)..where((x)=>x.id.equals(id))).write(e);
+    SyncOutboxService.notifyWrite("expenses", id);
+    final row = await (db.select(db.expenses)..where((x) => x.id.equals(id))).getSingleOrNull();
+    if (row != null) {
+      await _audit(row.groupId, AuditEntity.expense, id, AuditAction.update,
+          fields: _presentFields(_expenseAuditColumns(e)));
+    }
+  }
+  Future<void> deleteExpense(String id) async {
+    final row = await (db.select(db.expenses)..where((e) => e.id.equals(id))).getSingleOrNull();
+    await (db.delete(db.expenses)..where((e)=>e.id.equals(id))).go();
+    SyncOutboxService.notifyWrite("expenses", id, op: "delete");
+    if (row != null) {
+      await _audit(row.groupId, AuditEntity.expense, id, AuditAction.delete,
+          fields: {'title': row.title, 'amountCents': row.amountCents});
+    }
+  }
+  Future<void> setExpenseSettled(String eid, bool settled) async {
+    if(settled) { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value("manual"))); } else { await (db.update(db.expenses)..where((e)=>e.id.equals(eid))).write(ExpensesCompanion(settledRoundId:Value(null))); }
+    SyncOutboxService.notifyWrite("expenses", eid);
+    final row = await (db.select(db.expenses)..where((e) => e.id.equals(eid))).getSingleOrNull();
+    if (row != null) {
+      await _audit(row.groupId, AuditEntity.expense, eid, AuditAction.update,
+          fields: {'settledRoundId': settled ? 'manual' : null});
+    }
+  }
 
   // === 结算 ===
   Stream<List<Settlement>> watchSettlements(String gid) {
@@ -226,6 +477,7 @@ class LedgerRepository {
         roundNo: s.roundNo,
         createdAt: s.createdAt,
         completedAt: s.completedAt,
+        strategy: s.strategy,
       );
     }).toList());
   }
@@ -236,7 +488,12 @@ class LedgerRepository {
   /// * roundNo 取已有最大 + 1，保证第 2 轮、第 3 轮自增正确。
   /// * 全部账单净额已平衡时（无人欠款）不创建空轮，返回 null；UI 据此给"无需结算"提示。
   /// * transfersJson 走 jsonEncode 而非字符串拼接，杜绝单元素/零元素边界损坏。
-  Future<Settlement?> createSettlement(String gid) async {
+  Future<Settlement?> createSettlement(String gid,
+      {SettleStrategy strategy = SettleStrategy.minTransfers}) async {
+    // S4：个人账本无共同消费场景 → 直接短路，**不产生任何结算轮记录**。
+    final group = await getGroup(gid);
+    if (group != null && group.kind == 'personal') return null;
+
     final existing = await (db.select(db.settlements)
           ..where((s) => s.groupId.equals(gid) & s.status.equals('active')))
         .get();
@@ -249,7 +506,8 @@ class LedgerRepository {
           ..where((e) => e.groupId.equals(gid) & e.settledRoundId.isNull()))
         .get();
     final balances = _computeBalances(outstanding);
-    final plan = _minTransferPlan(balances);
+    // S9：走 domain/settle_strategy（minTransfers 逐位不变；两策略均过 validatePlan）。
+    final plan = buildPlan(balances: balances, strategy: strategy);
     if (plan.isEmpty) return null;
 
     final lastRound = await (db.select(db.settlements)
@@ -263,9 +521,9 @@ class LedgerRepository {
     final transfersJson = jsonEncode([
       for (final t in plan)
         {
-          "from": t["from"],
-          "to": t["to"],
-          "cents": t["cents"],
+          "from": t.from,
+          "to": t.to,
+          "cents": t.cents,
           "done": false,
         }
     ]);
@@ -277,9 +535,16 @@ class LedgerRepository {
       transfersJson: Value(transfersJson),
       expenseIdsJson: Value(jsonEncode([for (final e in outstanding) e.id])),
       roundNo: Value(nextRoundNo),
+      strategy: Value(strategy.name),
       createdAt: Value(now),
     ));
     SyncOutboxService.notifyWrite("settlements", id);
+    await _audit(gid, AuditEntity.settlement, id, AuditAction.settle, fields: {
+      'roundNo': nextRoundNo,
+      'strategy': strategy.name,
+      'transfers': plan.length,
+      'expenses': outstanding.length,
+    });
     final created = Settlement(
       id: id,
       groupId: gid,
@@ -287,15 +552,16 @@ class LedgerRepository {
       transfers: [
         for (final t in plan)
           TransferRecord(
-            from: t["from"] as String,
-            to: t["to"] as String,
-            cents: t["cents"] as int,
+            from: t.from,
+            to: t.to,
+            cents: t.cents,
             done: false,
           )
       ],
       roundNo: nextRoundNo,
       createdAt: now,
       completedAt: null,
+      strategy: strategy.name,
     );
     return created;
   }
@@ -311,6 +577,9 @@ class LedgerRepository {
       SettlementsCompanion(transfersJson: Value(jsonEncode(list))),
     );
     SyncOutboxService.notifyWrite("settlements", sid);
+    // S12.3：转账逐笔确认也是记录点（审计只记第几笔与最终状态）。
+    await _audit(s.groupId, AuditEntity.settlement, sid, AuditAction.update,
+        fields: {'transfer#': index, 'done': done});
   }
   Future<void> completeSettlement(String sid) async {
     final s = await (db.select(db.settlements)..where((x)=>x.id.equals(sid))).getSingleOrNull();
@@ -324,6 +593,8 @@ class LedgerRepository {
     // 否则云端账单永远「未结算」，其他端重复催款。
     _notifyUpsert("expenses", eids.map((e) => e.toString()));
     SyncOutboxService.notifyWrite("settlements", sid);
+    await _audit(s.groupId, AuditEntity.settlement, sid, AuditAction.complete,
+        fields: {'roundNo': s.roundNo, 'expenses': eids.length});
   }
 
   Future<void> undoLastSettlement(String gid) async {
@@ -337,6 +608,317 @@ class LedgerRepository {
     await (db.delete(db.settlements)..where((x)=>x.id.equals(last.id))).go();
     _notifyUpsert("expenses", eids.map((e) => e.toString()));
     SyncOutboxService.notifyWrite("settlements", last.id, op: "delete");
+    await _audit(gid, AuditEntity.settlement, last.id, AuditAction.undo,
+        fields: {'roundNo': last.roundNo, 'expenses': eids.length});
+  }
+
+  // === 公款池（S8 · N1） ===
+  //
+  // 核心建模红线（§S8.2）：
+  //   入金 = prepay：payers = 各缴款人（各自金额）、shares = 管理人（缴纳总额）
+  //   出金 = normal：payers = 管理人（本次支出）、shares = 按分摊模式
+  // 这样 settle_engine 零改动即自动产出「管理人退每人 X」的方案。
+
+  Stream<List<Fund>> watchFunds(String gid) => (db.select(db.funds)
+        ..where((f) => f.groupId.equals(gid))
+        ..orderBy([(f) => OrderingTerm.desc(f.createdAt)]))
+      .watch();
+
+  Future<Fund?> getFund(String id) async =>
+      (await (db.select(db.funds)..where((f) => f.id.equals(id))).get()).firstOrNull;
+
+  /// 该团当前未关闭的池（一池一管理人；同时只应有一个 open 池）。
+  Future<Fund?> getOpenFund(String gid) async => (await (db.select(db.funds)
+        ..where((f) => f.groupId.equals(gid) & f.status.equals('open'))
+        ..orderBy([(f) => OrderingTerm.desc(f.createdAt)])
+        ..limit(1))
+      .get()).firstOrNull;
+
+  Future<Fund> addFund({
+    required String gid,
+    required String name,
+    required String managerMemberId,
+    int? targetCents,
+  }) async {
+    final manager = await (db.select(db.members)
+          ..where((m) => m.id.equals(managerMemberId)))
+        .getSingleOrNull();
+    if (manager == null) throw StateError('管理人不存在，请先选择一位成员');
+    if (manager.archived) throw StateError('该成员已移除，不能担任公款池管理人');
+    if (manager.groupId != gid) throw StateError('管理人必须属于本账本');
+    final id = newId('fund');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.into(db.funds).insert(FundsCompanion(
+          id: Value(id),
+          groupId: Value(gid),
+          name: Value(name.trim().isEmpty ? '旅行基金' : name.trim()),
+          managerMemberId: Value(managerMemberId),
+          targetCents: Value(targetCents),
+          status: const Value('open'),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ));
+    SyncOutboxService.notifyWrite('funds', id);
+    await _audit(gid, AuditEntity.fund, id, AuditAction.create, fields: {
+      'name': name,
+      'managerMemberId': managerMemberId,
+      'targetCents': targetCents,
+    });
+    return (await getFund(id))!;
+  }
+
+  /// 改名 / 转移管理人 / 改计划金额。**只改 Fund 一行，不改历史账单**。
+  ///
+  /// [updateTarget] 为 true 时才会改写 `targetCents`（支持显式传 null 清空）。
+  Future<void> updateFund(
+    String fundId, {
+    String? name,
+    String? managerMemberId,
+    int? targetCents,
+    bool updateTarget = false,
+  }) async {
+    final comp = FundsCompanion(
+      name: name == null ? const Value.absent() : Value(name.trim()),
+      managerMemberId:
+          managerMemberId == null ? const Value.absent() : Value(managerMemberId),
+      targetCents: updateTarget ? Value(targetCents) : const Value.absent(),
+      updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+    );
+    await (db.update(db.funds)..where((f) => f.id.equals(fundId))).write(comp);
+    SyncOutboxService.notifyWrite('funds', fundId);
+    final fund = await getFund(fundId);
+    if (fund != null) {
+      await _audit(fund.groupId, AuditEntity.fund, fundId, AuditAction.update,
+          fields: {
+            'name': name,
+            'managerMemberId': managerMemberId,
+            if (updateTarget) 'targetCents': targetCents,
+          });
+    }
+  }
+
+  /// 关闭池（只读化）：关闭后禁止再新增入金/出金账单。
+  Future<void> closeFund(String fundId) async {
+    await (db.update(db.funds)..where((f) => f.id.equals(fundId))).write(
+      FundsCompanion(
+        status: const Value('closed'),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
+    );
+    SyncOutboxService.notifyWrite('funds', fundId);
+    final fund = await getFund(fundId);
+    if (fund != null) {
+      await _audit(fund.groupId, AuditEntity.fund, fundId, AuditAction.close,
+          fields: {'name': fund.name, 'status': 'closed'});
+    }
+  }
+
+  Future<Fund> _openFundOrThrow(String fundId) async {
+    final fund = await getFund(fundId);
+    if (fund == null) throw StateError('公款池不存在');
+    if (fund.status != 'open') throw StateError('公款池已关闭，不能再记入金或出金');
+    final manager = await (db.select(db.members)
+          ..where((m) => m.id.equals(fund.managerMemberId)))
+        .getSingleOrNull();
+    if (manager == null || manager.archived) {
+      throw StateError('公款池管理人已失效，请先转移管理人');
+    }
+    return fund;
+  }
+
+  /// 记入金：`prepay` + payers=缴款人 / shares=管理人。
+  ///
+  /// [contributions] 为 memberId -> 缴纳额（分，正数）。返回新账单 id。
+  Future<String> addFundContribution({
+    required String fundId,
+    required Map<String, int> contributions,
+    int? dateEpochDay,
+    String? note,
+  }) async {
+    final fund = await _openFundOrThrow(fundId);
+    final entries = contributions.entries.where((e) => e.value > 0).toList();
+    if (entries.isEmpty) throw StateError('请至少填写一位缴款人的金额');
+    final total = entries.fold<int>(0, (s, e) => s + e.value);
+    final id = newId('expense');
+    await db.into(db.expenses).insert(ExpensesCompanion(
+          id: Value(id),
+          groupId: Value(fund.groupId),
+          dateEpochDay: Value(dateEpochDay ?? todayEpochDay()),
+          title: Value('公费入金 · ${fund.name}'),
+          categoryKey: const Value('other'),
+          type: const Value('prepay'),
+          amountCents: Value(total),
+          currency: const Value('CNY'),
+          rate: const Value(1.0),
+          payersJson: Value(jsonEncode([
+            for (final e in entries) {'memberId': e.key, 'cents': e.value},
+          ])),
+          // 红线：shares 恒为管理人，金额 = 缴纳总额。
+          sharesJson: Value(jsonEncode([
+            {'memberId': fund.managerMemberId, 'cents': total},
+          ])),
+          shareMode: const Value('custom'),
+          note: Value(note ?? ''),
+          fundId: Value(fundId),
+          payMethod: const Value('fund'),
+          createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+        ));
+    SyncOutboxService.notifyWrite('expenses', id);
+    await _audit(fund.groupId, AuditEntity.fund, fundId, AuditAction.update,
+        fields: {'入金': total, '人数': entries.length});
+    return id;
+  }
+
+  /// 记出金：`normal` + payers=管理人 / shares 按分摊模式。
+  Future<String> addFundExpense({
+    required String fundId,
+    required String title,
+    required String categoryKey,
+    required int amountCents,
+    required List<String> shareMemberIds,
+    ShareMode shareMode = ShareMode.equal,
+    Map<String, int>? portions,
+    int? dateEpochDay,
+    String? note,
+  }) async {
+    final fund = await _openFundOrThrow(fundId);
+    if (amountCents <= 0) throw StateError('请填写有效金额');
+    if (shareMemberIds.isEmpty) throw StateError('请选择参与分摊的成员');
+    final shares = splitShares(
+      totalCents: amountCents,
+      memberIds: shareMemberIds,
+      mode: shareMode,
+      portions: portions ?? const {},
+    );
+    final id = newId('expense');
+    await db.into(db.expenses).insert(ExpensesCompanion(
+          id: Value(id),
+          groupId: Value(fund.groupId),
+          dateEpochDay: Value(dateEpochDay ?? todayEpochDay()),
+          title: Value(title.trim().isEmpty ? '公费支出' : title.trim()),
+          categoryKey: Value(categoryKey),
+          type: const Value('normal'),
+          amountCents: Value(amountCents),
+          currency: const Value('CNY'),
+          rate: const Value(1.0),
+          // 红线：payer 恒为管理人。
+          payersJson: Value(jsonEncode([
+            {'memberId': fund.managerMemberId, 'cents': amountCents},
+          ])),
+          sharesJson: Value(jsonEncode([
+            for (final s in shares) {'memberId': s.memberId, 'cents': s.cents},
+          ])),
+          shareMode: Value(shareMode.name),
+          portionsJson: Value(portions == null || portions.isEmpty ? null : jsonEncode(portions)),
+          note: Value(note ?? ''),
+          fundId: Value(fundId),
+          payMethod: const Value('fund'),
+          createdAt: Value(DateTime.now().millisecondsSinceEpoch),
+        ));
+    SyncOutboxService.notifyWrite('expenses', id);
+    await _audit(fund.groupId, AuditEntity.fund, fundId, AuditAction.update,
+        fields: {'出金': amountCents, 'title': title});
+    return id;
+  }
+
+  /// 某池的全部账单（含已入账，供详情页列表展示）。
+  Future<List<Expense>> fundExpenses(String fundId) =>
+      (db.select(db.expenses)
+            ..where((e) => e.fundId.equals(fundId))
+            ..orderBy([
+              (e) => OrderingTerm.desc(e.dateEpochDay),
+              (e) => OrderingTerm.desc(e.createdAt),
+            ]))
+          .get();
+
+  // === 记账收件箱（S10 · N3） ===
+  //
+  // 红线：独立暂存表 InboxItems；pending 条目**不得**参与任何统计 / 结算 / 预算 /
+  // 导出 / 备份 / 分享与只读快照。归类必须「先转正再移除」，禁止用删除代替归类。
+
+  Stream<List<InboxItem>> watchInboxItems(String gid) => (db.select(db.inboxItems)
+        ..where((i) => i.groupId.equals(gid))
+        ..orderBy([(i) => OrderingTerm.desc(i.capturedAt)]))
+      .watch();
+
+  Future<InboxItem?> getInboxItem(String id) async =>
+      (await (db.select(db.inboxItems)..where((i) => i.id.equals(id))).get())
+          .firstOrNull;
+
+  /// 捕捉一条（只填金额 + 可选备注），落 pending。
+  Future<String> captureInboxItem({
+    required String gid,
+    required int amountCents,
+    String? note,
+    String source = 'manual',
+    int? capturedAtMs,
+  }) async {
+    if (amountCents <= 0) throw StateError('请填写有效金额');
+    final id = newId('inbox');
+    final now = capturedAtMs ?? DateTime.now().millisecondsSinceEpoch;
+    await db.into(db.inboxItems).insert(InboxItemsCompanion(
+          id: Value(id),
+          groupId: Value(gid),
+          amountCents: Value(amountCents),
+          note: Value(note),
+          capturedAt: Value(now),
+          source: Value(source),
+          status: const Value('pending'),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ));
+    SyncOutboxService.notifyWrite('inbox_items', id);
+    return id;
+  }
+
+  /// 归类转正：把一个 pending 条目变成正式账单。
+  ///
+  /// **幂等键 = [InboxItems.convertedExpenseId]**：已存在则跳过写入、仅补状态与通知，
+  /// 因此「账单已插入但状态回写失败」后重试**不会**重复生成账单。
+  ///
+  /// [expense] 为归类表单构造的账单（id 由调用方给定，便于同事务写入幂等键）。
+  Future<String> convertInboxItem({
+    required String itemId,
+    required ExpensesCompanion expense,
+  }) async {
+    final item = await getInboxItem(itemId);
+    if (item == null) throw StateError('收件箱条目不存在');
+    final existing = item.convertedExpenseId;
+    if (existing != null && existing.isNotEmpty) {
+      // 幂等：已转正，仅确保同步事件到位。
+      SyncOutboxService.notifyWrite('inbox_items', itemId);
+      return existing;
+    }
+    final expenseId = expense.id.value;
+    await db.transaction(() async {
+      await db.into(db.expenses).insert(expense);
+      await (db.update(db.inboxItems)..where((i) => i.id.equals(itemId))).write(
+        InboxItemsCompanion(
+          status: const Value('converted'),
+          convertedExpenseId: Value(expenseId),
+          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        ),
+      );
+    });
+    // 事务提交成功后再通知（§3.1 事务与通知顺序）。
+    SyncOutboxService.notifyWrite('expenses', expenseId);
+    SyncOutboxService.notifyWrite('inbox_items', itemId);
+    await _audit(item.groupId, AuditEntity.inbox, itemId, AuditAction.convert,
+        fields: {'expenseId': expenseId, 'amountCents': item.amountCents});
+    return expenseId;
+  }
+
+  /// 删除条目：**仅允许已转正条目**；pending 必须先归类（S10 红线）。
+  Future<void> deleteInboxItem(String itemId) async {
+    final item = await getInboxItem(itemId);
+    if (item == null) return;
+    if (item.status == 'pending') {
+      throw StateError('请先归类再移除：未归类的条目不能直接删除');
+    }
+    await (db.delete(db.inboxItems)..where((i) => i.id.equals(itemId))).go();
+    SyncOutboxService.notifyWrite('inbox_items', itemId, op: 'delete');
+    await _audit(item.groupId, AuditEntity.inbox, itemId, AuditAction.delete,
+        fields: {'amountCents': item.amountCents, 'note': item.note});
   }
 
   // === 分类 ===
@@ -350,7 +932,7 @@ class LedgerRepository {
     final es=await (db.select(db.expenses)..where((e)=>e.groupId.equals(gid))).get();
     return jsonEncode({
       "app":"travel-assistant-v2","version":1,
-      "group":{"id":gid,"name":g?.name??"","icon":g?.icon??"📁"},
+      "group":{"id":gid,"name":g?.name??"","icon":g?.icon??"📁","kind":g?.kind??"travel"},
       "members":[for(final m in ms){"id":m.id,"name":m.name,"colorIndex":m.colorIndex}],
       "expenses":[for(final e in es){
         "id":e.id,"title":e.title,"amountCents":e.amountCents,
@@ -406,6 +988,7 @@ class LedgerRepository {
       id: Value(newGid),
       name: Value(gName.isEmpty ? '导入的团' : gName),
       icon: Value(gIcon),
+      kind: Value(_normalizeKind((gRaw['kind'] as String?) ?? 'travel')),
       createdAt: Value(now), updatedAt: Value(now),
     ));
 
@@ -470,6 +1053,12 @@ class LedgerRepository {
     SyncOutboxService.notifyWrite("groups", newGid);
     _notifyUpsert("members", newMemberIds);
     _notifyUpsert("expenses", newExpenseIds);
+    // S12.3：JSON 导入同理只记一条 import 汇总。
+    await _audit(newGid, AuditEntity.backup, newGid, AuditAction.import_,
+        fields: {
+          'members': report.members,
+          'expenses': report.expenses,
+        });
     return report;
   }
 
@@ -494,9 +1083,13 @@ class LedgerRepository {
       final items = await (db.select(db.tripItems)
             ..where((i) => i.tripId.equals(t.id)))
           .get();
+      final wishlist = await (db.select(db.wishlistItems)
+            ..where((w) => w.tripId.equals(t.id)))
+          .get();
       trips.add(<String, dynamic>{
         ...t.toJson(),
         'items': [for (final it in items) it.toJson()],
+        'wishlist': [for (final w in wishlist) w.toJson()],
       });
     }
     return jsonEncode(map);
@@ -525,9 +1118,13 @@ class LedgerRepository {
       final items = await (db.select(db.tripItems)
             ..where((i) => i.tripId.equals(t.id)))
           .get();
+      final wishlist = await (db.select(db.wishlistItems)
+            ..where((w) => w.tripId.equals(t.id)))
+          .get();
       tripsWithItems.add(<String, dynamic>{
         ...t.toJson(),
         'items': [for (final it in items) it.toJson()],
+        'wishlist': [for (final w in wishlist) w.toJson()],
       });
     }
     return buildGroupBackup(
@@ -571,6 +1168,7 @@ class LedgerRepository {
           budgetCents: Value(g['budgetCents'] is int ? g['budgetCents'] as int? : null),
           archived: Value(g['archived'] is bool ? g['archived'] as bool : false),
           archivedAtMs: Value(g['archivedAtMs'] is int ? g['archivedAtMs'] as int? : null),
+          kind: Value(_normalizeKind(g['kind'] as String? ?? 'travel')),
           createdAt: Value(g['createdAt'] is int ? g['createdAt'] as int : now),
           updatedAt: Value(now),
         ));
@@ -585,6 +1183,7 @@ class LedgerRepository {
               icon: Value(_nonEmpty(g['icon'] as String?, existsGroup.icon)),
               budgetEnabled: Value(g['budgetEnabled'] is bool ? g['budgetEnabled'] as bool : existsGroup.budgetEnabled),
               budgetCents: Value(g['budgetCents'] is int ? g['budgetCents'] as int? : existsGroup.budgetCents),
+              kind: Value(_normalizeKind(g['kind'] as String? ?? existsGroup.kind)),
               updatedAt: Value(now),
             ),
           );
@@ -646,6 +1245,8 @@ class LedgerRepository {
           settledRoundId: Value(e['settledRoundId'] is String ? e['settledRoundId'] as String? : null),
           tripId: Value(e['tripId'] is String ? e['tripId'] as String? : null),
           tripItemId: Value(e['tripItemId'] is String ? e['tripItemId'] as String? : null),
+          fundId: Value(e['fundId'] is String ? e['fundId'] as String? : null),
+          payMethod: Value(e['payMethod'] is String ? e['payMethod'] as String? : null),
           createdAt: Value(inCreated),
         );
         if (hit.isEmpty) {
@@ -743,6 +1344,22 @@ class LedgerRepository {
             items++;
             mark('trip_items', iid);
           }
+          // V2.7.2：想去池随行程合并（LWW updatedAt；行内无日期语义）
+          for (final w in _asMapList(t['wishlist'])) {
+            final wid = w['id'] as String?;
+            if (wid == null) continue;
+            final whit = await (db.select(db.wishlistItems)..where((x) => x.id.equals(wid))).get();
+            final wUpd = w['updatedAt'] is int ? w['updatedAt'] as int : 0;
+            final wLocal = whit.isEmpty ? -1 : (whit.first.updatedAt ?? 0);
+            if (whit.isNotEmpty && wLocal > wUpd) continue;
+            final comp = _wishlistItemCompanion(w, now, tid);
+            if (whit.isEmpty) {
+              await db.into(db.wishlistItems).insert(comp);
+            } else {
+              await (db.update(db.wishlistItems)..where((x) => x.id.equals(wid))).write(comp);
+            }
+            mark('wishlist_items', wid);
+          }
         }
       }
     });
@@ -750,6 +1367,13 @@ class LedgerRepository {
     for (final kv in touched.entries) {
       _notifyUpsert(kv.key, kv.value);
     }
+    // S12.3：局域网合并同为批量导入，只记一条 import 汇总。
+    await _audit(gid, AuditEntity.backup, gid, AuditAction.import_, fields: {
+      '来源': '局域网快照',
+      'members': members,
+      'expenses': expenses,
+      'settlements': settlements,
+    });
 
     return '合并完成：团$addGroup新增/更新$updGroup · 成员$members · 账单$expenses · '
         '结算$settlements · 行程$trips · 安排$items';
@@ -766,7 +1390,17 @@ class LedgerRepository {
     final backup = parseGroupBackupMap(root);
     final existingByName = await _existingCategoryNameToKey();
     final result = applyImport(backup, existingCategoryByName: existingByName);
-    return _insertFullBackup(result);
+    final report = await _insertFullBackup(result);
+    // S12.3：批量导入不逐条记录，只记一条 import 汇总（防体积爆炸）。
+    await _audit(
+        result.group['id'] as String? ?? '', AuditEntity.backup,
+        result.group['id'] as String? ?? '', AuditAction.import_,
+        fields: {
+          'members': report.members,
+          'expenses': report.expenses,
+          'settlements': report.settlements,
+        });
+    return report;
   }
 
   // === 全量备份（.tavA / 同步码） ===
@@ -787,10 +1421,14 @@ class LedgerRepository {
       final checklist = await (db.select(db.checklistItems)
             ..where((c) => c.tripId.equals(t.id)))
           .get();
+      final wishlist = await (db.select(db.wishlistItems)
+            ..where((w) => w.tripId.equals(t.id)))
+          .get();
       standalone.add(<String, dynamic>{
         ...t.toJson(),
         'items': [for (final it in items) it.toJson()],
         'checklist': [for (final c in checklist) c.toJson()],
+        'wishlist': [for (final w in wishlist) w.toJson()],
       });
     }
     return buildFullBackup(groups: groups, standaloneTrips: standalone);
@@ -849,6 +1487,16 @@ class LedgerRepository {
     // 未绑团独立行程：稳定 id upsert（行程+安排+清单）
     for (final t in backup.standaloneTrips) {
       await _upsertStandaloneTrip(t);
+    }
+    // S12.3：全量备份导入按团各记一条 import 汇总（绝不逐行记录）。
+    for (final g in backup.groups) {
+      final gid = ((g['group'] as Map?)?['id'] as String?) ?? '';
+      if (gid.isEmpty) continue;
+      await _audit(gid, AuditEntity.backup, gid, AuditAction.import_, fields: {
+        '来源': replace ? '全量备份（覆盖恢复）' : '全量备份（合并）',
+        'members': _asMapList(g['members']).length,
+        'expenses': _asMapList(g['expenses']).length,
+      });
     }
     return report;
   }
@@ -934,6 +1582,23 @@ class LedgerRepository {
         sortOrder: Value(c['sortOrder'] is int ? c['sortOrder'] as int : 0),
       ));
     }
+    // V2.7.2：全量备份携带的想去池行（LWW updatedAt）
+    for (final w in _asMapList(t['wishlist'])) {
+      final wid = w['id'] as String?;
+      if (wid == null) continue;
+      final whit =
+          await (db.select(db.wishlistItems)..where((x) => x.id.equals(wid))).get();
+      final wUpd = w['updatedAt'] is int ? w['updatedAt'] as int : 0;
+      final wLocal = whit.isEmpty ? -1 : (whit.first.updatedAt ?? 0);
+      if (whit.isNotEmpty && wLocal > wUpd) continue;
+      final comp = _wishlistItemCompanion(w, now, tid);
+      if (whit.isEmpty) {
+        await db.into(db.wishlistItems).insert(comp);
+      } else {
+        await (db.update(db.wishlistItems)..where((x) => x.id.equals(wid))).write(comp);
+      }
+      _notifyUpsert('wishlist_items', {wid});
+    }
     SyncOutboxService.notifyWrite('trips', tid);
     _notifyUpsert('trip_items', touchedItemIds);
   }
@@ -951,10 +1616,16 @@ class LedgerRepository {
         (await db.select(db.settlements).get()).map((r) => r.id).toList();
     final oldTrips = (await db.select(db.trips).get()).map((r) => r.id).toList();
     final oldItems = (await db.select(db.tripItems).get()).map((r) => r.id).toList();
+    final oldFunds = (await db.select(db.funds).get()).map((r) => r.id).toList();
+    final oldInbox = (await db.select(db.inboxItems).get()).map((r) => r.id).toList();
+    final oldWishlist = (await db.select(db.wishlistItems).get()).map((r) => r.id).toList();
     await db.transaction(() async {
       await db.delete(db.expenses).go();
       await db.delete(db.settlements).go();
+      await db.delete(db.funds).go();
+      await db.delete(db.inboxItems).go();
       await db.delete(db.tripItems).go();
+      await db.delete(db.wishlistItems).go();
       await db.delete(db.checklistItems).go();
       await db.delete(db.albumPhotos).go();
       await db.delete(db.trips).go();
@@ -964,10 +1635,13 @@ class LedgerRepository {
     });
     _notifyDelete('groups', oldGroups);
     _notifyDelete('members', oldMembers);
+    _notifyDelete('funds', oldFunds);
+    _notifyDelete('inbox_items', oldInbox);
     _notifyDelete('expenses', oldExpenses);
     _notifyDelete('settlements', oldSettlements);
     _notifyDelete('trips', oldTrips);
     _notifyDelete('trip_items', oldItems);
+    _notifyDelete('wishlist_items', oldWishlist);
   }
 
   /// CSV 批量导入账单到指定团。
@@ -1050,13 +1724,41 @@ class LedgerRepository {
           (m) => m.name == r['shareMode'],
           orElse: () => ShareMode.equal,
         );
+        // S3：percent 模式下把「分摊百分比」列（已按分摊人顺序对齐）归一为 bp 表；
+        // 全 0/全空回退 equal（与 share_splitter 同口径）。
+        var effectiveMode = mode;
+        Map<String, int>? portions;
         List<ShareEntry> shares;
         try {
-          shares = splitShares(
-            totalCents: amount,
-            memberIds: shareIds,
-            mode: mode,
-          );
+          if (mode == ShareMode.percent) {
+            final values =
+                (r['sharePercentValues'] as List?)?.whereType<int>().toList() ??
+                    const <int>[];
+            final raw = <String, int>{};
+            for (var i = 0; i < shareNames.length && i < values.length; i++) {
+              final id = nameToId[shareNames[i]];
+              if (id != null && values[i] > 0) raw[id] = values[i];
+            }
+            final bp = normalizePercentToBp(raw);
+            if (bp.isEmpty) {
+              effectiveMode = ShareMode.equal;
+              shares = splitShares(totalCents: amount, memberIds: shareIds);
+            } else {
+              portions = bp;
+              shares = splitShares(
+                totalCents: amount,
+                memberIds: shareIds,
+                mode: ShareMode.percent,
+                portions: bp,
+              );
+            }
+          } else {
+            shares = splitShares(
+              totalCents: amount,
+              memberIds: shareIds,
+              mode: mode,
+            );
+          }
         } catch (_) {
           badRows++;
           continue;
@@ -1087,8 +1789,8 @@ class LedgerRepository {
           sharesJson: Value(jsonEncode([
             for (final s in shares) {'memberId': s.memberId, 'cents': s.cents},
           ])),
-          shareMode: Value(mode.name),
-          portionsJson: const Value(null),
+          shareMode: Value(effectiveMode.name),
+          portionsJson: Value(portions == null ? null : jsonEncode(portions)),
           note: Value((r['note'] as String? ?? '')),
           settledRoundId: const Value(null),
           createdAt: Value(now),
@@ -1100,6 +1802,12 @@ class LedgerRepository {
     // 提交后入队：CSV 批量导入也是本地写入，必须同步到云端。
     _notifyUpsert('members', newMemberIds);
     _notifyUpsert('expenses', newExpenseIds);
+    await _audit(groupId, AuditEntity.backup, groupId, AuditAction.import_,
+        fields: {
+          '来源': 'CSV',
+          'members': memberCount,
+          'expenses': expenseCount,
+        });
     if (badRows > 0) warnings.add('$badRows 条无效记录已跳过');
     return ImportReport(
       groups: 0,
@@ -1138,6 +1846,7 @@ class LedgerRepository {
             Value(r.group['budgetEnabled'] is bool ? r.group['budgetEnabled'] as bool : false),
         budgetCents:
             Value(r.group['budgetCents'] is int ? r.group['budgetCents'] as int? : null),
+        kind: Value(_normalizeKind(r.group['kind'] as String? ?? 'travel')),
         createdAt: Value(r.group['createdAt'] is int ? r.group['createdAt'] as int : now),
         updatedAt: Value(now),
       ));
@@ -1174,6 +1883,8 @@ class LedgerRepository {
           settledRoundId: Value(e['settledRoundId'] is String ? e['settledRoundId'] as String? : null),
           tripId: Value(e['tripId'] is String ? e['tripId'] as String? : null),
           tripItemId: Value(e['tripItemId'] is String ? e['tripItemId'] as String? : null),
+          fundId: Value(e['fundId'] is String ? e['fundId'] as String? : null),
+          payMethod: Value(e['payMethod'] is String ? e['payMethod'] as String? : null),
           createdAt: Value(e['createdAt'] is int ? e['createdAt'] as int : now),
         ));
       }
@@ -1269,6 +1980,9 @@ class LedgerRepository {
         'settledRoundId': e.settledRoundId,
         'tripId': e.tripId,
         'tripItemId': e.tripItemId,
+        // V2.7.1：公款池与支付方式标签随备份/快照带出（金额口径不变）。
+        'fundId': e.fundId,
+        'payMethod': e.payMethod,
         'createdAt': e.createdAt,
       };
 
@@ -1328,8 +2042,27 @@ class LedgerRepository {
     );
   }
 
+  /// 想去池行 companion（备份/快照合并共用；updatedAt 恒为 now，LWW 基准）。
+  WishlistItemsCompanion _wishlistItemCompanion(Map<String, dynamic> w, int now, String tripId) {
+    return WishlistItemsCompanion(
+      id: Value(w['id'] as String),
+      tripId: Value(tripId),
+      cityKey: Value(w['cityKey'] as String? ?? ''),
+      name: Value(_nonEmpty(w['name'] as String?, '想去的地方')),
+      address: Value(w['address'] as String? ?? ''),
+      type: Value(_nonEmpty(w['type'] as String?, 'attraction')),
+      durationMin: Value(w['durationMin'] is int ? w['durationMin'] as int? : null),
+      tag: Value(w['tag'] as String?),
+      guideRef: Value(w['guideRef'] as String?),
+      note: Value(w['note'] as String? ?? ''),
+      sortOrder: Value(w['sortOrder'] is int ? w['sortOrder'] as int : 0),
+      createdAt: Value(w['createdAt'] is int ? w['createdAt'] as int : now),
+      updatedAt: Value(now),
+    );
+  }
+
   static const kExpenseTypeNames = {'normal','refund','prepay'};
-  static const kShareModeNames = {'equal','portions','custom'};
+  static const kShareModeNames = {'equal','portions','percent','custom'};
 
   // === 辅助 ===
   /// 净额计算（与 domain/settle_engine 同口径）：已付 − 应摊。
@@ -1362,26 +2095,29 @@ class LedgerRepository {
       // 单条账单格式异常不应影响同团其他账单的结算。
     }
   }
-  List<Map<String,dynamic>> _minTransferPlan(Map<String,int> balances) {
-    final owes = [for(final e in balances.entries.where((e)=>e.value<0)) {"id":e.key,"amt":-e.value}];
-    final gets = [for(final e in balances.entries.where((e)=>e.value>0)) {"id":e.key,"amt":e.value}];
-    owes.sort((a,b) => (b["amt"] as int).compareTo(a["amt"] as int));
-    gets.sort((a,b) => (b["amt"] as int).compareTo(a["amt"] as int));
-    final plan = <Map<String,dynamic>>[];
-    var i = 0, j = 0;
-    while (i < owes.length && j < gets.length) {
-      final d = owes[i]["amt"] as int, c = gets[j]["amt"] as int;
-      final m = d < c ? d : c;
-      if (m > 0) plan.add({"from": owes[i]["id"], "to": gets[j]["id"], "cents": m});
-      owes[i]["amt"] = d - m;
-      gets[j]["amt"] = c - m;
-      if (owes[i]["amt"] == 0) i++;
-      if (gets[j]["amt"] == 0) j++;
-    }
-    return plan;
-  }}
+  // 最少转账方案已统一收敛到 domain/settle_strategy.dart 的 buildPlan
+  // （S9：两策略共用同一入口，minTransfers 逐位不变）。此前的库内重复实现已删除。
+}
 
 /// —— 导入解析辅助（库内私有） ——
+
+/// S2 G1：结构化判定 JSON 数组（payers/shares）是否含指定 memberId。
+///
+/// 不再用 `LIKE '%id%'`（子串对抗会误报）；解析失败按「存在引用」保守拦截。
+bool _jsonReferencesMember(String json, String mid) {
+  final s = json.trim();
+  if (s.isEmpty || s == '[]') return false;
+  try {
+    final decoded = jsonDecode(s);
+    if (decoded is! List) return true; // 非数组形态：保守视为存在引用
+    for (final it in decoded) {
+      if (it is Map && it['memberId'] == mid) return true;
+    }
+    return false;
+  } catch (_) {
+    return true; // JSON 损坏：宁可拦不可漏
+  }
+}
 
 /// 宽松取整：num 直接转，纯数字字符串尝试解析，其余 null
 int? _asIntOrNull(Object? v) => v is num ? v.toInt() : (v is String ? int.tryParse(v) : null);

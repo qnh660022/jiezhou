@@ -130,6 +130,15 @@ class ProfileScreen extends ConsumerWidget {
         _StaggerIn(
           index: 6,
           child: _ProfileTile(
+            icon: Icons.lock_outline_rounded,
+            title: '启动锁',
+            subtitle: '冷启动时用 6 位 PIN 解锁',
+            onTap: () => context.push('/profile/app-lock'),
+          ),
+        ),
+        _StaggerIn(
+          index: 6,
+          child: _ProfileTile(
             icon: Icons.shield_outlined,
             title: '隐私说明',
             onTap: () => context.push('/profile/privacy'),
@@ -273,6 +282,12 @@ class ProfileScreen extends ConsumerWidget {
                 ),
             ]),
             section('数据与隐私', [
+              _ProfileTile(
+                icon: Icons.lock_outline_rounded,
+                title: '启动锁',
+                subtitle: '冷启动时用 6 位 PIN 解锁',
+                onTap: () => context.push('/profile/app-lock'),
+              ),
               _ProfileTile(
                 icon: Icons.shield_outlined,
                 title: '隐私说明',

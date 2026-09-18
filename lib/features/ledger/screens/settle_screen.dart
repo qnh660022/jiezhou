@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/date_utils.dart';
 import '../../../domain/models.dart';
+import '../../../domain/settle_strategy.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
@@ -16,13 +17,23 @@ import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/member_avatar.dart';
 import '../widgets/stagger_in.dart';
+import 'settle_card_sheet.dart';
 
 /// ⚖️ AA 结算：净额榜 → 转账方案逐笔确认 → 完成本轮；历史可撤销。
-class SettleScreen extends ConsumerWidget {
+///
+/// S9：净额榜下方可选结算策略（最少笔数 / 最少人参与），**会话级状态不持久化**。
+class SettleScreen extends ConsumerStatefulWidget {
   const SettleScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettleScreen> createState() => _SettleScreenState();
+}
+
+class _SettleScreenState extends ConsumerState<SettleScreen> {
+  SettleStrategy _strategy = SettleStrategy.minTransfers;
+
+  @override
+  Widget build(BuildContext context) {
     final activeAsync = ref.watch(activeSettlementProvider);
     final membersAsync = ref.watch(membersProvider);
     final historyAll = ref.watch(settlementsProvider);
@@ -55,6 +66,22 @@ class SettleScreen extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xxxl),
                   children: [
                     StaggerIn(index: 0, child: _NetBoard(members: members)),
+                    const SizedBox(height: Spacing.md),
+                    // S9：结算策略（切换即时生效，创建本轮时记录到 settlements.strategy）。
+                    SegmentedButton<SettleStrategy>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                            value: SettleStrategy.minTransfers, label: Text('最少笔数')),
+                        ButtonSegment(
+                            value: SettleStrategy.minParticipants, label: Text('最少人参与')),
+                      ],
+                      selected: {_strategy},
+                      onSelectionChanged: (s) {
+                        HapticFeedback.selectionClick();
+                        setState(() => _strategy = s.first);
+                      },
+                    ),
                     const SizedBox(height: Spacing.lg),
                     activeAsync.when(
                       loading: () => const SkeletonBox(height: 160, radius: AppRadius.cardValue),
@@ -65,7 +92,8 @@ class SettleScreen extends ConsumerWidget {
                               child: _StartRoundCard(
                                 onStart: () async {
                                   HapticFeedback.lightImpact();
-                                  final created = await startSettlement(ref, groupId);
+                                  final created = await startSettlement(ref, groupId,
+                                      strategy: _strategy);
                                   if (!context.mounted) return;
                                   // 余额已平衡 / 无未结账单时，createSettlement 返回 null 不入库
                                   if (!created) {
@@ -198,6 +226,16 @@ class _ActiveRound extends ConsumerWidget {
       members.firstWhere((m) => m.id == id,
           orElse: () => LedgerMemberView(id: id, name: '?', colorIndex: 0));
 
+  /// 方案中出现的不同账户数（脚注「M 人参与」）。
+  Set<String> _participants() {
+    final ids = <String>{};
+    for (final t in settlement.transfers) {
+      ids.add(t.from);
+      ids.add(t.to);
+    }
+    return ids;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final allDone = settlement.allDone;
@@ -213,6 +251,13 @@ class _ActiveRound extends ConsumerWidget {
                   style: Theme.of(context).textTheme.titleSmall),
             ),
           ],
+        ),
+        const SizedBox(height: Spacing.xs),
+        // S9 脚注：笔数 + 参与人数 + 所用策略。
+        Text(
+          '${settlement.transfers.length} 笔 · ${_participants().length} 人参与 · '
+          '${settlement.strategy == 'minParticipants' ? '最少人参与' : '最少笔数'}',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: Spacing.sm),
         for (var i = 0; i < settlement.transfers.length; i++)
@@ -244,6 +289,13 @@ class _ActiveRound extends ConsumerWidget {
                   }
                 }
               : null,
+        ),
+        const SizedBox(height: Spacing.sm),
+        // S5：把本轮方案变成可分享的图片卡 + 只读链接。
+        OutlinedButton.icon(
+          icon: const Icon(Icons.ios_share_rounded, size: 18),
+          label: const Text('生成结算卡 / 只读链接'),
+          onPressed: () => showSettleCardSheet(context, ref, settlement),
         ),
       ],
     );
@@ -453,10 +505,23 @@ class _HistorySection extends ConsumerWidget {
                     fmtFullDate(DateTime.fromMillisecondsSinceEpoch(history[i].completedAtMs ?? history[i].createdAtMs)),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  trailing: TextButton(
-                    onPressed: () => _confirmUndo(context, ref),
-                    child: Text('撤销',
-                        style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.error)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // S5：每一轮都可单独生成结算卡 / 只读链接。
+                      IconButton(
+                        tooltip: '生成结算卡',
+                        icon: Icon(Icons.ios_share_rounded,
+                            size: 18, color: scheme.onSurfaceVariant),
+                        onPressed: () => showSettleCardSheet(context, ref, history[i]),
+                      ),
+                      TextButton(
+                        onPressed: () => _confirmUndo(context, ref),
+                        child: Text('撤销',
+                            style: TextStyle(
+                                fontSize: AppFontSizes.caption, color: scheme.error)),
+                      ),
+                    ],
                   ),
                 ),
               ],

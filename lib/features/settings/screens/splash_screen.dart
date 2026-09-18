@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../platform/app_lock.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../theme/tokens.dart';
@@ -79,12 +80,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ..forward();
   }
 
-  void _enterApp() {
+  Future<void> _enterApp() async {
     if (!mounted) return;
     // 停留期内用户可能已通过底部胶囊导航切走（过渡帧里 HomeShell 与本页
     // 同树共存）：当前路由不再是 '/' 时放弃跳转，避免把用户拽回行程 Tab。
     if (GoRouterState.of(context).uri.path != '/') return;
-    context.go('/trips');
+    // V2.7.1 S7.2：冷启动读一次启动锁状态（失败/无插件一律视为未开启）。
+    // 与 `appLockRedirect` 是同一判据的两次读取，二者不会互相打架：
+    // 这里只负责「首跳去哪」，redirect 负责「拦住任何其它入口」。
+    await AppLockGate.load();
+    if (!mounted) return;
+    context.go(AppLockGate.locked ? '/lock' : '/trips');
   }
 
   @override

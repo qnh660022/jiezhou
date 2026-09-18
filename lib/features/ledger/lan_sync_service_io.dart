@@ -1,16 +1,27 @@
 /// 局域网离线协作记账：同一 Wi-Fi 下「发起口令」/「加入口令」快照同步。
 ///
 /// 传输纯走局域网（TCP HTTP + UDP 发现口），全程离线、不依赖公网。
-/// 协议：
+/// 协议（V2.7.1 S2.4 G6 起）：
 ///   GET  /snapshot  → 返回主机「当前团」整包 JSON 快照（稳定 id），供加入方拉取合并；
-///   POST /snapshot  → 请求体为对方快照 JSON，主机解析后按 id 合并进本地（LWW）。
-/// 发现：主机周期性向 255.255.255.255 广播 {code,port}；加入方监听并比对口令下发回执；
-///        若广播被 AP 隔离，主机界面会展示本机 IP，加入方可用「手动填 IP」兜底。
+///                     **必须**带 `x-lan-proto` / `x-lan-mac`（HMAC-SHA256）响应头；
+///   POST /snapshot  → 请求体为对方快照 JSON + `x-lan-mac`；主机先验签再按 id 合并（LWW）。
+/// 发现：主机周期性向 255.255.255.255 广播 {check,port,proto}；加入方监听并比对
+///       口令派生的 `check`；若广播被 AP 隔离，主机界面会展示本机 IP，
+///       加入方可用「手动填 IP」兜底。
+///
+/// 【安全口径 · 最小可接受实现】发现包不含明文口令（只有派生校验值）；
+/// 载荷做 HMAC-SHA256 完整性校验；载荷本身**未加密**（明文 HTTP），
+/// 界面必须提示风险。详见 `lib/core/lan_crypto.dart` 头注。
+///
+/// 【防回声风暴 · 不得回退】加入方只广播**纯询问包**（无 port、1100ms、≤12 次）；
+/// 主机只对「无 port 且 check 匹配且 proto 匹配」的纯询问单播回执，带 port 的一律不回。
 library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+
+import '../../../core/lan_crypto.dart';
 
 /// UDP 发现端口（两端固定）
 const int kLanSyncUdpPort = 45512;
@@ -18,6 +29,11 @@ const int kLanSyncUdpPort = 45512;
 const String kLanSyncBroadcast = '255.255.255.255';
 /// 时钟心跳广播间隔
 const Duration _announceInterval = Duration(milliseconds: 1200);
+
+/// 明文风险提示文案（UI 直接展示；口令派生的校验值不对外暴露）。
+const String kLanPlaintextRiskNotice =
+    '局域网同步目前为明文传输：仅校验口令与数据完整性，未加密快照内容。'
+    '请只在可信 Wi-Fi 下使用，并留意同网段设备。';
 
 class LanPeer {
   const LanPeer({required this.ip, required this.port});
@@ -31,6 +47,7 @@ class LanSyncManager {
   RawDatagramSocket? _udp;
   Timer? _announce;
   String? _code;
+  String? _check;
   bool _closed = false;
 
   /// 当前团快照提供者（由屏幕注入，取机主「当前团」）
@@ -48,6 +65,7 @@ class LanSyncManager {
     this.snapshotMerger = snapshotMerger;
     _closed = false;
     _code = _newCode();
+    _check = lanPasscodeCheck(_code!);
     _announce?.cancel(); // 防重复启动造成多定时器叠加
 
     // HTTP 服务
@@ -69,17 +87,33 @@ class LanSyncManager {
   void _onRequest(HttpRequest req) async {
     try {
       final uri = req.uri.path;
+      final clientProto =
+          int.tryParse(req.headers.value('x-lan-proto') ?? '') ?? 0;
+      if (clientProto != kLanProtoVersion) {
+        req.response.statusCode = HttpStatus.conflict;
+        req.response.headers.contentType =
+            ContentType('text', 'plain', charset: 'utf-8');
+        req.response.write('err:proto_mismatch');
+        await req.response.close();
+        return;
+      }
       if (req.method == 'GET' && uri == '/snapshot') {
         final json = await snapshotProvider?.call() ?? '{}';
         req.response.headers.contentType =
             ContentType('application', 'json', charset: 'utf-8');
+        req.response.headers.set('x-lan-proto', '$kLanProtoVersion');
+        req.response.headers.set('x-lan-mac', lanPayloadMac(_code!, json));
         req.response.write(json);
         await req.response.close();
       } else if (req.method == 'POST' && uri == '/snapshot') {
         final body = await utf8.decoder.bind(req).join();
+        // 先验签：完整性不通过一律拒绝，绝不合并脏数据。
+        verifyLanPayloadMac(_code!, body, req.headers.value('x-lan-mac'));
         final summary = await snapshotMerger?.call(body) ?? '合并完成';
         req.response.headers.contentType =
             ContentType('text', 'plain', charset: 'utf-8');
+        req.response.headers.set('x-lan-proto', '$kLanProtoVersion');
+        req.response.headers.set('x-lan-mac', lanPayloadMac(_code!, summary));
         req.response.write(summary);
         await req.response.close();
       } else {
@@ -96,9 +130,13 @@ class LanSyncManager {
   }
 
   void _announceCode() {
-    if (_closed || _udp == null || _code == null) return;
-    final msg = utf8.encode(
-        jsonEncode({'app': 'trip-sync', 'code': _code, 'port': _http?.port}));
+    if (_closed || _udp == null || _check == null) return;
+    final msg = utf8.encode(jsonEncode({
+      'app': 'trip-sync',
+      'check': _check,
+      'port': _http?.port,
+      'proto': kLanProtoVersion,
+    }));
     try {
       _udp!.send(msg, InternetAddress(kLanSyncBroadcast), kLanSyncUdpPort);
     } catch (_) {}
@@ -112,7 +150,7 @@ class LanSyncManager {
   /// 反复回给自己 → 数据报指数放大 → 主进程忙死、界面卡死、HTTP 快照
   /// 响应被饿死（对方「拉取不到账本」），且无法退出共享。
   void _onUdpEvent(RawSocketEvent event) {
-    if (_closed || _udp == null || _code == null) return;
+    if (_closed || _udp == null || _check == null) return;
     if (event != RawSocketEvent.read) return;
     final dg = _udp!.receive();
     if (dg == null) return;
@@ -120,13 +158,18 @@ class LanSyncManager {
       final obj = jsonDecode(utf8.decode(dg.data));
       if (obj is Map &&
           obj['app'] == 'trip-sync' &&
-          obj['code'] is String &&
-          obj['code'] == _code &&
+          obj['check'] is String &&
+          obj['check'] == _check &&
+          obj['proto'] == kLanProtoVersion &&
           obj['port'] is! int) {
         // 对方在问我的口令（纯询问，无 port）—— 单播回我的端口，
         // 确保即使广播被隔离也能被发现。
-        final reply = utf8.encode(jsonEncode(
-            {'app': 'trip-sync', 'code': _code, 'port': _http?.port}));
+        final reply = utf8.encode(jsonEncode({
+          'app': 'trip-sync',
+          'check': _check,
+          'port': _http?.port,
+          'proto': kLanProtoVersion,
+        }));
         _udp!.send(reply, dg.address, dg.port);
       }
     } catch (_) {}
@@ -149,12 +192,15 @@ class LanSyncManager {
   // ---- 加入端 ----
 
   /// 按口令发现主机；成功返回其 (ip, port)。可传 [manualIp] 兜底（主机屏幕会展示 IP）。
+  ///
+  /// 发现包只带口令派生的 `check`；协议版本不匹配时明确报错（不静默降级）。
   Future<LanPeer> discoverHost(String code,
       {String? manualIp, int manualPort = 45681}) async {
     final ip = manualIp?.trim() ?? '';
     if (ip.isNotEmpty) {
       return LanPeer(ip: ip, port: manualPort);
     }
+    final check = lanPasscodeCheck(code);
     final completer = Completer<LanPeer>();
     final socket = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4, kLanSyncUdpPort,
@@ -168,15 +214,25 @@ class LanSyncManager {
         final obj = jsonDecode(utf8.decode(dg.data));
         if (obj is Map &&
             obj['app'] == 'trip-sync' &&
-            obj['code'] == code &&
+            obj['check'] == check &&
             (obj['port'] is int) &&
             !completer.isCompleted) {
+          if (obj['proto'] != kLanProtoVersion) {
+            completer.completeError(
+                Exception('对方版本过旧，请双方升级到同版本后再同步'));
+            return;
+          }
           completer.complete(
               LanPeer(ip: dg.address.address, port: obj['port'] as int));
         }
       } catch (_) {}
     });
-    final query = utf8.encode(jsonEncode({'app': 'trip-sync', 'code': code}));
+    // 纯询问包：无 port 字段（防回声风暴，不得添加 port）。
+    final query = utf8.encode(jsonEncode({
+      'app': 'trip-sync',
+      'check': check,
+      'proto': kLanProtoVersion,
+    }));
     final target = InternetAddress(kLanSyncBroadcast);
     var attempts = 0;
     final timer = Timer.periodic(const Duration(milliseconds: 1100), (t) {
@@ -207,40 +263,57 @@ class LanSyncManager {
 
   // ---- 传输 ----
 
-  /// 拉取主机快照（join 侧）：返回主机当前团快照 JSON。
-  Future<String> pullSnapshot(LanPeer peer) async {
+  /// 拉取主机快照（join 侧）：返回主机当前团快照 JSON（已验完整性）。
+  Future<String> pullSnapshot(LanPeer peer, {required String code}) async {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 8);
     try {
       final req = await client.getUrl(
               Uri.parse('http://${peer.ip}:${peer.port}/snapshot'))
         ..headers.contentType =
-            ContentType('application', 'json', charset: 'utf-8');
+            ContentType('application', 'json', charset: 'utf-8')
+        ..headers.set('x-lan-proto', '$kLanProtoVersion');
       final res = await req.close();
+      if (res.statusCode == HttpStatus.conflict) {
+        throw const FormatException('对方版本过旧，请双方升级到同版本后再同步');
+      }
       // 读取阶段也加总超时：主机忙碌/网络抖动时避免 join 侧无限挂起。
-      return await res
+      final body = await res
           .transform(utf8.decoder)
           .join()
           .timeout(const Duration(seconds: 20));
+      verifyLanPayloadMac(code, body, res.headers.value('x-lan-mac'));
+      return body;
     } finally {
       client.close(force: true);
     }
   }
 
-  /// 推送本机快照给主机（join 侧）：返回主机合并后的摘要。
-  Future<String> pushSnapshot(LanPeer peer, String snapshotJson) async {
+  /// 推送本机快照给主机（join 侧）：返回主机合并后的摘要（已验完整性）。
+  Future<String> pushSnapshot(LanPeer peer, String snapshotJson,
+      {required String code}) async {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 8);
     try {
       final req = await client
           .postUrl(Uri.parse('http://${peer.ip}:${peer.port}/snapshot'))
-        ..headers.contentType = ContentType('application', 'json', charset: 'utf-8');
+        ..headers.contentType = ContentType('application', 'json', charset: 'utf-8')
+        ..headers.set('x-lan-proto', '$kLanProtoVersion')
+        ..headers.set('x-lan-mac', lanPayloadMac(code, snapshotJson));
       req.write(snapshotJson);
       final res = await req.close();
-      return await res
+      if (res.statusCode == HttpStatus.conflict) {
+        throw const FormatException('对方版本过旧，请双方升级到同版本后再同步');
+      }
+      final summary = await res
           .transform(utf8.decoder)
           .join()
           .timeout(const Duration(seconds: 20));
+      final mac = res.headers.value('x-lan-mac');
+      if (mac != null && mac.isNotEmpty) {
+        verifyLanPayloadMac(code, summary, mac);
+      }
+      return summary;
     } finally {
       client.close(force: true);
     }

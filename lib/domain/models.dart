@@ -29,6 +29,10 @@ enum ShareMode {
   /// 按份数最大余数法
   portions,
 
+  /// 按百分比（S3）：portionsJson 语义重载为万分比 bp 整数表（Σ 恒 10000），
+  /// 自动归一（Σ≠100% 时按比例缩放，不报错）。
+  percent,
+
   /// 自定义每人口径（要求总额守恒）
   custom,
 }
@@ -78,6 +82,89 @@ class ShareEntry {
   String toString() => 'ShareEntry($memberId, $cents)';
 }
 
+/// 想去池条目（WishlistItems 表镜像，V2.7.2 S1 登记 10）。
+///
+/// 条目**无日期**——这是与 Plan B 备选卡（已挂日期）的唯一分界线；
+/// 落卡即从池中移除，不存在两边同时持有。
+class WishlistRecord {
+  const WishlistRecord({
+    required this.id,
+    required this.tripId,
+    this.cityKey = '',
+    this.name = '',
+    this.address = '',
+    this.type = 'attraction',
+    this.durationMin,
+    this.tag,
+    this.guideRef,
+    this.note = '',
+    this.sortOrder = 0,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String tripId;
+
+  /// 攻略城 key；手动条目为 ''
+  final String cityKey;
+  final String name;
+  final String address;
+
+  /// attraction|food|transport|stay|note（五类同 TripItems）
+  final String type;
+
+  /// null = 未估时（参与装配前需补时长）
+  final int? durationMin;
+
+  /// 必去/经典/小众/亲子（可空）
+  final String? tag;
+
+  /// 攻略弱关联 "<cityKey>#<栏>#<序号>"（可空）
+  final String? guideRef;
+  final String note;
+  final int sortOrder;
+  final int createdAt;
+  final int updatedAt;
+
+  WishlistRecord copyWith({
+    String? cityKey,
+    String? name,
+    String? address,
+    String? type,
+    int? durationMin,
+    Object? tag = _unset,
+    Object? guideRef = _unset,
+    String? note,
+    int? sortOrder,
+    int? updatedAt,
+  }) =>
+      WishlistRecord(
+        id: id,
+        tripId: tripId,
+        cityKey: cityKey ?? this.cityKey,
+        name: name ?? this.name,
+        address: address ?? this.address,
+        type: type ?? this.type,
+        durationMin: durationMin ?? this.durationMin,
+        tag: tag == _unset ? this.tag : tag as String?,
+        guideRef: guideRef == _unset ? this.guideRef : guideRef as String?,
+        note: note ?? this.note,
+        sortOrder: sortOrder ?? this.sortOrder,
+        createdAt: createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || other is WishlistRecord && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+const Object _unset = Object();
+
 /// 账单（Expenses 表镜像）
 class ExpenseRecord {
   const ExpenseRecord({
@@ -99,6 +186,8 @@ class ExpenseRecord {
     this.settledRoundId,
     this.tripId,
     this.tripItemId,
+    this.fundId,
+    this.payMethod,
   });
 
   final String id;
@@ -141,6 +230,12 @@ class ExpenseRecord {
   /// 关联行程安排（可空）
   final String? tripItemId;
 
+  /// 所属公款池 id（S8；非空即属池）
+  final String? fundId;
+
+  /// 支付方式纯标签（S11；NULL = 未标记，不参与净额与分摊）
+  final String? payMethod;
+
   ExpenseRecord copyWith({
     String? id,
     String? groupId,
@@ -160,6 +255,8 @@ class ExpenseRecord {
     Object? settledRoundId = _sentinel,
     Object? tripId = _sentinel,
     Object? tripItemId = _sentinel,
+    Object? fundId = _sentinel,
+    Object? payMethod = _sentinel,
   }) =>
       ExpenseRecord(
         id: id ?? this.id,
@@ -182,6 +279,8 @@ class ExpenseRecord {
         tripId: identical(_sentinel, tripId) ? this.tripId : tripId as String?,
         tripItemId:
             identical(_sentinel, tripItemId) ? this.tripItemId : tripItemId as String?,
+        fundId: identical(_sentinel, fundId) ? this.fundId : fundId as String?,
+        payMethod: identical(_sentinel, payMethod) ? this.payMethod : payMethod as String?,
       );
 
   static const Object _sentinel = Object();
@@ -207,7 +306,9 @@ class ExpenseRecord {
           note == other.note &&
           settledRoundId == other.settledRoundId &&
           tripId == other.tripId &&
-          tripItemId == other.tripItemId;
+          tripItemId == other.tripItemId &&
+          fundId == other.fundId &&
+          payMethod == other.payMethod;
 
   @override
   int get hashCode => Object.hash(
@@ -250,13 +351,16 @@ class TransferRecord {
 
 /// 结算轮
 class Settlement {
-  const Settlement({required this.id, required this.groupId, required this.status, this.transfers = const [], required this.roundNo, required this.createdAt, this.completedAt});
+  const Settlement({required this.id, required this.groupId, required this.status, this.transfers = const [], required this.roundNo, required this.createdAt, this.completedAt, this.strategy = 'minTransfers'});
   final String id, groupId;
   final SettlementStatus status;
   final List<TransferRecord> transfers;
   final int roundNo;
   final int createdAt;
   final int? completedAt;
+
+  /// 本轮所用结算策略（S9）：minTransfers / minParticipants。
+  final String strategy;
 }
 
 /// 币种（独立定义，兼容 kCurrencies/CurrencyInfo 同构）

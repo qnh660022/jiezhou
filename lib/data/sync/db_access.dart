@@ -26,12 +26,21 @@ class SyncDbAccessor {
       case 'trip_items':
         final rows = await (db.select(db.tripItems)..where((t) => t.id.equals(rowId))).get();
         return rows.isEmpty ? null : SyncCodec.tripItemToCloud(rows.first);
+      case 'wishlist_items':
+        final rows = await (db.select(db.wishlistItems)..where((t) => t.id.equals(rowId))).get();
+        return rows.isEmpty ? null : SyncCodec.wishlistItemToCloud(rows.first);
       case 'groups':
         final rows = await (db.select(db.groups)..where((t) => t.id.equals(rowId))).get();
         return rows.isEmpty ? null : SyncCodec.groupToCloud(rows.first);
       case 'members':
         final rows = await (db.select(db.members)..where((t) => t.id.equals(rowId))).get();
         return rows.isEmpty ? null : SyncCodec.memberToCloud(rows.first);
+      case 'funds':
+        final rows = await (db.select(db.funds)..where((t) => t.id.equals(rowId))).get();
+        return rows.isEmpty ? null : SyncCodec.fundToCloud(rows.first);
+      case 'inbox_items':
+        final rows = await (db.select(db.inboxItems)..where((t) => t.id.equals(rowId))).get();
+        return rows.isEmpty ? null : SyncCodec.inboxItemToCloud(rows.first);
       case 'expenses':
         final rows = await (db.select(db.expenses)..where((t) => t.id.equals(rowId))).get();
         return rows.isEmpty ? null : SyncCodec.expenseToCloud(rows.first);

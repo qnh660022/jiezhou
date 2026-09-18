@@ -16,6 +16,7 @@ class GroupRecord {
     required this.budgetEnabled,
     this.budgetCents,
     required this.createdAt,
+    this.kind = 'travel',
   });
 
   final String id;
@@ -28,6 +29,9 @@ class GroupRecord {
   /// 预算（分；未启用时可为 null）
   final int? budgetCents;
   final int createdAt;
+
+  /// 账本类型（S4）：travel / personal；loan 仅解析层预留。
+  final String kind;
 }
 
 /// 结算轮状态
@@ -84,6 +88,7 @@ class SettlementRecord {
     required this.roundNo,
     required this.createdAt,
     this.completedAt,
+    this.strategy = 'minTransfers',
   });
 
   final String id;
@@ -102,6 +107,9 @@ class SettlementRecord {
 
   /// 完成时间（ms；未完成为 null）
   final int? completedAt;
+
+  /// 本轮所用结算策略（S9）：minTransfers / minParticipants。
+  final String strategy;
 }
 
 /// 行程（Trips 表镜像）
@@ -168,6 +176,8 @@ class TripItemRecord {
     required this.sortOrder,
     required this.createdAt,
     required this.updatedAt,
+    this.guideRef,
+    this.backupOf,
   });
 
   final String id;
@@ -206,6 +216,12 @@ class TripItemRecord {
   final int sortOrder;
   final int createdAt;
   final int updatedAt;
+
+  /// 攻略弱关联 "<cityKey>#<栏>#<序号>"（V2.7.2 S5；可空）
+  final String? guideRef;
+
+  /// Plan B 备选指向：非空非''=有主备胎；''=无主备胎；null=正式卡（V2.7.2 S8）
+  final String? backupOf;
 }
 
 /// 分类（Categories 表镜像）

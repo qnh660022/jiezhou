@@ -22,6 +22,9 @@ class _GroupEditScreenState extends ConsumerState<GroupEditScreen> {
 
   final _nameController = TextEditingController();
   String _icon = _iconChoices.first;
+
+  /// 账本类型（S4）：travel 旅行账本（AA）/ personal 个人账本。
+  String _kind = 'travel';
   bool _initialized = false;
 
   @override
@@ -40,6 +43,7 @@ class _GroupEditScreenState extends ConsumerState<GroupEditScreen> {
         setState(() {
           _nameController.text = g.name;
           _icon = g.icon;
+          _kind = g.isPersonal ? 'personal' : 'travel';
         });
         break;
       }
@@ -59,11 +63,13 @@ class _GroupEditScreenState extends ConsumerState<GroupEditScreen> {
       }
       return;
     }
-    final created = await createGroup(ref, name: name, icon: _icon);
+    final created = await createGroup(ref, name: name, icon: _icon, kind: _kind);
     await activateGroup(ref, created.id);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('「' + name + '」建好啦，开始记账吧 🎉')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_kind == 'personal'
+              ? '「' + name + '」建好啦，记下自己的每一笔 ✍️'
+              : '「' + name + '」建好啦，开始记账吧 🎉')));
       context.pop();
     }
   }
@@ -76,7 +82,7 @@ class _GroupEditScreenState extends ConsumerState<GroupEditScreen> {
     final canSave = _nameController.text.trim().isNotEmpty;
 
     return Scaffold(
-      appBar: GlassAppBar(title: editing ? '编辑旅行团' : '新建旅行团'),
+      appBar: GlassAppBar(title: editing ? '编辑账本' : '新建账本'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.lg, Spacing.xl, Spacing.xxxl),
         children: [
@@ -100,9 +106,44 @@ class _GroupEditScreenState extends ConsumerState<GroupEditScreen> {
             autofocus: !editing,
             maxLength: 20,
             style: Theme.of(context).textTheme.titleMedium,
-            decoration: InputDecoration(hintText: '团的名字，如「大理四人组」'),
+            decoration: InputDecoration(
+              hintText: _kind == 'personal' ? '账本的名字，如「我的日常」' : '团的名字，如「大理四人组」',
+            ),
             onChanged: (_) => setState(() {}),
           ),
+          const SizedBox(height: Spacing.lg),
+          // S4：账本类型（仅新建时可选；已有账本改类型会改变历史语义，故只读展示）。
+          Text('账本类型', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: Spacing.sm),
+          if (editing)
+            Row(children: [
+              Icon(_kind == 'personal' ? Icons.person_outline_rounded : Icons.groups_2_outlined,
+                  size: 18, color: scheme.onSurfaceVariant),
+              const SizedBox(width: Spacing.sm),
+              Text(_kind == 'personal' ? '个人账本（创建后不可更改）' : '旅行账本 · AA（创建后不可更改）',
+                  style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant)),
+            ])
+          else ...[
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: 'travel', label: Text('旅行账本')),
+                ButtonSegment(value: 'personal', label: Text('个人账本')),
+              ],
+              selected: {_kind},
+              onSelectionChanged: (s) {
+                HapticFeedback.selectionClick();
+                setState(() => _kind = s.first);
+              },
+            ),
+            const SizedBox(height: Spacing.xs),
+            Text(
+              _kind == 'personal'
+                  ? '只记自己的每一笔：无需选择付款人与分摊，成员固定为「我」。'
+                  : '和同伴 AA：可添加成员、选择付款人与分摊方式。',
+              style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant),
+            ),
+          ],
           const SizedBox(height: Spacing.lg),
           Text('挑个徽标', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: Spacing.md),

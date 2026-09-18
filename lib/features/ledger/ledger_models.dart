@@ -31,6 +31,8 @@ String shareModeLabel(ShareMode m) {
       return '平均';
     case ShareMode.portions:
       return '按份数';
+    case ShareMode.percent:
+      return '按百分比';
     case ShareMode.custom:
       return '自定义';
   }
@@ -49,6 +51,7 @@ class LedgerGroupView {
     required this.budgetEnabled,
     this.archived = false,
     this.budgetCents,
+    this.kind = 'travel',
   });
 
   final String id;
@@ -59,16 +62,30 @@ class LedgerGroupView {
   /// 团已结束（软归档）：数据保留可改，可随时恢复
   final bool archived;
   final int? budgetCents;
+
+  /// 账本类型（S4）：travel / personal；未知值一律按 travel 处理。
+  final String kind;
+
+  /// 是否个人账本（隐藏余额板 / AA 结算 / 公款池入口）。
+  bool get isPersonal => kind == 'personal';
 }
 
 /// 成员视图：colorIndex 由仓储层轮换分配（%8），UI 只读不写；
 /// 数据缺失时用姓名稳定哈希兜底，保证跨会话颜色一致。
 class LedgerMemberView {
-  const LedgerMemberView({required this.id, required this.name, required this.colorIndex});
+  const LedgerMemberView({
+    required this.id,
+    required this.name,
+    required this.colorIndex,
+    this.archived = false,
+  });
 
   final String id;
   final String name;
   final int colorIndex;
+
+  /// 已移除成员（软删除，S2 G1）：不进选择器，但历史账单照常参与净额。
+  final bool archived;
 
   MemberRecord get record => MemberRecord(id: id, name: name);
 
@@ -169,6 +186,7 @@ class SettlementView {
     required this.transfers,
     required this.createdAtMs,
     this.completedAtMs,
+    this.strategy = 'minTransfers',
   });
 
   /// true = 进行中；false = 已完成的历史轮次
@@ -179,6 +197,9 @@ class SettlementView {
   final List<TransferView> transfers;
   final int createdAtMs;
   final int? completedAtMs;
+
+  /// 本轮所用结算策略（S9）：minTransfers / minParticipants。
+  final String strategy;
 
   /// 全部转账都已确认
   bool get allDone => transfers.isNotEmpty && transfers.every((t) => t.done);
@@ -291,6 +312,8 @@ class ExpenseDraft {
     this.tripId,
     this.tripItemId,
     this.id,
+    this.fundId,
+    this.payMethod,
   });
 
   /// 编辑模式携带已有 id；新增为 null
@@ -311,6 +334,8 @@ class ExpenseDraft {
   final String? note;
   final String? tripId;
   final String? tripItemId;
+  final String? fundId;
+  final String? payMethod;
 
   /// 转为不可变记录（新增自动生成 id）
   ExpenseRecord toRecord() => ExpenseRecord(
@@ -331,6 +356,8 @@ class ExpenseDraft {
         note: note,
         tripId: tripId,
         tripItemId: tripItemId,
+        fundId: fundId,
+        payMethod: payMethod,
       );
 
   /// 从已有记录构造编辑草稿
@@ -352,6 +379,8 @@ class ExpenseDraft {
         note: r.note,
         tripId: r.tripId,
         tripItemId: r.tripItemId,
+        fundId: r.fundId,
+        payMethod: r.payMethod,
       );
 }
 
@@ -365,3 +394,86 @@ int countMemberReferences(List<ExpenseRecord> expenses, String memberId) => expe
         e.payers.any((p) => p.memberId == memberId) ||
         e.shares.any((s) => s.memberId == memberId))
     .length;
+
+/// 支付方式分组合计（S11）：[payMethod] 为 null 表示「未标记」。
+class PayMethodTotalView {
+  const PayMethodTotalView({required this.payMethod, required this.cents});
+
+  final String? payMethod;
+  final int cents;
+}
+
+/// 支付方式内置取值 → 中文标签（S11）。
+const Map<String, String> kPayMethodLabels = {
+  'cash': '现金',
+  'credit': '信用卡',
+  'debit': '储蓄卡',
+  'ewallet': '电子钱包',
+  'fund': '公费池',
+  'other': '其他',
+};
+
+/// 支付方式展示文案：null/空 = 未标记；自定义串原样显示。
+String payMethodLabel(String? key) =>
+    key == null || key.isEmpty ? '未标记' : (kPayMethodLabels[key] ?? key);
+
+/// 公款池视图（S8）：UI 只读，不直接接触 drift 行。
+class FundView {
+  const FundView({
+    required this.id,
+    required this.groupId,
+    required this.name,
+    required this.managerMemberId,
+    this.targetCents,
+    required this.status,
+    required this.createdAtMs,
+  });
+
+  final String id;
+  final String groupId;
+  final String name;
+
+  /// 一池唯一管理人。
+  final String managerMemberId;
+
+  /// 计划收款总额（可空，不强制）。
+  final int? targetCents;
+
+  /// open | closed
+  final String status;
+  final int createdAtMs;
+
+  bool get isOpen => status == 'open';
+}
+
+/// 收件箱条目视图（S10）。
+class InboxItemView {
+  const InboxItemView({
+    required this.id,
+    required this.groupId,
+    required this.amountCents,
+    this.note,
+    required this.capturedAtMs,
+    required this.source,
+    required this.status,
+    this.convertedExpenseId,
+  });
+
+  final String id;
+  final String groupId;
+  final int amountCents;
+  final String? note;
+  final int capturedAtMs;
+
+  /// manual | quick_action
+  final String source;
+
+  /// pending | converted
+  final String status;
+
+  /// 归类幂等键：非空表示已转正。
+  final String? convertedExpenseId;
+
+  bool get isPending => status == 'pending';
+  bool get isConverted => status == 'converted';
+}

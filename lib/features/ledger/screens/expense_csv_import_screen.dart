@@ -14,7 +14,7 @@ import '../ledger_providers.dart';
 
 /// CSV 列角色
 const List<String> _roles = [
-  '忽略', '日期', '标题', '金额（元）', '分类', '付款人', '分账人', '币种', '备注',
+  '忽略', '日期', '标题', '金额（元）', '分类', '付款人', '分账人', '分摊百分比', '币种', '备注',
 ];
 
 class ExpenseCsvImportScreen extends ConsumerStatefulWidget {
@@ -78,6 +78,7 @@ class _ExpenseCsvImportScreenState extends ConsumerState<ExpenseCsvImportScreen>
           '分类' || 'category' || '类别' => '分类',
           '付款人' || 'pay' || 'payer' => '付款人',
           '分账人' || '分摊人' || 'share' || '参与人' => '分账人',
+          '分摊百分比' || '百分比' || 'percent' => '分摊百分比',
           '币种' || 'currency' => '币种',
           '备注' || 'note' => '备注',
           _ => '忽略',
@@ -120,7 +121,7 @@ class _ExpenseCsvImportScreenState extends ConsumerState<ExpenseCsvImportScreen>
     final payerCols = <int>[];
     final shareCols = <int>[];
     var dateCol = -1, titleCol = -1, amountCol = -1, catCol = -1,
-        curCol = -1, noteCol = -1;
+        curCol = -1, noteCol = -1, percentCol = -1;
     for (var i = 0; i < _rolesPerCol.length; i++) {
       switch (_rolesPerCol[i]) {
         case '日期':
@@ -139,6 +140,8 @@ class _ExpenseCsvImportScreenState extends ConsumerState<ExpenseCsvImportScreen>
           payerCols.add(i);
         case '分账人':
           shareCols.add(i);
+        case '分摊百分比':
+          percentCol = i;
       }
     }
     final defPayer = _splitNames(_defaultPayer.text);
@@ -157,6 +160,9 @@ class _ExpenseCsvImportScreenState extends ConsumerState<ExpenseCsvImportScreen>
       final shares = [
         for (final c in shareCols) ..._splitNames(cell(c)),
       ];
+      // 分摊百分比列：数值按分摊人顺序对齐（导出格式即 shares 顺序）。
+      final percents = percentCol < 0 ? const <int>[] : _percentListOf(cell(percentCol));
+      final usePercent = shares.isNotEmpty && percents.length == shares.length;
       out.add({
         'title': cell(titleCol),
         'amountCents': amount,
@@ -164,8 +170,9 @@ class _ExpenseCsvImportScreenState extends ConsumerState<ExpenseCsvImportScreen>
         'categoryKey': cell(catCol),
         'type': amount < 0 ? 'refund' : 'normal',
         'payerNames': payer,
-        'shareMode': 'equal',
+        'shareMode': usePercent ? 'percent' : 'equal',
         'shareNames': shares,
+        if (usePercent) 'sharePercentValues': percents,
         'currency': cell(curCol),
         'rate': 1.0,
         'note': cell(noteCol),
@@ -176,6 +183,21 @@ class _ExpenseCsvImportScreenState extends ConsumerState<ExpenseCsvImportScreen>
 
   List<String> _splitNames(String s) =>
       s.split(RegExp(r'[、,，;；/]')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+
+  /// 解析「分摊百分比」单元格：按分隔符拆出数值，返回百分数×100 的整数列表
+  /// （如 `33.33；66.67` → `[3333, 6667]`）。非数值项跳过。
+  List<int> _percentListOf(String cell) {
+    if (cell.trim().isEmpty) return const [];
+    final out = <int>[];
+    for (final seg in cell.split(RegExp(r'[、,，;；/]'))) {
+      final s = seg.trim().replaceAll('%', '');
+      if (s.isEmpty) continue;
+      final v = double.tryParse(s);
+      if (v == null || v <= 0) continue;
+      out.add((v * 100).round());
+    }
+    return out;
+  }
 
   Future<void> _import() async {
     final gid = ref.read(activeGroupIdProvider).value;

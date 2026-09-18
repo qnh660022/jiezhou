@@ -31,11 +31,17 @@ class LanSyncManager {
     throw UnsupportedError('网页版不支持局域网同步，请改用备份文件互传');
   }
 
-  Future<String> pullSnapshot(LanPeer peer) async {
+  Future<String> pullSnapshot(LanPeer peer, {required String code}) async {
     throw UnsupportedError('网页版不支持局域网同步，请改用备份文件互传');
   }
 
-  Future<String> pushSnapshot(LanPeer peer, String snapshotJson) async {
+  Future<String> pushSnapshot(LanPeer peer, String snapshotJson,
+      {required String code}) async {
     throw UnsupportedError('网页版不支持局域网同步，请改用备份文件互传');
   }
 }
+
+/// 明文风险提示文案（与 IO 端一致；Web 端口径相同以便界面共享）。
+const String kLanPlaintextRiskNotice =
+    '局域网同步目前为明文传输：仅校验口令与数据完整性，未加密快照内容。'
+    '请只在可信 Wi-Fi 下使用，并留意同网段设备。';

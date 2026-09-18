@@ -9,6 +9,7 @@
 /// 防环：本地胜再入队产生一条比云端更新的事件（事件时点单调递增），下一轮推上即收敛。
 library;
 import '../db/database.dart';
+import '../repo/observability_repo.dart';
 import 'sync_codec.dart';
 import 'sync_models.dart';
 import 'sync_outbox_service.dart';
@@ -63,6 +64,24 @@ class SyncMerger {
     final localMs = await _effectiveLocalMs(entity, id, local, pending);
 
     if (local == null || cloudMs > localMs) {
+      // ---- S12.2 冲突回执（纯观测，不改判定） ----
+      // 条件精确化（规格原文「双方都存在未合入改动」不可判定）：
+      //   本地行存在 ∧ 本地有未上行事件（pending）∧ 云端 updated_ms 更大
+      //   → 云端胜、本地那次未上行的改动被静默覆盖 → 记一条回执。
+      // 本地胜不记：本地会重推并自动收敛，记了只是噪声。
+      if (local != null && pending != null && cloudMs > localMs) {
+        // 归属团：业务表取 group_id；团自身取 id；没有归属（独立行程等）不记。
+        final gid = (cloud['group_id'] as String?) ??
+            (entity == SyncEntity.groups ? id : '');
+        await recordConflict(
+          db,
+          groupId: gid,
+          entity: entity.localKey,
+          entityId: id,
+          localUpdatedMs: localMs,
+          remoteUpdatedMs: cloudMs,
+        );
+      }
       await _upsertLocal(entity, cloud, toShared); // 云端胜
     } else if (cloudMs < localMs) {
       // 本地胜：排队上行（防环收敛）。走 hook 以便统一触发 debounce（否则该行
@@ -118,6 +137,13 @@ class SyncMerger {
         if (owner == null || owner == currentUserId) return false;
         if (!collabContextKnown) return null;
         return collabTripIds.contains((cloud['trip_id'] as String?) ?? '') ? true : null;
+      case SyncEntity.wishlistItems:
+        // 与 tripItems 同口径：本人的池行落业务表；他人的行仅当其行程在
+        // 协作名单内才落 SharedWishlistItems 镜像。
+        final owner = cloud['owner_user_id'] as String?;
+        if (owner == null || owner == currentUserId) return false;
+        if (!collabContextKnown) return null;
+        return collabTripIds.contains((cloud['trip_id'] as String?) ?? '') ? true : null;
       case SyncEntity.groups:
         final owner = cloud['owner_user_id'] as String?;
         if (owner == null || owner == currentUserId) return false;
@@ -130,6 +156,14 @@ class SyncMerger {
         if (owner == null || owner == currentUserId) return false;
         if (!collabContextKnown) return null;
         return collabGroupIds.contains(cloud['group_id']) ? true : null;
+      // V2.7.1：公款池 / 收件箱属业务表，且**没有协作镜像表**（S1 未建 Shared 变体）。
+      // 自己的行落业务表；他人行一律跳过——绝不复现 H7（把他人账本数据写进本地
+      // 业务表，随后又被 assemble 上行成云端重复行）。
+      case SyncEntity.funds:
+      case SyncEntity.inboxItems:
+        final owner = cloud['owner_user_id'] as String?;
+        if (owner == null || owner == currentUserId) return false;
+        return null;
     }
   }
 
@@ -158,6 +192,13 @@ class SyncMerger {
               .firstOrNull;
         }
         return (await (db.select(db.tripItems)..where((t) => t.id.equals(id))).get()).firstOrNull;
+      case SyncEntity.wishlistItems:
+        if (shared) {
+          return (await (db.select(db.sharedWishlistItems)..where((t) => t.id.equals(id))).get())
+              .firstOrNull;
+        }
+        return (await (db.select(db.wishlistItems)..where((t) => t.id.equals(id))).get())
+            .firstOrNull;
       case SyncEntity.categories:
         return (await (db.select(db.categories)..where((c) => c.key.equals(id))).get()).firstOrNull;
       case SyncEntity.groups:
@@ -170,6 +211,10 @@ class SyncMerger {
           return (await (db.select(db.sharedMembers)..where((t) => t.id.equals(id))).get()).firstOrNull;
         }
         return (await (db.select(db.members)..where((t) => t.id.equals(id))).get()).firstOrNull;
+      case SyncEntity.funds:
+        return (await (db.select(db.funds)..where((t) => t.id.equals(id))).get()).firstOrNull;
+      case SyncEntity.inboxItems:
+        return (await (db.select(db.inboxItems)..where((t) => t.id.equals(id))).get()).firstOrNull;
       case SyncEntity.expenses:
         if (shared) {
           return (await (db.select(db.sharedExpenses)..where((t) => t.id.equals(id))).get()).firstOrNull;
@@ -222,6 +267,12 @@ class SyncMerger {
         } else {
           await db.into(db.tripItems).insertOnConflictUpdate(SyncCodec.tripItemFromCloud(cloud));
         }
+      case SyncEntity.wishlistItems:
+        if (shared) {
+          await db.into(db.sharedWishlistItems).insertOnConflictUpdate(SyncCodec.sharedWishlistItemFromCloud(cloud));
+        } else {
+          await db.into(db.wishlistItems).insertOnConflictUpdate(SyncCodec.wishlistItemFromCloud(cloud));
+        }
       case SyncEntity.categories:
         await db.into(db.categories).insertOnConflictUpdate(SyncCodec.categoryFromCloud(cloud));
       case SyncEntity.groups:
@@ -236,6 +287,10 @@ class SyncMerger {
         } else {
           await db.into(db.members).insertOnConflictUpdate(SyncCodec.memberFromCloud(cloud));
         }
+      case SyncEntity.funds:
+        await db.into(db.funds).insertOnConflictUpdate(SyncCodec.fundFromCloud(cloud));
+      case SyncEntity.inboxItems:
+        await db.into(db.inboxItems).insertOnConflictUpdate(SyncCodec.inboxItemFromCloud(cloud));
       case SyncEntity.expenses:
         if (shared) {
           await db.into(db.sharedExpenses).insertOnConflictUpdate(SyncCodec.sharedExpenseFromCloud(cloud));
@@ -268,6 +323,9 @@ class SyncMerger {
       case SyncEntity.tripItems:
         await (db.delete(db.tripItems)..where((t) => t.id.equals(id))).go();
         await (db.delete(db.sharedTripItems)..where((t) => t.id.equals(id))).go();
+      case SyncEntity.wishlistItems:
+        await (db.delete(db.wishlistItems)..where((t) => t.id.equals(id))).go();
+        await (db.delete(db.sharedWishlistItems)..where((t) => t.id.equals(id))).go();
       case SyncEntity.categories:
         await (db.delete(db.categories)..where((c) => c.key.equals(id))).go();
       case SyncEntity.groups:
@@ -276,6 +334,10 @@ class SyncMerger {
       case SyncEntity.members:
         await (db.delete(db.members)..where((t) => t.id.equals(id))).go();
         await (db.delete(db.sharedMembers)..where((t) => t.id.equals(id))).go();
+      case SyncEntity.funds:
+        await (db.delete(db.funds)..where((t) => t.id.equals(id))).go();
+      case SyncEntity.inboxItems:
+        await (db.delete(db.inboxItems)..where((t) => t.id.equals(id))).go();
       case SyncEntity.expenses:
         await (db.delete(db.expenses)..where((t) => t.id.equals(id))).go();
         await (db.delete(db.sharedExpenses)..where((t) => t.id.equals(id))).go();
@@ -297,6 +359,8 @@ class SyncMerger {
   Future<void> clearSharedTrip(String tripId) async {
     await (db.delete(db.sharedTrips)..where((t) => t.id.equals(tripId))).go();
     await (db.delete(db.sharedTripItems)..where((t) => t.tripId.equals(tripId))).go();
+    // V2.7.2：想去池镜像一并清掉（与行程项同属行程域子实体）
+    await (db.delete(db.sharedWishlistItems)..where((t) => t.tripId.equals(tripId))).go();
   }
 
   /// 清除某空间的本地行（空间被删除 / 我退出后的本地清理）。

@@ -19,6 +19,7 @@ import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/bill_detail_sheet.dart';
 import '../widgets/category_icon_box.dart';
+import '../widgets/conflict_badge.dart';
 import '../widgets/stagger_in.dart';
 import 'expense_csv_import_screen.dart';
 
@@ -33,6 +34,9 @@ class ExpensesScreen extends ConsumerStatefulWidget {
 class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   String _categoryFilter = ''; // '' = 全部
   String _memberFilter = ''; // '' = 全部
+
+  /// S11 支付方式筛选（多选；空集 = 全部；`''` 代表「未标记」）。
+  final Set<String> _payFilter = {};
   bool _showSearch = false;
   final _searchController = TextEditingController();
 
@@ -46,6 +50,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     final query = _searchController.text.trim().toLowerCase();
     return all.where((e) {
       if (_categoryFilter.isNotEmpty && e.categoryKey != _categoryFilter) return false;
+      if (_payFilter.isNotEmpty && !_payFilter.contains(e.payMethod ?? '')) return false;
       if (_memberFilter.isNotEmpty &&
           !e.payers.any((p) => p.memberId == _memberFilter) &&
           !e.shares.any((s) => s.memberId == _memberFilter)) {
@@ -205,6 +210,15 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   ),
           ),
         ),
+        // S11：支付方式筛选（多选，含「未标记」）
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Spacing.xl, 0, Spacing.xl, Spacing.sm),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            child: Row(children: _buildPayFilterPills()),
+          ),
+        ),
         Expanded(
           child: loading
               ? ListView(
@@ -253,6 +267,49 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         ),
       ],
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // S11：支付方式筛选小胶囊（多选；'' = 未标记）
+  // ---------------------------------------------------------------------------
+
+  List<Widget> _buildPayFilterPills() {
+    final out = <Widget>[];
+    if (_payFilter.isNotEmpty) {
+      out.add(_FilterPill(
+        label: '清空',
+        selected: false,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() => _payFilter.clear());
+        },
+      ));
+      out.add(const SizedBox(width: Spacing.sm));
+    }
+    for (final e in kPayMethodLabels.entries) {
+      out.add(_FilterPill(
+        label: e.value,
+        selected: _payFilter.contains(e.key),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() => _payFilter.contains(e.key)
+              ? _payFilter.remove(e.key)
+              : _payFilter.add(e.key));
+        },
+      ));
+      out.add(const SizedBox(width: Spacing.sm));
+    }
+    out.add(_FilterPill(
+      label: '未标记',
+      selected: _payFilter.contains(''),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _payFilter.contains('')
+            ? _payFilter.remove('')
+            : _payFilter.add(''));
+      },
+    ));
+    return out;
   }
 
   // ---------------------------------------------------------------------------
@@ -341,7 +398,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               index: i,
               child: _ExpenseTile(
                 expense: groups[day]![i],
-                memberName: (id) => members.where((m) => m.id == id).firstOrNull?.name ?? '?',
+                // S2 G1：悬空 memberId（仅存量物理删除数据）兜底为「已移除成员」。
+                memberName: (id) =>
+                    members.where((m) => m.id == id).firstOrNull?.name ?? '已移除成员',
                 categoryIcon: categories.where((c) => c.key == groups[day]![i].categoryKey).firstOrNull?.icon ?? '🏷️',
               ),
             ),
@@ -544,6 +603,17 @@ class _ExpenseTile extends ConsumerWidget {
                           foreground: scheme.error,
                         ),
                       ],
+                      // S11：支付方式小标签（未标记不占位）。
+                      if ((expense.payMethod ?? '').isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        ExpenseTypeChip(
+                          label: payMethodLabel(expense.payMethod),
+                          background: scheme.surfaceContainerHighest,
+                          foreground: scheme.onSurfaceVariant,
+                        ),
+                      ],
+                      // V2.7.1 S12.2：该账单存在未确认冲突时显示小标记（仅提示）。
+                      ConflictDot(entityId: expense.id),
                     ],
                   ),
                   const SizedBox(height: 1),

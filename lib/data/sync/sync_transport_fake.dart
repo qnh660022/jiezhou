@@ -90,6 +90,17 @@ class SyncTransportFake implements SyncTransport {
     'expenses_sync': {'group_id', 'created_ms'},
     'settlements_sync': {'group_id', 'created_ms'},
     'categories_sync': {'created_ms'},
+    // ===== V2.7.1 公款池 / 记账收件箱 =====
+    // funds_sync：name / manager_member_id 均 not null 无默认值；updated_ms 由信封恒带。
+    'funds_sync': {'group_id', 'name', 'manager_member_id', 'created_ms', 'updated_ms'},
+    // inbox_items_sync：amount_cents / captured_ms / source / status 均 not null 无默认值。
+    'inbox_items_sync': {
+      'group_id', 'amount_cents', 'captured_ms', 'source', 'status', 'created_ms', 'updated_ms',
+    },
+    // ===== V2.7.2 想去池 =====
+    // wishlist_items_sync 最小列集（规格 §S1 登记 6）：trip_id / name / type /
+    // created_ms / updated_ms；guide_ref / backup_of 等为 nullable，不得加入 required。
+    'wishlist_items_sync': {'trip_id', 'name', 'type', 'created_ms', 'updated_ms'},
   };
 
   @override

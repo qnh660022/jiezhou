@@ -81,13 +81,75 @@ void main() {
     categoryNames: const {'food': '餐饮'},
   );
 
-  test('快照：BOM + CRLF + 转义 + 17 列逐字匹配', () {
+  test('快照：BOM + CRLF + 转义 + 19 列逐字匹配', () {
     const expected = '\uFEFF'
-        '日期,描述,分类,类型,金额元,币种,汇率,外币金额,付款人,分摊方式,分摊人数,分摊人,分摊明细,备注,状态,关联行程,关联安排\r\n'
-        '2025-08-25,东京塔登塔,ticket,正常,123.46,CNY,1.0000,,小王,平均,3,小王、小李、小张,小王:41.16；小李:41.15；小张:41.15,,未结,,\r\n'
-        '2025-08-26,"晚餐,含""酒水""",餐饮,退款,-50.00,USD,7.2500,-6.90,小王,自定义,2,小王、小李,小王:-25.00；小李:-25.00,"第一行\n第二行",已结,,\r\n'
-        '2025-08-27,酒店押金,stay,预付,900.00,CNY,1.0000,,小李、小王,自定义,2,小李、小王,小李:450.00；小王:450.00,押金待退,未结,关西之行,清水寺清晨\r\n';
+        '日期,描述,分类,类型,金额元,币种,汇率,外币金额,付款人,分摊方式,分摊人数,分摊人,分摊明细,备注,状态,关联行程,关联安排,分摊百分比,支付方式\r\n'
+        '2025-08-25,东京塔登塔,ticket,正常,123.46,CNY,1.0000,,小王,平均,3,小王、小李、小张,小王:41.16；小李:41.15；小张:41.15,,未结,,,,\r\n'
+        '2025-08-26,"晚餐,含""酒水""",餐饮,退款,-50.00,USD,7.2500,-6.90,小王,自定义,2,小王、小李,小王:-25.00；小李:-25.00,"第一行\n第二行",已结,,,,\r\n'
+        '2025-08-27,酒店押金,stay,预付,900.00,CNY,1.0000,,小李、小王,自定义,2,小李、小王,小李:450.00；小王:450.00,押金待退,未结,关西之行,清水寺清晨,,\r\n';
     expect(csv, expected);
+  });
+
+  test('S1 G5：列定义同源 —— 表头列数 == kCsvColumns.length', () {
+    // 列数由常量推导，禁止手写数字（注释与实现同源）。
+    final headerLine = csv.split('\r\n').first.substring(1); // 去 BOM
+    expect(headerLine.split(',').length, kCsvColumns.length);
+    expect(kCsvColumns.length, 19);
+    expect(
+      kCsvColumns.map((c) => c.label).toList(),
+      const [
+        '日期', '描述', '分类', '类型', '金额元', '币种', '汇率', '外币金额',
+        '付款人', '分摊方式', '分摊人数', '分摊人', '分摊明细', '备注', '状态',
+        '关联行程', '关联安排', '分摊百分比', '支付方式',
+      ],
+      reason: '前 17 列顺序/语义必须与历史导出一致，18/19 列为 V2.7.1 新增',
+    );
+  });
+
+  test('S3：percent 模式导出第 18 列（bp/100 两位小数）', () {
+    final rec = ExpenseRecord(
+      id: 'p1',
+      groupId: 'g1',
+      dateEpochDay: day0,
+      title: '百分比账单',
+      categoryKey: 'food',
+      type: ExpenseType.normal,
+      amountCents: 10000,
+      currency: 'CNY',
+      rate: 1,
+      payers: const [ShareEntry(memberId: 'a', cents: 10000)],
+      shares: const [
+        ShareEntry(memberId: 'a', cents: 3333),
+        ShareEntry(memberId: 'b', cents: 3333),
+        ShareEntry(memberId: 'c', cents: 3334),
+      ],
+      shareMode: ShareMode.percent,
+      portions: const {'a': 3333, 'b': 3333, 'c': 3334},
+    );
+    final out = buildExpensesCsv([rec], memberNames: const {'a': 'A', 'b': 'B', 'c': 'C'});
+    final row = out.split('\r\n')[1].split(',');
+    expect(row[9], '按百分比');
+    expect(row[17], '33.33；33.33；33.34');
+    expect(row[18], '', reason: '未标记支付方式 → 空');
+  });
+
+  test('S11：支付方式导出第 19 列', () {
+    final rec = ExpenseRecord(
+      id: 'm1',
+      groupId: 'g1',
+      dateEpochDay: day0,
+      title: '打车',
+      categoryKey: 'transport',
+      type: ExpenseType.normal,
+      amountCents: 3000,
+      currency: 'CNY',
+      rate: 1,
+      payers: const [ShareEntry(memberId: 'a', cents: 3000)],
+      shares: const [ShareEntry(memberId: 'a', cents: 3000)],
+      payMethod: 'ewallet',
+    );
+    final out = buildExpensesCsv([rec], memberNames: const {'a': 'A'});
+    expect(out.split('\r\n')[1].split(',').last, 'ewallet');
   });
 
   test('结构断言：BOM 开头、全 CRLF、含尾随空行', () {
@@ -97,8 +159,8 @@ void main() {
     expect(lines.length, 5, reason: '表头+3 行+尾随空串');
     expect(lines.last, '');
     for (final line in lines.take(4)) {
-      expect(line.split(',').length, greaterThanOrEqualTo(17),
-          reason: '引号内逗号除外时列数应≥17');
+      expect(line.split(',').length, greaterThanOrEqualTo(kCsvColumns.length),
+          reason: '引号内逗号除外时列数应≥19');
     }
   });
 

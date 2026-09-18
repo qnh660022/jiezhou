@@ -25,6 +25,8 @@ abstract final class SyncCodec {
         'note': r.note,
         'group_id': r.groupId,
         'archived': r.archived,
+        // V2.7.2：装配节奏档（relaxed/standard/tight），随整行 LWW。
+        'pace': r.pace,
         'created_ms': r.createdAt,
       };
 
@@ -52,6 +54,9 @@ abstract final class SyncCodec {
         'to_lng': r.toLng,
         'flight_no': r.flightNo,
         'sort_order': r.sortOrder,
+        // V2.7.2：攻略弱关联 / Plan B 备选指向（nullable 透传，null 不省略键）。
+        'guide_ref': r.guideRef,
+        'backup_of': r.backupOf,
         'created_ms': r.createdAt,
       };
 
@@ -62,6 +67,7 @@ abstract final class SyncCodec {
         'budget_cents': r.budgetCents,
         'archived': r.archived,
         'archived_at_ms': r.archivedAtMs,
+        'kind': r.kind,
         'created_ms': r.createdAt,
       };
 
@@ -69,6 +75,7 @@ abstract final class SyncCodec {
         'group_id': r.groupId,
         'name': r.name,
         'color_index': r.colorIndex,
+        'archived': r.archived,
         'created_ms': r.createdAt,
       };
 
@@ -90,6 +97,8 @@ abstract final class SyncCodec {
         'settled_round_id': r.settledRoundId,
         'trip_id': r.tripId,
         'trip_item_id': r.tripItemId,
+        'fund_id': r.fundId,
+        'pay_method': r.payMethod,
         'created_ms': r.createdAt,
       };
 
@@ -99,7 +108,49 @@ abstract final class SyncCodec {
         'transfers_json': r.transfersJson,
         'expense_ids_json': r.expenseIdsJson,
         'round_no': r.roundNo,
+        'strategy': r.strategy,
         'created_ms': r.createdAt,
+      };
+
+  // ===== V2.7.1 公款池 / 记账收件箱 =====
+
+  static Map<String, dynamic> fundToCloud(db.Fund r) => {
+        'group_id': r.groupId,
+        'name': r.name,
+        'manager_member_id': r.managerMemberId,
+        'target_cents': r.targetCents,
+        'status': r.status,
+        'created_ms': r.createdAt,
+        'updated_ms': r.updatedAt,
+      };
+
+  static Map<String, dynamic> inboxItemToCloud(db.InboxItem r) => {
+        'group_id': r.groupId,
+        'amount_cents': r.amountCents,
+        'note': r.note,
+        'captured_ms': r.capturedAt,
+        'source': r.source,
+        'status': r.status,
+        'converted_expense_id': r.convertedExpenseId,
+        'created_ms': r.createdAt,
+        'updated_ms': r.updatedAt,
+      };
+
+  // ===== V2.7.2 想去池 =====
+
+  static Map<String, dynamic> wishlistItemToCloud(db.WishlistItem r) => {
+        'trip_id': r.tripId,
+        'city_key': r.cityKey,
+        'name': r.name,
+        'address': r.address,
+        'type': r.type,
+        'duration_min': r.durationMin,
+        'tag': r.tag,
+        'guide_ref': r.guideRef,
+        'note': r.note,
+        'sort_order': r.sortOrder,
+        'created_ms': r.createdAt,
+        'updated_ms': r.updatedAt,
       };
 
   /// 本地 Categories 表无时间戳列，故此处不产出 `created_ms`；
@@ -156,18 +207,28 @@ abstract final class SyncCodec {
     if (row is db.SharedSettlement) return row.createdAt;
     if (row is db.SharedTrip) return row.updatedAt;
     if (row is db.SharedTripItem) return row.updatedAt;
+    if (row is db.SharedWishlistItem) return row.updatedAt;
+    if (row is db.WishlistItem) return row.updatedAt;
     if (row is db.TravelSpace) return row.updatedMs;
     if (row is db.SpaceMember) return row.updatedMs;
     if (row is db.SpaceEvent) return row.updatedMs;
+    if (row is db.Fund) return row.updatedAt;
+    if (row is db.InboxItem) return row.updatedAt;
     switch (entity) {
       case SyncEntity.trips:
         return (row as db.Trip).updatedAt;
       case SyncEntity.tripItems:
         return (row as db.TripItem).updatedAt;
+      case SyncEntity.wishlistItems:
+        return (row as db.WishlistItem).updatedAt;
       case SyncEntity.groups:
         return (row as db.Group).updatedAt;
       case SyncEntity.members:
         return (row as db.Member).createdAt;
+      case SyncEntity.funds:
+        return (row as db.Fund).updatedAt;
+      case SyncEntity.inboxItems:
+        return (row as db.InboxItem).updatedAt;
       case SyncEntity.expenses:
         return (row as db.Expense).createdAt;
       case SyncEntity.settlements:
@@ -196,6 +257,7 @@ abstract final class SyncCodec {
         note: Value((m['note'] as String?) ?? ''),
         groupId: Value(m['group_id'] as String?),
         archived: Value((m['archived'] as bool?) ?? false),
+        pace: Value((m['pace'] as String?) ?? 'standard'),
         createdAt: _ms(m),
         updatedAt: _ms(m),
       );
@@ -226,6 +288,8 @@ abstract final class SyncCodec {
         toLng: Value((m['to_lng'] as num?)?.toDouble()),
         flightNo: Value(m['flight_no'] as String?),
         sortOrder: Value((m['sort_order'] as num?)?.toInt() ?? 0),
+        guideRef: Value(m['guide_ref'] as String?),
+        backupOf: Value(m['backup_of'] as String?),
         createdAt: _ms(m),
         updatedAt: _ms(m),
       );
@@ -238,6 +302,7 @@ abstract final class SyncCodec {
         budgetCents: Value((m['budget_cents'] as num?)?.toInt()),
         archived: Value((m['archived'] as bool?) ?? false),
         archivedAtMs: Value((m['archived_at_ms'] as num?)?.toInt()),
+        kind: Value((m['kind'] as String?) ?? 'travel'),
         createdAt: _ms(m),
         updatedAt: _ms(m),
       );
@@ -247,6 +312,7 @@ abstract final class SyncCodec {
         groupId: (m['group_id'] as String?) ?? '',
         name: (m['name'] as String?) ?? '',
         colorIndex: Value((m['color_index'] as num?)?.toInt() ?? 0),
+        archived: Value((m['archived'] as bool?) ?? false),
         createdAt: _ms(m),
       );
 
@@ -272,6 +338,8 @@ abstract final class SyncCodec {
       settledRoundId: Value(m['settled_round_id'] as String?),
       tripId: Value(m['trip_id'] as String?),
       tripItemId: Value(m['trip_item_id'] as String?),
+      fundId: Value(m['fund_id'] as String?),
+      payMethod: Value(m['pay_method'] as String?),
       createdAt: _ms(m),
     );
   }
@@ -284,7 +352,34 @@ abstract final class SyncCodec {
         transfersJson: Value((m['transfers_json'] as String?) ?? '[]'),
         expenseIdsJson: Value((m['expense_ids_json'] as String?) ?? '[]'),
         roundNo: Value((m['round_no'] as num?)?.toInt() ?? 1),
+        strategy: Value((m['strategy'] as String?) ?? 'minTransfers'),
         createdAt: _ms(m),
+      );
+
+  static db.FundsCompanion fundFromCloud(Map<String, dynamic> m) =>
+      db.FundsCompanion.insert(
+        id: m['id'] as String,
+        groupId: (m['group_id'] as String?) ?? '',
+        name: (m['name'] as String?) ?? '公款池',
+        managerMemberId: (m['manager_member_id'] as String?) ?? '',
+        targetCents: Value((m['target_cents'] as num?)?.toInt()),
+        status: Value((m['status'] as String?) ?? 'open'),
+        createdAt: (m['created_ms'] as num?)?.toInt() ?? _ms(m),
+        updatedAt: _ms(m),
+      );
+
+  static db.InboxItemsCompanion inboxItemFromCloud(Map<String, dynamic> m) =>
+      db.InboxItemsCompanion.insert(
+        id: m['id'] as String,
+        groupId: (m['group_id'] as String?) ?? '',
+        amountCents: Value((m['amount_cents'] as num?)?.toInt() ?? 0),
+        note: Value(m['note'] as String?),
+        capturedAt: (m['captured_ms'] as num?)?.toInt() ?? _ms(m),
+        source: Value((m['source'] as String?) ?? 'manual'),
+        status: Value((m['status'] as String?) ?? 'pending'),
+        convertedExpenseId: Value(m['converted_expense_id'] as String?),
+        createdAt: (m['created_ms'] as num?)?.toInt() ?? _ms(m),
+        updatedAt: _ms(m),
       );
 
   static db.CategoriesCompanion categoryFromCloud(Map<String, dynamic> m) =>
@@ -412,6 +507,7 @@ abstract final class SyncCodec {
         note: Value((m['note'] as String?) ?? ''),
         groupId: Value(m['group_id'] as String?),
         archived: Value((m['archived'] as bool?) ?? false),
+        pace: Value((m['pace'] as String?) ?? 'standard'),
         createdAt: _ms(m),
         updatedAt: _ms(m),
       );
@@ -442,7 +538,46 @@ abstract final class SyncCodec {
         toLng: Value((m['to_lng'] as num?)?.toDouble()),
         flightNo: Value(m['flight_no'] as String?),
         sortOrder: Value((m['sort_order'] as num?)?.toInt() ?? 0),
+        guideRef: Value(m['guide_ref'] as String?),
+        backupOf: Value(m['backup_of'] as String?),
         createdAt: _ms(m),
+        updatedAt: _ms(m),
+      );
+
+  // ===== V2.7.2 想去池（下行落库：业务表 + 受邀端镜像表） =====
+
+  static db.WishlistItemsCompanion wishlistItemFromCloud(Map<String, dynamic> m) =>
+      db.WishlistItemsCompanion.insert(
+        id: m['id'] as String,
+        tripId: (m['trip_id'] as String?) ?? '',
+        cityKey: Value((m['city_key'] as String?) ?? ''),
+        name: Value((m['name'] as String?) ?? ''),
+        address: Value((m['address'] as String?) ?? ''),
+        type: Value((m['type'] as String?) ?? 'attraction'),
+        durationMin: Value((m['duration_min'] as num?)?.toInt()),
+        tag: Value(m['tag'] as String?),
+        guideRef: Value(m['guide_ref'] as String?),
+        note: Value((m['note'] as String?) ?? ''),
+        sortOrder: Value((m['sort_order'] as num?)?.toInt() ?? 0),
+        createdAt: (m['created_ms'] as num?)?.toInt() ?? _ms(m),
+        updatedAt: _ms(m),
+      );
+
+  static db.SharedWishlistItemsCompanion sharedWishlistItemFromCloud(
+          Map<String, dynamic> m) =>
+      db.SharedWishlistItemsCompanion.insert(
+        id: m['id'] as String,
+        tripId: (m['trip_id'] as String?) ?? '',
+        cityKey: Value((m['city_key'] as String?) ?? ''),
+        name: Value((m['name'] as String?) ?? ''),
+        address: Value((m['address'] as String?) ?? ''),
+        type: Value((m['type'] as String?) ?? 'attraction'),
+        durationMin: Value((m['duration_min'] as num?)?.toInt()),
+        tag: Value(m['tag'] as String?),
+        guideRef: Value(m['guide_ref'] as String?),
+        note: Value((m['note'] as String?) ?? ''),
+        sortOrder: Value((m['sort_order'] as num?)?.toInt() ?? 0),
+        createdAt: (m['created_ms'] as num?)?.toInt() ?? _ms(m),
         updatedAt: _ms(m),
       );
 

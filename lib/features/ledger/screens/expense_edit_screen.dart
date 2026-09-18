@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/date_utils.dart';
 import '../../../core/money.dart';
 import '../../../domain/models.dart';
+import '../../../domain/share_splitter.dart' show normalizePercentToBp;
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
@@ -63,6 +64,25 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   /// 每成员的自定义金额控制器（必须持久持有，避免重建打断输入）
   final Map<String, TextEditingController> _customCtrls = {};
 
+  /// 按百分比模式（S3）：每成员的百分比输入控制器（值 = 百分数，如 33.33）
+  final Map<String, TextEditingController> _percentCtrls = {};
+
+  /// 个人账本模式（S4）：隐藏付款人/分摊控件，固定 equal + owner 单人全额。
+  bool _personal = false;
+
+  /// 支付方式纯标签（S11）：null = 未标记。
+  String? _payMethod;
+
+  /// 内置支付方式（允许自定义串，长度 ≤ 20）。
+  static const _payMethods = <String, String>{
+    'cash': '现金',
+    'credit': '信用卡',
+    'debit': '储蓄卡',
+    'ewallet': '电子钱包',
+    'fund': '公费池',
+    'other': '其他',
+  };
+
   String? _editingId;
   bool _initialized = false;
 
@@ -114,6 +134,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
         _categoryKey = e.categoryKey;
         _tripId = e.tripId;
         _tripItemId = e.tripItemId;
+        _payMethod = e.payMethod;
         // 输入框回填「原始口径」：非 CNY 回填外币原额，否则回填折算额
         final sourceCents =
             (_currencyCode == 'CNY' || e.amountForeignCents == null) ? e.amountCents.abs() : e.amountForeignCents!.abs();
@@ -137,6 +158,16 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
             _portionParticipants.add(s.memberId);
           }
           _customShares[s.memberId] = s.cents.abs();
+        }
+        // percent 模式：portions 存 bp，回填百分比输入框（bp/100 两位小数）。
+        if (e.shareMode == ShareMode.percent && e.portions != null) {
+          e.portions!.forEach((id, bp) {
+            if (bp > 0) {
+              _percentCtrls
+                  .putIfAbsent(id, () => TextEditingController())
+                  .text = (bp / 100).toStringAsFixed(2);
+            }
+          });
         }
         break;
       }
@@ -170,6 +201,9 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
       c.dispose();
     }
     for (final c in _customCtrls.values) {
+      c.dispose();
+    }
+    for (final c in _percentCtrls.values) {
       c.dispose();
     }
     super.dispose();
@@ -207,13 +241,44 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     for (final m in _members) {
       if (m.id == id) return m.name;
     }
-    return '?';
+    // S2 G1：悬空 memberId（仅存量物理删除数据）兜底为「已移除成员」。
+    return '已移除成员';
   }
 
-  /// 预览分摊结果（equal/portions 引擎算，custom 用矩阵值）
+  /// 百分比原始输入 → bp（hundredths→bp，即百分数×100）；仅取 >0。
+  Map<String, int> get _rawPercentBp {
+    final out = <String, int>{};
+    for (final id in _memberIds) {
+      final text = _percentCtrls[id]?.text.trim() ?? '';
+      if (text.isEmpty) continue;
+      final v = double.tryParse(text);
+      if (v != null && v > 0) out[id] = (v * 100).round();
+    }
+    return out;
+  }
+
+  /// 归一后的 bp 表（Σ==10000）；空表示未填，回退 equal。
+  Map<String, int> get _normalizedPercentBp => normalizePercentToBp(_rawPercentBp);
+
+  /// 百分比合计（百分数），用于实时守恒提示。
+  double get _percentSum =>
+      _percentCtrls.values.fold<double>(0, (a, c) {
+        final v = double.tryParse(c.text.trim());
+        return a + (v ?? 0);
+      });
+
+  /// percent 模式是否因「全空」回退 equal（落库时把 shareMode 归为 equal）。
+  bool get _percentFallsBackToEqual =>
+      _shareMode == ShareMode.percent && _rawPercentBp.isEmpty;
+
+  /// 预览分摊结果（equal/portions/percent 引擎算，custom 用矩阵值）
   List<ShareEntry>? get _previewShares {
     final ids = _memberIds;
     if (ids.isEmpty || _cnyTotalAbs <= 0) return null;
+    // S4：个人账本固定 owner 单人全额（不提供分摊编辑）。
+    if (_personal) {
+      return [ShareEntry(memberId: ids.first, cents: _cnyTotalAbs)];
+    }
     switch (_shareMode) {
       case ShareMode.equal:
       case ShareMode.portions:
@@ -228,6 +293,26 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
             memberIds: participants,
             mode: _shareMode,
             portions: _shareMode == ShareMode.portions ? _portions : null,
+          );
+        } on ArgumentError {
+          return null;
+        }
+      case ShareMode.percent:
+        // 未填/全空 → 回退 equal（引擎内同为该口径）
+        if (_rawPercentBp.isEmpty) {
+          try {
+            return computeSplit(
+                totalCents: _cnyTotalAbs, memberIds: ids, mode: ShareMode.equal);
+          } on ArgumentError {
+            return null;
+          }
+        }
+        try {
+          return computeSplit(
+            totalCents: _cnyTotalAbs,
+            memberIds: ids,
+            mode: ShareMode.percent,
+            portions: _normalizedPercentBp,
           );
         } on ArgumentError {
           return null;
@@ -260,8 +345,11 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     if (_titleController.text.trim().isEmpty) return false;
     if (_inputCents == null || _cnyTotalAbs <= 0) return false;
     if (_categoryKey == null) return false;
-    if (_payerIds.isEmpty) return false;
-    if (_payerDiff != 0) return false;
+    // S4：个人账本无付款人/分摊编辑，跳过这两项校验。
+    if (!_personal) {
+      if (_payerIds.isEmpty) return false;
+      if (_payerDiff != 0) return false;
+    }
     if (_previewShares == null || _previewShares!.isEmpty) return false;
     return true;
   }
@@ -273,9 +361,9 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
           ? '请填写账单名称'
           : _inputCents == null || _cnyTotalAbs <= 0
               ? '请填写有效金额'
-              : _payerIds.isEmpty
+              : (!_personal && _payerIds.isEmpty)
                   ? '请选择付款人'
-                  : _payerDiff != 0
+                  : (!_personal && _payerDiff != 0)
                       ? '请让付款合计与账单金额一致'
                       : '请完善账单分类和分摊信息';
       ScaffoldMessenger.of(context)
@@ -315,19 +403,29 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
       amountForeignCents: _currencyCode == 'CNY'
           ? null
           : sign * (_inputCents ?? 0),
-      payers: [
-        for (final id in _payerIds)
-          ShareEntry(
-            memberId: id,
-            cents: sign * (parseMoney(_payerAmounts[id]?.text ?? '') ?? 0),
-          ),
-      ],
+      // S4：个人账本付款人固定 owner、金额全额（与 shares 同为单人）。
+      payers: _personal
+          ? [ShareEntry(memberId: shares.first.memberId, cents: sign * _cnyTotalAbs)]
+          : [
+              for (final id in _payerIds)
+                ShareEntry(
+                  memberId: id,
+                  cents: sign * (parseMoney(_payerAmounts[id]?.text ?? '') ?? 0),
+                ),
+            ],
       shares: [for (final s in shares) ShareEntry(memberId: s.memberId, cents: s.cents * sign)],
-      shareMode: _shareMode,
-      portions: _shareMode == ShareMode.portions ? Map.of(_portions) : null,
+      shareMode:
+          _personal ? ShareMode.equal : (_percentFallsBackToEqual ? ShareMode.equal : _shareMode),
+      // percent 模式落库为归一后 bp（Σ==10000）；全空回退 equal（portions 传 null）。
+      portions: _shareMode == ShareMode.portions
+          ? Map.of(_portions)
+          : _shareMode == ShareMode.percent && !_percentFallsBackToEqual
+              ? _normalizedPercentBp
+              : null,
       note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
       tripId: _tripId,
       tripItemId: _tripItemId,
+      payMethod: _payMethod,
     );
     try {
       await saveExpense(ref, draft);
@@ -356,6 +454,8 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     final isRefund = _type == ExpenseType.refund;
     final amountColor = isRefund ? SemanticColors.income : scheme.onSurface;
     final members = _members;
+    // S4：个人账本隐藏付款人/分摊控件（内部固定 equal + owner 单人全额）。
+    _personal = ref.watch(activeGroupProvider).value?.isPersonal ?? false;
 
     return Scaffold(
       appBar: GlassAppBar(
@@ -394,12 +494,16 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
                 const SizedBox(height: Spacing.md),
                 _typeToggles(),
                 const SizedBox(height: Spacing.md),
+                _payMethodChips(),
+                const SizedBox(height: Spacing.md),
                 _metaCard(),
                 const SizedBox(height: Spacing.md),
-                _payerSection(members: members),
-                const SizedBox(height: Spacing.md),
-                _splitSection(members: members),
-                const SizedBox(height: Spacing.md),
+                if (!_personal) ...[
+                  _payerSection(members: members),
+                  const SizedBox(height: Spacing.md),
+                  _splitSection(members: members),
+                  const SizedBox(height: Spacing.md),
+                ],
                 _categoryGrid(),
                 const SizedBox(height: Spacing.md),
                 _linkTripCard(),
@@ -661,6 +765,44 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   }
 
   // ---------------------------------------------------------------------------
+  // 区块：支付方式（S11 纯标签，可留空）
+  // ---------------------------------------------------------------------------
+
+  Widget _payMethodChips() {
+    final scheme = Theme.of(context).colorScheme;
+    return _SectionCard(
+      title: '支付方式（选填）',
+      subtitle: '只是标签，不跟踪账户余额',
+      child: Wrap(
+        spacing: Spacing.sm,
+        runSpacing: Spacing.sm,
+        children: [
+          for (final e in _payMethods.entries)
+            ChoiceChip(
+              label: Text(e.value),
+              selected: _payMethod == e.key,
+              onSelected: (v) {
+                HapticFeedback.selectionClick();
+                setState(() => _payMethod = v ? e.key : null);
+              },
+            ),
+          if (_payMethod != null && !_payMethods.containsKey(_payMethod))
+            ChoiceChip(
+              label: Text(_payMethod!),
+              selected: true,
+              onSelected: (_) => setState(() => _payMethod = null),
+            ),
+          ActionChip(
+            avatar: Icon(Icons.clear_rounded, size: 16, color: scheme.onSurfaceVariant),
+            label: const Text('未标记'),
+            onPressed: () => setState(() => _payMethod = null),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // 区块：退款 / 预付 互斥开关
   // ---------------------------------------------------------------------------
 
@@ -912,6 +1054,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
             segments: const [
               ButtonSegment(value: ShareMode.equal, label: Text('平均')),
               ButtonSegment(value: ShareMode.portions, label: Text('按份数')),
+              ButtonSegment(value: ShareMode.percent, label: Text('按百分比')),
               ButtonSegment(value: ShareMode.custom, label: Text('自定义')),
             ],
             selected: {_shareMode},
@@ -964,6 +1107,41 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
                     ),
                   ),
               ],
+            ShareMode.percent => [
+                Text('填每人百分比，合计不必正好 100%，保存时按比例自动归一',
+                    style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: Spacing.xs),
+                for (final m in members)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: Spacing.sm),
+                    child: Row(
+                      children: [
+                        Opacity(
+                          opacity: (_percentCtrlFor(m.id).text.trim().isEmpty) ? 0.45 : 1,
+                          child: MemberAvatar(member: m, size: 28),
+                        ),
+                        const SizedBox(width: Spacing.sm),
+                        Expanded(
+                            child: Text(m.name, style: Theme.of(context).textTheme.bodyMedium)),
+                        SizedBox(
+                          width: 110,
+                          child: TextField(
+                            controller: _percentCtrlFor(m.id),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            textAlign: TextAlign.right,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'^\d{0,3}(\.\d{0,2})?')),
+                            ],
+                            decoration: const InputDecoration(suffixText: '%', hintText: '0'),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                _percentBalanceHint(),
+              ],
             ShareMode.custom => [
                 for (final m in members)
                   Padding(
@@ -1012,6 +1190,39 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   TextEditingController _customCtrlFor(String id) => _customCtrls
       .putIfAbsent(id, () => TextEditingController(text: _customSharesText(id)));
 
+  TextEditingController _percentCtrlFor(String id) =>
+      _percentCtrls.putIfAbsent(id, () => TextEditingController());
+
+  /// 百分比守恒提示（警告式，不禁用保存按钮）：
+  /// Σ=100% → 守恒；Σ≠100% → 将自动归一；全空 → 按平均分摊。
+  Widget _percentBalanceHint() {
+    final scheme = Theme.of(context).colorScheme;
+    final hasAny = _rawPercentBp.isNotEmpty;
+    final sum = _percentSum;
+    final ok = hasAny && (sum - 100).abs() < 0.005;
+    final text = !hasAny
+        ? '未填百分比，保存时按平均分摊'
+        : ok
+            ? '各认比例守恒 ✅'
+            : '当前合计 ${sum.toStringAsFixed(2)}%，保存时将按比例自动归一';
+    return Row(
+      children: [
+        Icon(ok ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+            size: 15, color: ok ? SemanticColors.income : scheme.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+                fontSize: AppFontSizes.caption,
+                fontWeight: FontWeight.w600,
+                color: ok ? SemanticColors.income : scheme.onSurfaceVariant),
+          ),
+        ),
+      ],
+    );
+  }
+
   String _customSharesText(String id) {
     final v = _customShares[id];
     if (v == null || v == 0) return '';
@@ -1052,6 +1263,10 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
       return Text('填好金额后这里实时显示每人应摊', style: Theme.of(context).textTheme.bodySmall);
     }
     final names = {for (final m in members) m.id: m};
+    // percent 模式（未回退 equal）在每人金额前展示归一后占比，如「张三 33.34%」。
+    final bp = _shareMode == ShareMode.percent && !_percentFallsBackToEqual
+        ? _normalizedPercentBp
+        : null;
     return Wrap(
       spacing: Spacing.sm,
       runSpacing: Spacing.xs,
@@ -1060,6 +1275,13 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
           Row(mainAxisSize: MainAxisSize.min, children: [
             if (names[s.memberId] != null) MemberAvatar(member: names[s.memberId]!, size: 20),
             const SizedBox(width: 4),
+            if (bp != null)
+              Text(
+                '${names[s.memberId]?.name ?? s.memberId} '
+                '${((bp[s.memberId] ?? 0) / 100).toStringAsFixed(2)}%',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (bp != null) const SizedBox(width: 6),
             MoneyText(s.cents, fontSize: AppFontSizes.caption),
             const SizedBox(width: 6),
           ]),
