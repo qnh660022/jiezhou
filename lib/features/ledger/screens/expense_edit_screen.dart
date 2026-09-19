@@ -31,6 +31,7 @@ import '../widgets/category_icon_box.dart';
 import '../../checklist/widgets/confetti_burst.dart';
 import '../widgets/count_up_text.dart';
 import '../widgets/member_avatar.dart';
+import '../../../theme/app_icons.dart';
 
 /// V2.8.1 S5：会话级草稿仓库（不持久化到磁盘）。
 /// key = 'new' 或 'edit:{id}'；保存成功 / 明确放弃后清除。
@@ -148,6 +149,20 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   /// V2.8.1 S5：「更多选项」当前展开组（页内 AnimatedCrossFade，一次一组；
   /// 空串 = 全部折叠）。组名：currency/type/pay/date/payer/split/trip/note
   String _expandedGroup = '';
+
+  /// V2.8.3.2：自绘键盘收起态（收起为细栏，点按展开）
+  bool _keypadCollapsed = false;
+
+  /// 收起态细栏上的金额摘要
+  String get _keypadAmountText {
+    final f = _money.totalFen;
+    if (f == null) return '¥0.00';
+    final abs = f.abs();
+    return (f < 0 ? '-¥' : '¥') +
+        (abs ~/ 100).toString() +
+        '.' +
+        (abs % 100).toString().padLeft(2, '0');
+  }
 
   /// V2.8.1 S5：保存成功蒙层（全屏玻璃 + CountUp + 800ms 自动 pop）
   bool _showSavedOverlay = false;
@@ -697,7 +712,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
         resizeToAvoidBottomInset: false,
         body: members.isEmpty
             ? EmptyState(
-                emoji: '👥',
+                icon: AppIcons.members,
                 title: '先拉人再记账',
                 message: '当前团还没有成员，去成员管理里添加吧',
                 actionLabel: '去加成员',
@@ -708,31 +723,81 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
                   Column(
                     children: [
                       Expanded(
-                        child: ListView(
-                          padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.md),
-                          children: [
-                            _amountCard(color: amountColor),
-                            const SizedBox(height: Spacing.md),
-                            _summaryChips(),
-                            const SizedBox(height: Spacing.md),
-                            _categoryGrid(),
-                            const SizedBox(height: Spacing.md),
-                            _titleRow(),
-                            const SizedBox(height: Spacing.md),
-                            _moreOptions(members: members),
-                          ],
+                        // V2.8.3.2：点空白处收起系统键盘（此前备注/标题输入后
+                        // 键盘无法收下）
+                        child: GestureDetector(
+                          onTap: () => FocusScope.of(context).unfocus(),
+                          child: ListView(
+                            padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.md),
+                            children: [
+                              _amountCard(color: amountColor),
+                              const SizedBox(height: Spacing.md),
+                              _summaryChips(),
+                              const SizedBox(height: Spacing.md),
+                              // V2.8.3.2：展开的编辑组就地出现在摘要栏正下方
+                              //（原沉在页面底部，选完 chip 要滚到页尾才能改）
+                              _moreOptions(members: members),
+                              const SizedBox(height: Spacing.md),
+                              // V2.8.3.2：支付方式常驻（高频操作移出横向栏）
+                              _payMethodChips(),
+                              const SizedBox(height: Spacing.md),
+                              _categoryGrid(),
+                              const SizedBox(height: Spacing.md),
+                              _titleRow(),
+                            ],
+                          ),
                         ),
                       ),
-                      AmountKeypad(
-                        onDigit: (d) => setState(() => _money.pushDigit(d)),
-                        onBackspace: () => setState(() => _money.backspace()),
-                        onOp: (op) => setState(() => _money.pushOp(op)),
-                        onDot: () => setState(() => _money.pushDot()),
-                        onNote: () => _toggleGroup('note'),
-                        hasNote: _noteController.text.trim().isNotEmpty,
-                        doneEnabled: _money.totalFen != null,
-                        onDone: _save,
-                      ),
+                      // V2.8.3.2：自绘键盘可收起 —— 收起为一条细栏（可展开、
+                      // 可直接完成），不再常驻挡住表单
+                      if (_keypadCollapsed)
+                        Material(
+                          color: scheme.surfaceContainerHigh,
+                          child: InkWell(
+                            onTap: () => setState(() => _keypadCollapsed = false),
+                            child: SizedBox(
+                              height: 56,
+                              child: Row(
+                                children: [
+                                  const SizedBox(width: Spacing.lg),
+                                  Icon(Icons.keyboard_alt_outlined,
+                                      size: 20, color: scheme.onSurfaceVariant),
+                                  const SizedBox(width: Spacing.sm),
+                                  Text('展开键盘',
+                                      style: TextStyle(
+                                          fontSize: AppFontSizes.body,
+                                          fontWeight: FontWeight.w600,
+                                          color: scheme.onSurface)),
+                                  const Spacer(),
+                                  Text(_keypadAmountText,
+                                      style: TextStyle(
+                                          fontSize: AppFontSizes.bodyLarge,
+                                          fontWeight: FontWeight.w800,
+                                          color: amountColor)),
+                                  const SizedBox(width: Spacing.md),
+                                  TextButton(
+                                    onPressed: _money.totalFen != null
+                                        ? () => _save()
+                                        : null,
+                                    child: const Text('完成'),
+                                  ),
+                                  const SizedBox(width: Spacing.sm),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        AmountKeypad(
+                          onDigit: (d) => setState(() => _money.pushDigit(d)),
+                          onBackspace: () => setState(() => _money.backspace()),
+                          onOp: (op) => setState(() => _money.pushOp(op)),
+                          onDot: () => setState(() => _money.pushDot()),
+                          onNote: () => _toggleGroup('note'),
+                          hasNote: _noteController.text.trim().isNotEmpty,
+                          doneEnabled: _money.totalFen != null,
+                          onDone: _save,
+                        ),
                     ],
                   ),
                   if (_showSavedOverlay)
@@ -914,13 +979,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          _SummaryChip(
-            label: _payMethod == null
-                ? '💳 支付方式'
-                : '💳 ${_payMethods[_payMethod] ?? _payMethod!}',
-            active: _payMethod != null,
-            onTap: () => _toggleGroup('pay'),
-          ),
+          // V2.8.3.2：「支付方式」常驻移出横向栏（高频），此处不再重复
           _SummaryChip(
             label: _type == ExpenseType.normal ? '↩ 退款/预付态' : (_type == ExpenseType.refund ? '↩ 已标退款' : '🛫 已标预付'),
             active: _type != ExpenseType.normal,

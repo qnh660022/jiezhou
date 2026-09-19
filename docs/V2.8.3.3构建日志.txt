@@ -1,0 +1,95 @@
+芥舟 V2.8.3.3 构建日志（四版统筹协调版）
+=========================================
+构建时间 : 2026-09-19 13:41~13:45 (本地)
+版本     : 2.8.3+2831 (versionName 2.8.3 / versionCode 2831)
+产物     : build\app\outputs\flutter-apk\app-release.apk (33.4 MB / 35,030,060 字节)
+归档     : release\jiezhou-2.8.3+2831-arm64.apk (sha1 0e217165d7a24d3c706a9276df3dca366a8bbee9)
+目标架构 : android-arm64
+
+构建背景
+-------------------------------------
+本包为「V2.7.1 / V2.7.2 / V2.8.1 / V2.8.2 四版统筹协调 + V2.8.3.2 成果」的合体构建，
+工作区包含全部未提交改动（共 40+ 文件）。统筹结论见 docs/V2.8.3.3验收报告.md。
+
+工具链（scripts/env.local.ps1）
+-------------------------------------
+JAVA_HOME            : D:\AI\env\jdk\jdk-17.0.2
+ANDROID_HOME         : D:\AI\env\android-sdk
+FLUTTER_ROOT         : D:\AI\env\flutter
+GRADLE_USER_HOME     : D:\AI\env\gradle-home
+PUB_HOSTED_URL       : https://pub.flutter-io.cn
+FLUTTER_STORAGE_BASE : https://storage.flutter-io.cn
+Flutter              : 3.47.1 stable (revision 6655482ec0) / Dart 3.13.1
+AGP build-tools      : 36.0.0
+
+【本次构建的环境修正（重要）】
+scripts/build_apk.ps1 无法通过本机 PowerShell 会话驱动（脚本第一步 flutter pub get
+即中止且无输出，疑似会话输出管道异常）。改为在 Git Bash 中按脚本同等步骤手工执行，
+结果等价。**踩坑**：Git Bash 下 POSIX 形式的 JAVA_HOME（/d/AI/env/jdk/...）会让
+Gradle 报 "JAVA_HOME is set to an invalid directory"；必须用 Windows 形式
+（D:/AI/env/jdk/jdk-17.0.2）。分析/测试两阶段不需要 Java，故该坑只在构建阶段暴露。
+
+云端密钥注入（§3.2.2 契约）
+-------------------------------------
+脚本输出确认: "Supabase endpoint injection: ENABLED (from env.local.ps1)"
+  --dart-define=SUPABASE_URL=https://yxclvavejcxhkobnldyx.supabase.co
+  --dart-define=SUPABASE_ANON_KEY=sb_publishable_***（env.local.ps1，已 gitignore 不入库）
+注入断言（解包 APK 后对 lib/*/libapp.so 检索，不打印密钥本体）:
+  SUPABASE_URL      已注入 ✓
+  SUPABASE_ANON_KEY 已注入 ✓
+
+构建门禁（逐项通过）
+-------------------------------------
+1) flutter pub get                                         OK
+2) dart run build_runner build --delete-conflicting        OK（Built in 149s；wrote 791 outputs）
+3) flutter analyze   （要求 0 error）                      OK：0 error / 347 存量 warning·info
+                                                          （低于 V2.8.2 的 353 基线）
+4) flutter test      （要求全绿）                          OK：948 全绿（931 基线 + 17 新增）
+   新增用例：test/features/v2833_trip_access_test.dart（12）
+             test/features/v2833_consistency_gate_test.dart（5）
+   修订断言：test/features/v282_s123_backfill_test.dart（3 条改反向）
+             test/features/v282_s6_micro_test.dart（3 条改反向 + AlertDialog 门禁扩至全 lib）
+             test/features/v282_s5_trip_tabs_test.dart（1 条：KitTab 调用式含 canEdit）
+             test/features/expense_edit_test.dart（1 条：支付方式 chip 改常驻，换折叠组）
+5) flutter build apk --release --target-platform android-arm64   OK
+
+【门禁首轮失败与修复记录（如实登记）】
+首轮 flutter analyze = 2 error：
+  lib\features\trips\screens\trip_detail_screen.dart:920 / :1073 undefined_identifier '_canWrite'
+  原因：两处位于子类 _DetailBodyState，拿不到宿主 _TripDetailScreenState 的私有字段。
+  修复：改为由宿主经构造参数下传 canWrite（角色单一来源），两处改用 widget.canWrite。
+首轮 flutter test = 2 failed：
+  ① v282_s5_trip_tabs_test 断言写死 'KitTab(tripId: id)' → 已按含 canEdit 的新调用式更新。
+  ② expense_edit_test 用例 9 依赖的 '💳 支付方式' chip 已被并发改动移除（支付方式改常驻，
+     见 expense_edit_screen.dart「V2.8.3.2：支付方式常驻移出横向栏」），
+     → 用例改用「退款/预付」↔「关联行程」两组验证 展开/互斥/收起。
+复跑后 948 全绿。
+
+构建输出
+-------------------------------------
+Running Gradle task 'assembleRelease'...  174.6s
+Font asset "JieZhouIcons.ttf"        tree-shaken: 8792 -> 6428 bytes (-26.9%)
+Font asset "MaterialIcons-Regular.otf" tree-shaken: 1645184 -> 33860 bytes (-97.9%)
+Font asset "CupertinoIcons.ttf"      tree-shaken: 257628 -> 848 bytes (-99.7%)
+√ Built build\app\outputs\flutter-apk\app-release.apk (33.4MB)
+
+签名验证（apksigner verify --print-certs）
+-------------------------------------
+Signer #1 certificate DN    : CN=Travel Assistant, OU=Dev, O=Travel, L=Shanghai, ST=Shanghai, C=CN
+Signer #1 SHA-256 digest    : 4469f25aa6a9402f12aaf0cfa4cd4f9cc9c77cf8be37408b24833e4e0a85ea28
+                              （与 V2.8.2 交付指纹逐位一致 → 同一密钥库）
+Signer #1 SHA-1 digest      : 45b2663bde5170960de256bc49c0a8834f9d1362
+密钥库                      : android/app/release-key.jks（android/key.properties 引用，不入库）
+验证结论                    : ✅ 正式签名有效
+
+Git 提交
+-------------------------------------
+提交内容 : 四版统筹协调全部改动 + V2.8.3.2 成果 + 新增测试 17 例 + 交付文档
+推送状态 : 未推送（按指令仅本地提交）
+
+已知遗留（未处理，待用户裁定）
+-------------------------------------
+1) 版本号未推进：pubspec 仍为 2.8.3+2831，与 11:17 构建的 2.8.3.1 包 versionCode 相同。
+   两个 APK 版本号一致、内容不同；功能上可覆盖安装，但对外发布前建议推进到 2.8.3+2833
+   并同步 app_meta（当前仍显示 v2.7.1）/ 官网 / README。
+2) app_meta.dart 的 kAppVersionLabel 仍为 'v2.7.1'（用户可见），用户裁定暂不修。

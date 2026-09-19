@@ -20,6 +20,8 @@ import '../../../domain/models.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../theme/tokens.dart';
 import '../wishlist_providers.dart';
+import '../../../theme/app_icons.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 const List<String> kWishlistTypes = [
   'attraction',
@@ -126,9 +128,8 @@ class _WishlistPanelState extends ConsumerState<WishlistPanel> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, msg);
   }
 
   @override
@@ -154,7 +155,7 @@ class _WishlistPanelState extends ConsumerState<WishlistPanel> {
             const Expanded(
               child: Center(
                 child: EmptyState(
-                  emoji: '🧺',
+                  icon: AppIcons.bookmark,
                   title: '想去池还是空的',
                   message: '在攻略里点「先想去」，或手动添加',
                 ),

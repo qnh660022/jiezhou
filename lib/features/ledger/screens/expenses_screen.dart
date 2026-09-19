@@ -17,7 +17,6 @@ import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/swipeable_bill_tile.dart';
 import '../../../shared/widgets/money_text.dart';
-import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_access.dart';
@@ -28,6 +27,7 @@ import '../widgets/category_icon_box.dart';
 import '../widgets/conflict_badge.dart';
 import '../widgets/stagger_in.dart';
 import 'expense_csv_import_screen.dart';
+import '../../../theme/app_icons.dart';
 
 /// 🧾 消费 Tab：粘性日期分组账单流 + 多维筛选 + 合计栏 + CSV 导出。
 class ExpensesScreen extends ConsumerStatefulWidget {
@@ -528,7 +528,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       final hasAnyBills =
           (ref.read(expensesProvider).value ?? const <ExpenseRecord>[]).isNotEmpty;
       return EmptyState(
-        emoji: hasAnyBills ? '🔍' : '🧾',
+        icon: hasAnyBills ? AppIcons.search : AppIcons.wallet,
         title: hasAnyBills ? '没找到匹配的账单' : '一笔都还没记',
         message: hasAnyBills ? '换个筛选条件试试' : '点「记一笔」，花销从此有迹可循',
         actionLabel: hasAnyBills ? null : '记一笔',

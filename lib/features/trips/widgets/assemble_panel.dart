@@ -26,6 +26,7 @@ import '../../../domain/records.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import 'wishlist_panel.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 class AssemblePanel extends ConsumerStatefulWidget {
   const AssemblePanel({
@@ -71,12 +72,8 @@ class _AssemblePanelState extends ConsumerState<AssemblePanel> {
 
   void _toast(String msg, {SnackBarAction? action}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(msg),
-        action: action,
-      ));
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1，保留 action 透传）。
+    showAppSnackBar(context, msg, action: action);
   }
 
   @override

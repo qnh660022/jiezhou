@@ -21,6 +21,7 @@ import '../widgets/smart_template_sheet.dart';
 import '../widgets/confetti_burst.dart';
 import '../widgets/stagger_in.dart';
 import '../../../shared/copy_tokens.dart';
+import '../../../theme/app_icons.dart';
 
 class ChecklistScreen extends ConsumerStatefulWidget {
   const ChecklistScreen({super.key});
@@ -105,9 +106,9 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
       stream: _watchTrips,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const ChecklistSkeleton();
-        if (snapshot.hasError) return EmptyState(emoji: '😵', title: '加载失败', message: snapshot.error.toString());
+        if (snapshot.hasError) return EmptyState(icon: Icons.error_outline_rounded, title: '加载失败', message: snapshot.error.toString());
         final trips = snapshot.data ?? [];
-        if (trips.isEmpty) return EmptyState(emoji: '🧳', title: copy(CopyTokens.checklistEmpty), message: '创建行程后就可以整理行李啦', actionLabel: '去创建行程', onAction: () => context.push('/trips/edit'));
+        if (trips.isEmpty) return EmptyState(icon: AppIcons.clip, title: copy(CopyTokens.checklistEmpty), message: '创建行程后就可以整理行李啦', actionLabel: '去创建行程', onAction: () => context.push('/trips/edit'));
         // 不在 build 中直接改 state（会触发失活元素重建断言）：
         // 用局部变量计算有效选中；失效 id 延迟到 post-frame 安全重置。
         var selectedTripId = _selectedTripId;
@@ -129,7 +130,7 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
             onSmartTemplate: _showSmartTemplateSheet,
           ),
           const SizedBox(height: Spacing.sm),
-          Expanded(child: effectiveTripId == null ? EmptyState(emoji: '👆', title: '选择行程', message: '在上方选择行程查看行李清单') : _buildChecklistBody(stream, true)),
+          Expanded(child: effectiveTripId == null ? EmptyState(icon: Icons.touch_app_rounded, title: '选择行程', message: '在上方选择行程查看行李清单') : _buildChecklistBody(stream, true)),
         ]);
       },
     );
@@ -144,7 +145,7 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
       if (snapshot.connectionState == ConnectionState.waiting) return const ChecklistSkeleton();
       final items = snapshot.data ?? [];
       if (items.isEmpty) return EmptyState(
-        emoji: isLuggage ? '📦' : '📝',
+        icon: isLuggage ? AppIcons.clip : AppIcons.check,
         title: isLuggage ? '行李清单空空如也' : '暂无待办事项',
         message: isLuggage ? '点击下方按钮添加物品' : '点击下方按钮添加待办',
         actionLabel: isLuggage ? '添加物品' : '添加待办',

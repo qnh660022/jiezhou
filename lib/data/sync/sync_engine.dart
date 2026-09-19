@@ -752,6 +752,13 @@ class SyncEngine {
 
   String _sanitizeError(Object? e) {
     var s = e.toString();
+    // V2.8.3.2：PGRST205（云端 schema cache 中无此表）→ 人话 + 修复指引。
+    // 典型场景：Supabase 未执行 docs/db_v271.sql（funds_sync / inbox_items_sync
+    // 建表 + RLS），push/pull 命中缺表。原始 PostgrestException 对用户无意义。
+    if (s.contains('PGRST205')) {
+      return '云端缺少数据表（PGRST205）：请管理员在 Supabase SQL Editor 执行 '
+          'docs/db_v271.sql 完成建表后重试同步（funds_sync / inbox_items_sync 等）';
+    }
     s = s.replaceAll(RegExp(r'(key|token|password)[=:]\s*[^\s,;]+', caseSensitive: false), r'$1=***');
     return s.length > 160 ? s.substring(0, 160) : s;
   }

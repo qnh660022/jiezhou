@@ -50,7 +50,7 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
               data: (logs) {
                 if (logs.isEmpty) {
                   return const EmptyState(
-                    emoji: '🪶',
+                    icon: Icons.history_rounded,
                     title: '还没有变更记录',
                     message: '这本账的每次增删改都会留在这里，方便回溯。',
                   );

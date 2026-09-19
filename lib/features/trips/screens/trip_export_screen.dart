@@ -15,6 +15,7 @@ import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
 import '../../../theme/app_icons.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 导出行程 PDF 页
 class TripExportScreen extends ConsumerStatefulWidget {
@@ -33,9 +34,8 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
   Stream<List<TripItem>>? _itemsStream;
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, msg);
   }
 
   @override

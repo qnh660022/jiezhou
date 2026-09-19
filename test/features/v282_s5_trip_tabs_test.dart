@@ -103,23 +103,20 @@ void main() {
   });
 
   group('S5 组件下沉（文件断言）', () {
-    test('trip_detail_tabs.dart 独立组件存在，宿主不再使用裸 TabBar', () {
-      final tabsSrc =
-          File('lib/features/trips/widgets/trip_detail_tabs.dart').readAsStringSync();
-      expect(tabsSrc.contains('class TripDetailTabs'), isTrue);
-      expect(tabsSrc.contains('GlassSurface('), isTrue);
-      expect(tabsSrc.contains('Curves.easeOutCubic'), isTrue);
-      expect(tabsSrc.contains('Duration(milliseconds: 240)'), isTrue);
-
+    test('V2.8.3.2：四页签 → 双视图+底部双段，大纲/装配改抽屉宿主', () {
       final screenSrc =
           File('lib/features/trips/screens/trip_detail_screen.dart').readAsStringSync();
-      expect(screenSrc.contains('TripDetailTabs('), isTrue);
-      // 页签层替换后，宿主 AppBar 不再挂裸 TabBar
-      expect(screenSrc.contains('child: TabBar('), isFalse);
-      // viewer/editor 口径维持：四页签仍在宿主装配
-      expect(screenSrc.contains('OutlineTab(tripId: id)'), isTrue);
-      expect(screenSrc.contains('AssemblePanel(tripId: id'), isTrue);
-      expect(screenSrc.contains('KitTab(tripId: id)'), isTrue);
+      // 宿主不再挂 TripDetailTabs 页签层
+      expect(screenSrc.contains('TripDetailTabs('), isFalse);
+      expect(screenSrc.contains('TabBarView('), isFalse);
+      // 双视图：时间线（IndexedStack）+ 攻略（KitTab 并入）+ 停靠双段
+      expect(screenSrc.contains('IndexedStack('), isTrue);
+      expect(screenSrc.contains('KitTab(tripId: id, canEdit:'), isTrue);
+      expect(screenSrc.contains('_DetailDock('), isTrue);
+      // 大纲入「更多」、装配半屏抽屉
+      expect(screenSrc.contains('_openOutlineSheet'), isTrue);
+      expect(screenSrc.contains('_openAssembleSheet'), isTrue);
+      expect(screenSrc.contains('行程大纲'), isTrue);
     });
   });
 }

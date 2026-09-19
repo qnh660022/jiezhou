@@ -67,7 +67,7 @@ class MembersScreen extends ConsumerWidget {
                         return ListView(children: [
                           if (!personal) _InviteTile(groupId: groupId),
                           const EmptyState(
-                            emoji: '👥',
+                            icon: AppIcons.members,
                             title: '还没有成员',
                             message: 'AA 记账至少要有两位同行人哦',
                           ),

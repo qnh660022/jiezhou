@@ -110,7 +110,7 @@ class LedgerHomeScreen extends ConsumerWidget {
                   return KeyedSubtree(
                     key: const ValueKey('home-empty'),
                     child: EmptyState(
-                      emoji: '💰',
+                      icon: AppIcons.coins,
                       title: copy(CopyTokens.ledgerEmpty),
                       message: copy(CopyTokens.ledgerEmptyAction),
                       actionLabel: '新建旅行团',
@@ -420,7 +420,7 @@ class _LedgerBody extends ConsumerWidget {
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
                     child: EmptyState(
-                      emoji: '✍️',
+                      icon: Icons.edit_note_rounded,
                       title: '记下自己的每一笔',
                       message: '个人账本不用选付款人与分摊，点下面按钮直接开记。',
                     ),

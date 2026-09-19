@@ -6,10 +6,17 @@ import '../../theme/tokens.dart';
 import 'glass_surface.dart';
 import 'secondary_button.dart';
 
-/// 空状态：大 emoji（内容岗位兼容参数）或矢量图标（玻璃圆盘底座）+ 一句引导 + 可选行动按钮。
+/// 空状态：矢量图标（玻璃圆盘底座）或大 emoji（存量兼容）+ 一句引导 + 可选行动按钮。
 ///
 /// V2.8.1 S11：新增可选 [icon]（AppIcons）与玻璃圆盘底座 + 3.2s 微浮动
 ///（±6px，`disableAnimations` 时静止）；[emoji] 参数保留兼容（既有调用零破坏）。
+///
+/// **V2.8.3.3 契约收口（图标岗位规则，见 `theme/app_icons.dart` 头注）**：
+/// 功能岗位一律用 [icon]（`AppIcons.*` 或 `Icons.*_rounded`）；
+/// emoji **仅允许内容岗位**。[icon] 与 [emoji] 同时传入时以 [icon] 优先。
+/// 新代码禁止再传 [emoji] —— 手机端调用点已于 V2.8.3.3 全量换装，
+/// 残留仅剩 `features/ai/`（无版本归属）、`companions/`（V2.8.1 O1 排除）、
+/// `desktop_*`（V2.8.1 O7 禁触）三处，见《2.8.3.3 版本统筹裁定书》。
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
@@ -23,10 +30,10 @@ class EmptyState extends StatelessWidget {
 
   final String title;
 
-  /// emoji 图标（兼容参数：内容岗位，未迁移调用点仍走这里）。
+  /// emoji 图标（**存量兼容参数，新代码禁用**；仅内容岗位允许，见类头注）。
   final String? emoji;
 
-  /// 矢量图标（优先渲染；玻璃圆盘底座 + 微浮动）。
+  /// 矢量图标（优先渲染；玻璃圆盘底座 + 微浮动）。功能岗位唯一合法形态。
   final IconData? icon;
   final String? message;
   final String? actionLabel;

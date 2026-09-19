@@ -59,7 +59,7 @@ class _TodaySpendScreenState extends ConsumerState<TodaySpendScreen> {
       return Scaffold(
         appBar: GlassAppBar(title: tripName),
         body: const EmptyState(
-          emoji: '🧭',
+          icon: AppIcons.compass,
           title: '行程不存在或已删除',
           message: '回到行程列表重新看看',
         ),

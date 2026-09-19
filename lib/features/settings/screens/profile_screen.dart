@@ -471,9 +471,9 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   void _toast(BuildContext context, String message) {
-    HapticFeedback.selectionClick();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, message);
+}
 
   Future<bool> _confirm(BuildContext context, String title, String message) {
     HapticFeedback.lightImpact();

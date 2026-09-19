@@ -88,7 +88,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
           const SizedBox(height: Spacing.lg),
           if (pending.isEmpty)
             const EmptyState(
-              emoji: '📥',
+              icon: Icons.inbox_rounded,
               title: '收件箱空了',
               message: '随手记下的金额都在这里排队，归类后才会进入账本。',
             )

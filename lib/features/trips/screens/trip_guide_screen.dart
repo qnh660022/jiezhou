@@ -498,7 +498,7 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
       );
 
   Widget _emptyState(BuildContext context, String message) => EmptyState(
-        emoji: '🧭',
+        icon: AppIcons.compass,
         title: copy('guide.noCityPicked'),
         message: message,
         actionLabel: copy('guide.pickCity'),

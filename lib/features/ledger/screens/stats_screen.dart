@@ -21,6 +21,7 @@ import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/count_up_text.dart';
 import '../widgets/member_avatar.dart';
+import '../../../theme/app_icons.dart';
 
 /// 📊 消费统计：预算环 + 月度趋势 + 分类圆盘 + 支付方式 + 每日柱状 + 成员排行。
 ///
@@ -200,7 +201,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
           ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
           : all.isEmpty
               ? const EmptyState(
-                  emoji: '📊',
+                  icon: AppIcons.chart,
                   title: '还没有可统计的数据',
                   message: '记下第一笔，图表马上就有内容了',
                 )

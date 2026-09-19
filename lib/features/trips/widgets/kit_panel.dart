@@ -118,7 +118,7 @@ class _KitEmpty extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: EmptyState(
-        emoji: '🎒',
+        icon: Icons.backpack_rounded,
         title: '该目的地暂无锦囊',
         message: '攻略还在持续扩容，可以先看看目的地攻略页',
       ),

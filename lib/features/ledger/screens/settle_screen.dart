@@ -19,6 +19,7 @@ import '../widgets/member_avatar.dart';
 import '../widgets/stagger_in.dart';
 import 'settle_card_sheet.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../theme/app_icons.dart';
 
 /// ⚖️ AA 结算：净额榜 → 转账方案逐笔确认 → 完成本轮；历史可撤销。
 ///
@@ -59,7 +60,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
             )
           : groupId == null || members.isEmpty
               ? const EmptyState(
-                  emoji: '👥',
+                  icon: AppIcons.members,
                   title: '先有团有人才好算账',
                   message: '去账本页建团加成员，回来一键算清',
                 )

@@ -267,7 +267,7 @@ class _CustomSection extends ConsumerWidget {
 
     if (custom.isEmpty) {
       return EmptyState(
-        emoji: '🏷️',
+        icon: AppIcons.tag,
         title: '还没有自定义分类',
         message: '点右下角按钮，给特殊开销建个专属格子',
       );

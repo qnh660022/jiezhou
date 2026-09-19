@@ -182,7 +182,10 @@ void main() {
       final detail =
           File('lib/features/trips/screens/trip_detail_screen.dart')
               .readAsStringSync();
-      expect(trips.contains('AnimatedSwitcher('), isTrue);
+      // V2.8.3.2：行程首页按用户裁决整体回退 v2.7，骨架 morph 不再覆盖主页；
+      // 断言改为「不应出现」，防止回退成果被后来者误当缺陷回补。
+      expect(trips.contains('AnimatedSwitcher('), isFalse,
+          reason: '主页已回退 v2.7，不做骨架 morph');
       expect(detail.contains('AnimatedSwitcher('), isTrue);
       expect(detail.contains('detail-skeleton'), isTrue);
       final expenses =
@@ -236,7 +239,7 @@ void main() {
       expect(find.text('最近每天花多少'), findsOneWidget);
     });
 
-    testWidgets('行程首页：行程卡包 PressableScale（S6 行程域接线）', (tester) async {
+    testWidgets('行程首页：回退 v2.7 后行程卡不接 PressableScale', (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -259,8 +262,10 @@ void main() {
         child: MaterialApp.router(routerConfig: router),
       ));
       await tester.pumpAndSettle();
-      expect(find.byType(PressableScale), findsWidgets,
-          reason: '行程卡已接按压缩放');
+      // V2.8.3.2：主页整体回退 v2.7，按压缩放（V2.8.2 S6 行程域接线）
+      // 随回退一并退役；PressableScale 现仅保留在行程详情页快捷卡。
+      expect(find.byType(PressableScale), findsNothing,
+          reason: '主页已回退 v2.7，不再接按压缩放');
     });
 
     test('快捷卡 PressableScale 接线（文件断言）', () {
@@ -350,14 +355,18 @@ void main() {
       return out;
     }
 
-    test('grep AlertDialog( in lib/features = 0', () {
+    test('grep AlertDialog( in lib = 0（V2.8.3.3：门禁由 lib/features 扩至全 lib）',
+        () {
       final offenders = <String>[];
-      for (final f in dartFiles('lib/features')) {
+      for (final f in dartFiles('lib')) {
         if (f.readAsStringSync().contains('AlertDialog(')) {
           offenders.add(f.path);
         }
       }
-      expect(offenders, isEmpty, reason: 'B7：全 App 模态唯一形态 = 抽屉');
+      expect(offenders, isEmpty,
+          reason: 'B7：全 App 模态唯一形态 = 抽屉。'
+              '原门禁只扫 lib/features，令 lib/shared/check_update_dialog.dart '
+              '成为漏网存量（V2.8.2 偏差 D-6）；V2.8.3.3 已收编并把门禁扩到全 lib。');
     });
 
     test('showDangerConfirmSheet 旧函数已删除（并入 confirm_sheet）', () {

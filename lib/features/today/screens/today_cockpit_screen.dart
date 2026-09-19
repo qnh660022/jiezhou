@@ -29,6 +29,7 @@ import '../today_providers.dart';
 import '../today_scope.dart';
 import '../widgets/money_hero_text.dart';
 import '../widgets/today_surface.dart';
+import '../../../theme/app_icons.dart';
 
 /// 今日驾驶舱：全屏页，路由 `/today/:tripId`。
 class TodayCockpitScreen extends ConsumerStatefulWidget {
@@ -69,7 +70,7 @@ class _TodayCockpitScreenState extends ConsumerState<TodayCockpitScreen> {
       return Scaffold(
         appBar: GlassAppBar(title: tripName),
         body: const EmptyState(
-          emoji: '🧭',
+          icon: AppIcons.compass,
           title: '行程不存在或已删除',
           message: '回到行程列表重新看看',
         ),

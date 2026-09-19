@@ -20,6 +20,7 @@ import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 安排编辑页（路由 extra 传 {tripId, item?}）
 class ItemEditScreen extends ConsumerStatefulWidget {
@@ -117,9 +118,8 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, msg);
   }
 
   // ===== POI Search =====

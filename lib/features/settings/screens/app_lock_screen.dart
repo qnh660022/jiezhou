@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import '../../../platform/app_lock.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 class AppLockScreen extends StatefulWidget {
   const AppLockScreen({super.key});
@@ -73,8 +74,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, msg);
+}
 
   /// 输入当前 PIN。
   Future<String?> _askExistingPin({required String title, required String hint}) =>

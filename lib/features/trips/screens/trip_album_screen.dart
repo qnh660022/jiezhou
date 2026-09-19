@@ -18,6 +18,7 @@ import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
 import '../../../theme/app_icons.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 行程相册页（路由 extra 传行程 id）
 class TripAlbumScreen extends ConsumerStatefulWidget {
@@ -35,9 +36,8 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
   Stream<List<AlbumPhoto>>? _photosStream;
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, message);
   }
 
   Future<void> _addPhotoFlow() async {
@@ -174,7 +174,7 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
           final photos = snap.data ?? const <AlbumPhoto>[];
           if (photos.isEmpty) {
             return EmptyState(
-              emoji: '📷',
+              icon: AppIcons.camera,
               title: '还没有照片',
               message: '旅途中的精彩瞬间等你记录',
               actionLabel: '添加第一张',

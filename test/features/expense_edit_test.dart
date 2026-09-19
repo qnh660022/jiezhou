@@ -178,13 +178,15 @@ void main() {
     testWidgets('9. 摘要 chip 与折叠组联动：点 chip 展开对应组、再点收起（互斥）',
         (tester) async {
       await pumpEdit(tester);
-      await tester.tap(find.text('💳 支付方式'));
+      // V2.8.3.2：支付方式已「常驻」移出横向摘要栏（不再是折叠组），
+      // 故改用「退款/预付」↔「关联行程」两组验证 展开 / 互斥 / 收起。
+      await tester.tap(find.textContaining('退款/预付态'));
       await tester.pumpAndSettle();
-      expect(find.text('现金'), findsOneWidget, reason: '支付方式组展开');
+      expect(find.textContaining('预付款'), findsOneWidget, reason: '退款/预付组展开');
       await tester.tap(find.text('🔗 关联行程'));
       await tester.pumpAndSettle();
       expect(find.text('不关联行程'), findsOneWidget, reason: '切换到行程组');
-      expect(find.text('现金'), findsNothing, reason: '一次只展开一组');
+      expect(find.textContaining('预付款'), findsNothing, reason: '一次只展开一组');
       await tester.tap(find.text('🔗 关联行程'));
       await tester.pumpAndSettle();
       expect(find.text('不关联行程'), findsNothing, reason: '再点收起');

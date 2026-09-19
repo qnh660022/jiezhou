@@ -313,14 +313,17 @@ void main() {
     });
   });
 
-  group('S3 行程卡水印接线（文件断言）', () {
-    test('行程卡封面水印使用 CoverWatermark + AppIcons.compass', () {
+  group('S3 行程卡水印接线（文件断言 · V2.8.3.2 回退后口径）', () {
+    test('行程首页回退 v2.7：水印回落原生 emoji，不再走 CoverWatermark', () {
       final src = File('lib/features/trips/screens/trips_home_screen.dart')
           .readAsStringSync();
-      expect(src.contains('CoverWatermark('), isTrue);
-      expect(src.contains('icon: AppIcons.compass'), isTrue);
-      expect(src.contains('emoji: trip.emoji'), isTrue,
-          reason: 'O6：trip.emoji 数据字段只读不改，渲染层回落');
+      // V2.8.3.2：行程首页按用户裁决整体回退 v2.7（不做重设计），
+      // CoverWatermark 的行程卡接线随回退退役（组件本体保留，其它宿主仍可复用）。
+      // 断言改为「不应出现」，防止回退成果被后来者误当缺陷回补。
+      expect(src.contains('CoverWatermark('), isFalse,
+          reason: '主页已回退 v2.7，回落到原生 emoji 水印');
+      expect(src.contains('Text(trip.emoji'), isTrue,
+          reason: 'O6：trip.emoji 数据字段只读不改，渲染层直接回落');
     });
   });
 }

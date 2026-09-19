@@ -893,12 +893,12 @@ class GlassTokens {
   static const double sigma = sigmaRegular;
 
   /// 玻璃 tint 不透明度（浅色）—— thin / regular / thick
-  static const double tintAlphaThinLight = 0.44;
+  static const double tintAlphaThinLight = 0.36;
   static const double tintAlphaRegularLight = 0.58;
   static const double tintAlphaThickLight = 0.68;
 
   /// 玻璃 tint 不透明度（深色）—— 深色整体更低以透出光感
-  static const double tintAlphaThinDark = 0.38;
+  static const double tintAlphaThinDark = 0.34;
   static const double tintAlphaRegularDark = 0.48;
   static const double tintAlphaThickDark = 0.54;
 
@@ -906,21 +906,29 @@ class GlassTokens {
   static const double tintAlphaLight = tintAlphaRegularLight;
   static const double tintAlphaDark = tintAlphaRegularDark;
 
-  /// 对角柔光强度（受光渐变）
-  static const double highlightAlphaLight = 0.55;
-  static const double highlightAlphaDark = 0.22;
+  /// 对角柔光强度（受光渐变，画在内容之下）。
+  /// V2.8.3.2：0.55 → 0.35 —— 它与 tint / 描边是「同向叠白」，
+  /// 三层叠加会把玻璃整体漂白（全 App 发白事故根因之一）。
+  static const double highlightAlphaLight = 0.35;
+  static const double highlightAlphaDark = 0.18;
 
-  /// 顶边内高光强度（受光边，叠加在前景描边之上）
-  static const double topSheenAlphaLight = 0.50;
-  static const double topSheenAlphaDark = 0.20;
+  /// 内圈白描边（受光环，画在内容之上——因此必须低 α）。
+  /// V2.8.3.2：0.55 → 0.30，并废除前景白色渐变幕（见 glass_surface 注释）。
+  static const double innerEdgeLight = 0.30;
+  static const double innerEdgeDark = 0.08;
 
-  /// 兼容旧引用：旧「全周白描边」拆分为内圈白描边
-  static const double innerEdgeLight = 0.55;
-  static const double innerEdgeDark = 0.10;
+  /// 外圈深色 hairline（outlineVariant 基色）—— 按档位分强度：
+  /// 吸顶栏全宽最忌重描边，thin 档最轻。
+  static const double outerEdgeThinLight = 0.18;
+  static const double outerEdgeRegularLight = 0.28;
+  static const double outerEdgeThickLight = 0.35;
+  static const double outerEdgeThinDark = 0.20;
+  static const double outerEdgeRegularDark = 0.28;
+  static const double outerEdgeThickDark = 0.35;
 
-  /// 兼容旧引用：外圈深色 hairline（outlineVariant 基色）
-  static const double outerEdgeAlphaLight = 0.35;
-  static const double outerEdgeAlphaDark = 0.35;
+  /// 兼容旧引用（= regular 档）
+  static const double outerEdgeAlphaLight = outerEdgeRegularLight;
+  static const double outerEdgeAlphaDark = outerEdgeRegularDark;
 
   /// 背景饱和度补偿倍率。V2.8.3.1 由 1.35 翻转为去饱和 0.92。
   static const double saturation = 0.92;

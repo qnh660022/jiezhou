@@ -14,11 +14,11 @@ import '../../../data/repo/trips_repo.dart';
 import '../../../data/services/weather_service.dart';
 import '../../../domain/trip_bill_linker.dart';
 import '../../../domain/day_shift_engine.dart';
-import '../../../domain/outline_parser.dart';
 import '../../ledger/ledger_providers.dart';
+import '../trip_access.dart';
 import '../trip_template_store.dart';
 import '../widgets/assemble_panel.dart';
-import '../widgets/trip_detail_tabs.dart';
+
 import '../widgets/trip_tab_panels.dart';
 
 import '../../../shared/widgets/confirm_sheet.dart';
@@ -38,6 +38,7 @@ import '../widgets/day_ops_sheet.dart';
 import '../guide_widgets.dart' show GuideRouteArgs;
 import 'item_detail_screen.dart';
 import 'item_edit_screen.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 行程详情页（路由 extra 传行程 id）
 class TripDetailScreen extends ConsumerStatefulWidget {
@@ -47,8 +48,7 @@ class TripDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<TripDetailScreen> createState() => _TripDetailScreenState();
 }
 
-class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
-    with SingleTickerProviderStateMixin {
+class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
   final ScrollController _scroll = ScrollController();
   String? _tripId;
   Future<List<WeatherDay>?>? _weatherFuture;
@@ -65,20 +65,28 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   bool _multiSelect = false;
   final Set<String> _selectedIds = {};
 
-  /// 页签容器（V2.7.2 总纲 §2.5）：时间轴 / 大纲 / 装配 / 锦囊
-  TabController? _tabCtrl;
+  /// V2.8.3.2：底部双段视图（0=时间线 / 1=攻略·含原锦囊城市贴士）
+  int _viewIndex = 0;
+
+  /// V2.7.2 A12：viewer 只读判定缓存。
+  ///
+  /// 角色唯一权威源 = `trip_access.dart`（空间成员镜像 → 本地行程行 → 未知）。
+  /// 未知/解析中一律按**可写**放开 —— 云 RLS 才是最终屏障，
+  /// 「看不见的权限」比「误藏入口」安全（与 ledger_access 同口径）。
+  /// 该字段只在 build 期写入，供各回调用同步读取（回调期不能 watch）。
+  bool? _canWriteCache;
+
+  bool get _canWrite => _canWriteCache ?? true;
 
   @override
   void dispose() {
     _scroll.dispose();
-    _tabCtrl?.dispose();
     super.dispose();
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, message);
   }
 
   /// 天气 Future 按「行程id+起止日+首个坐标」缓存；失败静默降级
@@ -121,22 +129,22 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         body: const EmptyState(icon: AppIcons.compass, title: '未找到行程', message: '返回重新进入试试'),
       );
     }
+    // V2.7.2 A12：viewer 只读 —— 角色由 trip_access 统一解析后再分发各门控点。
+    _canWriteCache = ref.watch(tripAccessProvider(id)).valueOrNull?.canWrite;
     return Scaffold(
       appBar: GlassAppBar(
         title: '行程详情',
         scrollController: _scroll,
-        // V2.8.2 S5：页签层视觉基线 —— 玻璃 SegmentedTab（仅页签层，
-        // 四页签可见性维持 V2.7.2 口径）
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
-          child: TripDetailTabs(
-              controller: _tabCtrl ??= TabController(length: 4, vsync: this)),
-        ),
       ),
-      body: TabBarView(
-        controller: _tabCtrl,
+      // V2.8.3.2：四页签 → 双视图 + 底部停靠双段切换。
+      // 视图0 = 时间线（原页签1 流链原样保留）；
+      // 视图1 = 攻略（KitTab 承载 —— 锦囊页签删除，城市贴士并入攻略）。
+      body: Stack(
         children: [
-          // ---- 页签 1：时间轴（既有流链原样保留） ----
+          IndexedStack(
+            index: _viewIndex,
+            children: [
+          // ---- 视图 0：时间线（既有流链原样保留） ----
           StreamBuilder<Trip?>(
         stream: _tripStream ??= ref.read(tripsRepoProvider).watchTrip(id),
         builder: (context, tripSnap) {
@@ -165,6 +173,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   child: _DetailBody(
                 trip: trip,
                 items: items,
+                canWrite: _canWrite,
                 scrollController: _scroll,
                 onItemLongPress: _showItemOps,
                 onAddItem: _addItem,
@@ -180,17 +189,23 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                     if (!_selectedIds.add(it.id)) _selectedIds.remove(it.id);
                   });
                 },
-                onEnterMultiSelect: (it) => setState(() {
-                  _multiSelect = true;
-                  _selectedIds
-                    ..clear()
-                    ..add(it.id);
-                }),
+                onEnterMultiSelect: (it) {
+                  // V2.7.2 A12：viewer 只读
+                  if (!_canWrite) return;
+                  setState(() {
+                    _multiSelect = true;
+                    _selectedIds
+                      ..clear()
+                      ..add(it.id);
+                  });
+                },
                 onExitMultiSelect: () => setState(() {
                   _multiSelect = false;
                   _selectedIds.clear();
                 }),
                 onBatchMove: (ids, dayIndex) async {
+                  // V2.7.2 A12：viewer 只读
+                  if (!_canWrite) return;
                   final target = trip.startEpochDay + dayIndex - 1;
                   await ref
                       .read(tripsRepoProvider)
@@ -204,6 +219,8 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   }
                 },
                 onBatchDelete: (ids) async {
+                  // V2.7.2 A12：viewer 只读
+                  if (!_canWrite) return;
                   // V2.8.2 S6：并入统一 L2 危险确认（showDangerConfirm）
                   final ok = await showDangerConfirm(
                     context: context,
@@ -227,12 +244,27 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
           );
         },
       ),
-          // ---- 页签 2：大纲（S3 面板 + S6 想去池侧栏） ----
-          OutlineTab(tripId: id),
-          // ---- 页签 3：装配（S7 装配台） ----
-          AssemblePanel(tripId: id, canEdit: true),
-          // ---- 页签 4：锦囊（S9） ----
-          KitTab(tripId: id),
+          // ---- 视图 1：攻略（原锦囊 S9 城市贴士并入） ----
+          KitTab(tripId: id, canEdit: _canWrite),
+            ],
+          ),
+          // 底部停靠双段：时间线 / 攻略（原大纲/装配/锦囊页签收编：大纲入
+          // 「更多」抽屉、装配改半屏抽屉、锦囊并入攻略）
+          Positioned(
+            left: Spacing.xl,
+            right: Spacing.xl,
+            bottom: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.actionButtonOffset,
+            ),
+            child: _DetailDock(
+              index: _viewIndex,
+              onChanged: (i) {
+                HapticFeedback.selectionClick();
+                setState(() => _viewIndex = i);
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -240,6 +272,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
   // ============ 条目操作 ============
 
   void _addItem(BuildContext context, TripItem? item) {
+    // V2.7.2 A12：viewer 只读 —— 新增/编辑安排同走此入口。
+    if (!_canWrite) {
+      _toast('你是观察者，只能查看行程');
+      return;
+    }
     HapticFeedback.lightImpact();
     Navigator.of(context).push(MaterialPageRoute<bool>(
       fullscreenDialog: true,
@@ -249,6 +286,11 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
 
   void _showItemOps(
       BuildContext context, TripItem item, List<TripItem> dayList) {
+    // V2.7.2 A12：viewer 只读 —— 长按抽屉内的动作全部是写操作，整体拦截。
+    if (!_canWrite) {
+      _toast('你是观察者，只能查看行程');
+      return;
+    }
     HapticFeedback.mediumImpact();
     final repo = ref.read(tripsRepoProvider);
     final idx = dayList.indexWhere((e) => e.id == item.id);
@@ -574,7 +616,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   final groups = snap.data ?? const <Group>[];
                   if (groups.isEmpty) {
                     return const EmptyState(
-                        emoji: '💰', title: '还没有旅行团', message: '先到「账本」页创建一个旅行团');
+                        icon: AppIcons.coins, title: '还没有旅行团', message: '先到「账本」页创建一个旅行团');
                   }
                   return ListView.builder(
                     controller: scrollController,
@@ -733,6 +775,7 @@ class _DetailBody extends ConsumerStatefulWidget {
     this.onExitMultiSelect,
     this.onBatchMove,
     this.onBatchDelete,
+    this.canWrite = true,
   });
 
   final Trip trip;
@@ -761,6 +804,10 @@ class _DetailBody extends ConsumerStatefulWidget {
 
   /// 批量删除（宿主强确认 + 执行 + toast）
   final Future<void> Function(List<String> ids)? onBatchDelete;
+
+  /// V2.7.2 A12：viewer 只读 —— 由宿主按角色解析后下传（未知按可写放开）。
+  /// 此处不再是 `_canWrite` 私有字段：body 与宿主是两个类，角色只应有单一来源。
+  final bool canWrite;
 
   @override
   ConsumerState<_DetailBody> createState() => _DetailBodyState();
@@ -862,21 +909,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             onTapLedger: trip.groupId == null ? widget.onBind : widget.onShowExpenses,
           ),
         ),
-        // 行程概览（默认缩略成一行要点，点开才是天气/清单/费用全貌）在日期栏上方
-        SliverToBoxAdapter(
-          child: _OverviewCard(
-            trip: trip,
-            items: items,
-            bills: bills,
-            ensureWeather: widget.ensureWeather,
-            tripId: trip.id,
-            showAll: showAll,
-            selectedDay: _selectedDay,
-            expanded: _overviewExpanded,
-            onToggle: () => setState(() => _overviewExpanded = !_overviewExpanded),
-          ),
-        ),
-        // 横向滑动日期栏：置于概览下方，配合上面的概览卡成「概览 → 切天 → 每日安排」节奏
+        // V2.8.3.2：「行程概览」折叠卡删除 —— 天数/安排数并入口袋信息，
+        // 天气随行程上下文保留在时间线卡片流；日期栏成为唯一 day 导航。
+        // 横向滑动日期栏 + 行尾「装配」入口（半屏抽屉唤起想去装配台）
         SliverToBoxAdapter(
           child: _DayPicker(
             trip: trip,
@@ -887,6 +922,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               HapticFeedback.selectionClick();
               setState(() => _selectedDay = d);
             },
+            onAssemble: widget.canWrite
+                ? () => _openAssembleSheet(context, trip.id)
+                : null,
           ),
         ),
         SliverList(
@@ -894,11 +932,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               _buildDaySections(context, ref, latestUnsettledByItem, dayKeys, visibleDays, showAll)),
         ),
         // 尾部留白：内容可从悬浮胶囊导航下方穿过，末尾垫高保证最后一条可达
+        // （V2.8.3.2：+62 让位底部停靠双段）
         SliverToBoxAdapter(
           child: SizedBox(
             height: AppBottomLayout.withSafeArea(
               context,
-              AppBottomLayout.contentTail,
+              AppBottomLayout.contentTail + 62,
             ),
           ),
         ),
@@ -907,9 +946,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       if (!widget.multiSelect)
       Positioned(
           right: Spacing.xl,
+          // V2.8.3.2：FAB 上移，让位底部停靠双段（时间线/攻略）
           bottom: AppBottomLayout.withSafeArea(
             context,
-            AppBottomLayout.actionButtonOffset,
+            AppBottomLayout.actionButtonOffset + 62,
           ),
           child: FloatingActionButton.extended(
             heroTag: 'fab-add-item-detail',
@@ -927,7 +967,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             right: Spacing.xl,
             bottom: AppBottomLayout.withSafeArea(
               context,
-              AppBottomLayout.actionButtonOffset,
+              AppBottomLayout.actionButtonOffset + 62,
             ),
             child: _MultiSelectBar(
               count: widget.selectedIds.length,
@@ -1034,6 +1074,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           buildDefaultDragHandles: false,
           itemCount: list.length,
           onReorder: (oldIndex, newIndex) async {
+            // V2.7.2 A12：viewer 只读
+            if (!widget.canWrite) return;
             setState(() {
               if (newIndex > oldIndex) newIndex -= 1;
               final moved = list.removeAt(oldIndex);
@@ -1099,7 +1141,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       widgets.add(const Padding(
         padding: EdgeInsets.only(top: Spacing.huge),
         child: EmptyState(
-          emoji: '🗺️',
+          icon: Icons.map_rounded,
           title: '还没有安排',
           message: '点右下角「添加安排」，从第一天开始填充旅程',
         ),
@@ -2258,6 +2300,7 @@ class _DayPicker extends StatelessWidget {
     required this.items,
     required this.selected,
     required this.onSelect,
+    this.onAssemble,
   });
 
   final Trip trip;
@@ -2265,6 +2308,9 @@ class _DayPicker extends StatelessWidget {
   final List<TripItem> items;
   final int? selected;
   final ValueChanged<int?> onSelect;
+
+  /// V2.8.3.2：行尾「装配」入口（半屏抽屉唤起想去装配台）
+  final VoidCallback? onAssemble;
 
   @override
   Widget build(BuildContext context) {
@@ -2275,7 +2321,7 @@ class _DayPicker extends StatelessWidget {
         height: 64,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
-          itemCount: days.length + 1,
+          itemCount: days.length + (onAssemble != null ? 2 : 1),
           separatorBuilder: (_, __) => const SizedBox(width: Spacing.sm),
           itemBuilder: (context, i) {
             // 第 0 项固定为「总览」
@@ -2288,6 +2334,16 @@ class _DayPicker extends StatelessWidget {
                 onTap: () => onSelect(null),
               );
             }
+            // V2.8.3.2：行尾「装配」入口（想去池落点，半屏抽屉）
+            if (onAssemble != null && i == days.length + 1) {
+              return _DayChip(
+                label: '装配',
+                caption: '想去池落点',
+                active: false,
+                icon: Icons.extension_rounded,
+                onTap: onAssemble!,
+              );
+            }
             final day = days[i - 1];
             final count = items.where((it) => it.dateEpochDay == day).length;
             return _DayChip(
@@ -2298,6 +2354,61 @@ class _DayPicker extends StatelessWidget {
               onTap: () => onSelect(day),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// V2.8.3.2：详情页底部停靠双段切换（时间线 / 攻略）。
+/// 实色胶囊（选中主色填充），悬浮于全局胶囊底栏上方；替代原四页签。
+class _DetailDock extends StatelessWidget {
+  const _DetailDock({required this.index, required this.onChanged});
+
+  final int index;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.35)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Row(
+          children: [
+            for (var i = 0; i < 2; i++)
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => onChanged(i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: index == i ? scheme.primary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      i == 0 ? '时间线' : '攻略',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight:
+                            index == i ? FontWeight.w800 : FontWeight.w600,
+                        color: index == i
+                            ? scheme.onPrimary
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -2596,13 +2707,20 @@ class _QuickActionsCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // V2.8.3.2：长文案说明条 → 紧凑徽章（绑定关系一眼可见，点账本看账单）
             if (bound != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: Spacing.xs),
-                child: Text('已绑定旅行团 · 点击「账本」查看关联账单',
-                    style: TextStyle(
-                        fontSize: AppFontSizes.caption - 2,
-                        color: scheme.primary)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.luggage_rounded,
+                      size: 13, color: scheme.primary),
+                  const SizedBox(width: 4),
+                  Text('已关联账本',
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption - 2,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary)),
+                ]),
               ),
             Row(
               children: [
@@ -2630,9 +2748,21 @@ class _QuickActionsCard extends StatelessWidget {
   }
 }
 
+/// V2.7.2 A12：详情页写权限（未知角色按可写放开；与 `trip_access.dart` 同源）。
+///
+/// 顶层抽屉函数没有 build 上下文缓存，故就地从 Provider 容器同步读取；
+/// 详情页 build 期已 watch 过同一 provider，此处读到的通常已是解析结果。
+bool _tripCanWrite(BuildContext context, String tripId) =>
+    ProviderScope.containerOf(context)
+        .read(tripAccessProvider(tripId))
+        .valueOrNull
+        ?.canWrite ??
+    true;
+
 /// 「更多」抽屉：收纳使用频率较低的 PDF / 海报 / 模板入口，保持主工具行精简
 void _openMoreSheet(BuildContext context, String tripId) {
   HapticFeedback.selectionClick();
+  final canWrite = _tripCanWrite(context, tripId);
   showDraggableSheet(
     context: context,
     initialChildSize: 0.38,
@@ -2646,16 +2776,29 @@ void _openMoreSheet(BuildContext context, String tripId) {
           Text('更多操作',
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: AppFontSizes.bodyLarge)),
           const SizedBox(height: Spacing.md),
+          // V2.8.3.2：大纲收入「更多」（原页签移除，往返式导入导出功能不删）
           ListTile(
-            leading: const Icon(Icons.inventory_2_outlined),
-            title: const Text('存为行程模板'),
-            subtitle: const Text('保存安排结构，之后可一键复用'),
+            leading: const Icon(Icons.segment_rounded),
+            title: const Text('行程大纲'),
+            subtitle: const Text('文本大纲查看 / 编辑，支持往返导入导出'),
             contentPadding: EdgeInsets.zero,
-            onTap: () async {
+            onTap: () {
               Navigator.of(ctx).pop();
-              await _saveAsTemplate(context, tripId);
+              _openOutlineSheet(context, tripId);
             },
           ),
+          // V2.7.2 A12：viewer 只读 —— 存模板是写操作，观察者不可见
+          if (canWrite)
+            ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: const Text('存为行程模板'),
+              subtitle: const Text('保存安排结构，之后可一键复用'),
+              contentPadding: EdgeInsets.zero,
+              onTap: () async {
+                Navigator.of(ctx).pop();
+                await _saveAsTemplate(context, tripId);
+              },
+            ),
           ListTile(
             leading: const Icon(Icons.picture_as_pdf_rounded),
             title: const Text('导出 PDF'),
@@ -2678,6 +2821,35 @@ void _openMoreSheet(BuildContext context, String tripId) {
         ],
       ),
     ),
+  );
+}
+
+/// V2.8.3.2：装配半屏抽屉 —— 想去装配台不再占页签/全屏，从 Day 行「装配」唤起。
+/// 落点/撤销/容量/备胎引擎零改动（AssemblePanel 原样承载）。
+void _openAssembleSheet(BuildContext context, String tripId) {
+  HapticFeedback.selectionClick();
+  // V2.7.2 A12：viewer 只读（装配台落点即写库）
+  final canEdit = _tripCanWrite(context, tripId);
+  showDraggableSheet(
+    context: context,
+    initialChildSize: 0.82,
+    minChildSize: 0.5,
+    maxChildSize: 0.94,
+    builder: (_, __) => AssemblePanel(tripId: tripId, canEdit: canEdit),
+  );
+}
+
+/// V2.8.3.2：大纲抽屉 —— 原页签移入「更多」，文本编辑 + 往返式导入导出原样保留。
+void _openOutlineSheet(BuildContext context, String tripId) {
+  HapticFeedback.selectionClick();
+  // V2.7.2 A12：viewer 只读（大纲面板自带只读态：文本域只读、无导入按钮）
+  final canEdit = _tripCanWrite(context, tripId);
+  showDraggableSheet(
+    context: context,
+    initialChildSize: 0.9,
+    minChildSize: 0.6,
+    maxChildSize: 0.94,
+    builder: (_, __) => OutlineTab(tripId: tripId, canEdit: canEdit),
   );
 }
 

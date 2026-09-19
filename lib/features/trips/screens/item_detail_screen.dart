@@ -85,7 +85,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
           return Scaffold(
             appBar: GlassAppBar(title: '安排详情'),
             body: const EmptyState(
-              emoji: '🗺️',
+              icon: Icons.map_rounded,
               title: '该安排不存在或已删除',
               message: '返回行程重新看看',
             ),

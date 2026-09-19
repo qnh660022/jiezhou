@@ -35,7 +35,7 @@ class TripTemplatesScreen extends ConsumerWidget {
         data: (templates) {
           if (templates.isEmpty) {
             return EmptyState(
-              emoji: '📦',
+              icon: AppIcons.toolbox,
               title: '还没有行程模板',
               message: '在行程详情页「存为模板」，\n或让 AI 生成行程后自动收藏',
             );

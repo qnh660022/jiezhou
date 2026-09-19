@@ -19,6 +19,7 @@ import '../trip_widgets.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/share_link_sheet.dart';
 import '../../../theme/app_icons.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 分享行程海报页
 class TripShareScreen extends ConsumerStatefulWidget {
@@ -37,9 +38,8 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
   Stream<List<TripItem>>? _itemsStream;
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, msg);
   }
 
   @override

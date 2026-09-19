@@ -32,6 +32,7 @@ import '../../../theme/tokens.dart';
 import '../../companions/space_actions.dart';
 import '../../companions/widgets/space_widgets.dart';
 import '../../ledger/screens/qr_scan_screen.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 class ShareCenterScreen extends ConsumerStatefulWidget {
   const ShareCenterScreen({super.key});
@@ -76,10 +77,9 @@ class _ShareCenterScreenState extends ConsumerState<ShareCenterScreen> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
-  }
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, msg);
+}
 
   @override
   Widget build(BuildContext context) {

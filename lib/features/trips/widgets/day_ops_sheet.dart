@@ -16,6 +16,7 @@ import '../../../data/repo/trips_repo.dart';
 import '../../../domain/day_shift_engine.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 「插入一天」天序面板（纯内容，宿主决定容器）。
 class DayInsertPickerPanel extends StatelessWidget {
@@ -236,9 +237,8 @@ Future<void> runRemoveDayDialog(
 }
 
 void _toastOf(BuildContext context, String message) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+  // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+  showAppSnackBar(context, message);
 }
 
 /// 行程天数（与 core/date_utils.tripDays 同口径，避免 UI 层多余 import）。

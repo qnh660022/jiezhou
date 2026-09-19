@@ -68,14 +68,15 @@ void main() {
     }
   });
 
-  testWidgets('2. disableAnimations 降级：无 BackdropFilter、不透明表面', (tester) async {
+  testWidgets('2. disableAnimations 不再触发降级（V2.8.3.2）：玻璃正常渲染', (tester) async {
+    // 「移除动画」≠「降低透明度」——旧逻辑会在这类设备上把玻璃变不透明灰板。
     await tester.pumpWidget(_host(MediaQuery(
       data: const MediaQueryData(disableAnimations: true),
-      child: GlassSurface(child: const Text('降级')),
+      child: GlassSurface(child: const Text('动画关闭')),
     )));
     await tester.pump();
-    expect(find.byType(BackdropFilter), findsNothing);
-    expect(find.text('降级'), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(find.text('动画关闭'), findsOneWidget);
   });
 
   testWidgets('3. fallbackOpaque 强制降级', (tester) async {
@@ -173,25 +174,28 @@ void main() {
     expect(Spacing.xxl, 24);
     expect(Spacing.xxxl, 32);
     expect(Spacing.huge, 48);
-    // V2.8.3.1 玻璃令牌重校准（材质分档 + 去饱和翻转）
+    // V2.8.3.2 玻璃令牌（发白事故修正：去前景白幕 / 降叠白 / 分档描边）
     expect(GlassTokens.sigmaThin, 24);
     expect(GlassTokens.sigmaRegular, 28);
     expect(GlassTokens.sigmaThick, 32);
     expect(GlassTokens.sigma, GlassTokens.sigmaRegular);
-    expect(GlassTokens.tintAlphaThinLight, 0.44);
+    expect(GlassTokens.tintAlphaThinLight, 0.36);
     expect(GlassTokens.tintAlphaRegularLight, 0.58);
     expect(GlassTokens.tintAlphaThickLight, 0.68);
-    expect(GlassTokens.tintAlphaThinDark, 0.38);
+    expect(GlassTokens.tintAlphaThinDark, 0.34);
     expect(GlassTokens.tintAlphaRegularDark, 0.48);
     expect(GlassTokens.tintAlphaThickDark, 0.54);
     expect(GlassTokens.tintAlphaLight, GlassTokens.tintAlphaRegularLight);
     expect(GlassTokens.tintAlphaDark, GlassTokens.tintAlphaRegularDark);
-    expect(GlassTokens.highlightAlphaLight, 0.55);
-    expect(GlassTokens.highlightAlphaDark, 0.22);
-    expect(GlassTokens.innerEdgeLight, 0.55);
-    expect(GlassTokens.innerEdgeDark, 0.10);
-    expect(GlassTokens.outerEdgeAlphaLight, 0.35);
-    expect(GlassTokens.outerEdgeAlphaDark, 0.35);
+    expect(GlassTokens.highlightAlphaLight, 0.35);
+    expect(GlassTokens.highlightAlphaDark, 0.18);
+    expect(GlassTokens.innerEdgeLight, 0.30);
+    expect(GlassTokens.innerEdgeDark, 0.08);
+    expect(GlassTokens.outerEdgeThinLight, 0.18);
+    expect(GlassTokens.outerEdgeRegularLight, 0.28);
+    expect(GlassTokens.outerEdgeThickLight, 0.35);
+    expect(GlassTokens.outerEdgeAlphaLight, GlassTokens.outerEdgeRegularLight);
+    expect(GlassTokens.outerEdgeAlphaDark, GlassTokens.outerEdgeRegularDark);
     expect(GlassTokens.saturation, 0.92);
   });
 

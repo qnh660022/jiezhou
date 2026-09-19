@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v2.8.3.2 行程页整改 · 设计审核稿</title>
+<style>
+:root{
+  --bg:#0d1117;--panel:#151b24;--panel-2:#1a212c;--line:#243041;
+  --txt:#e8edf4;--txt-2:#9aa7b8;--txt-3:#66748a;
+  --green:#12b76a;--amber:#f5a623;--red:#ef5b5b;--blue:#3b82f6;--radius:14px;
+  --mono:'Cascadia Code',Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:radial-gradient(1200px 500px at 80% -100px, rgba(18,183,106,.08), transparent 60%),var(--bg);
+  color:var(--txt);font-family:'PingFang SC','Microsoft YaHei',sans-serif;line-height:1.7;padding-bottom:80px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+.hero{padding:52px 0 28px;border-bottom:1px solid var(--line)}
+.tag-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.badge{font-size:12px;font-weight:600;padding:5px 12px;border-radius:999px;border:1px solid var(--line);color:var(--txt-2)}
+.badge.version{color:var(--green);border-color:rgba(18,183,106,.35);background:rgba(18,183,106,.08)}
+.badge.waiting{color:var(--amber);border-color:rgba(245,166,35,.35);background:rgba(245,166,35,.08)}
+.hero h1{font-size:30px;font-weight:800}
+.hero h1 em{font-style:normal;color:var(--green)}
+.hero .sub{color:var(--txt-2);margin-top:10px;font-size:15px;max-width:860px}
+.hero .sub b{color:var(--txt)}
+section{padding:48px 0 6px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.sec-no{font-family:var(--mono);font-size:13px;color:var(--green);font-weight:700;
+  border:1px solid rgba(18,183,106,.35);border-radius:8px;padding:2px 10px;background:rgba(18,183,106,.07)}
+.sec-head h2{font-size:23px;font-weight:800}
+.sec-desc{color:var(--txt-2);font-size:14.5px;margin-bottom:24px;max-width:920px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+/* 诊断卡 */
+.diag3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.diag3 h3{font-size:15px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.sev{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+.sev.high{color:#ffb4b4;background:rgba(239,91,91,.12);border:1px solid rgba(239,91,91,.35)}
+.sev.mid{color:#ffd88a;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.35)}
+.diag3 p{font-size:13px;color:var(--txt-2)}
+.diag3 code{font-family:var(--mono);font-size:11.5px;color:#7dd3fc;background:rgba(56,142,255,.08);padding:1px 5px;border-radius:4px}
+.math{margin-top:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+  font-family:var(--mono);font-size:12px;color:#8af0bd}
+/* mockup 手机 */
+.phone-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:26px;justify-items:center}
+.phone-block{width:100%;max-width:320px}
+.phone-label{display:flex;gap:10px;margin-bottom:12px;justify-content:center;align-items:center}
+.pl-tag{font-size:12px;font-weight:800;padding:4px 14px;border-radius:999px}
+.pl-tag.before{color:#ffb4b4;border:1px solid rgba(239,91,91,.4);background:rgba(239,91,91,.1)}
+.pl-tag.after{color:#8af0bd;border:1px solid rgba(18,183,106,.45);background:rgba(18,183,106,.1)}
+.pl-note{font-size:12px;color:var(--txt-3)}
+.phone{width:100%;aspect-ratio:9/19;border-radius:38px;position:relative;overflow:hidden;
+  border:6px solid #232a35;box-shadow:0 24px 60px rgba(0,0,0,.5);background:#f0f2ef}
+.scene{position:absolute;inset:0;color:#1a1d21;font-size:13px}
+.anno{margin-top:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--txt-2)}
+.anno b{color:var(--txt)}
+.anno ul{margin:6px 0 0 18px}
+.anno li{margin:3px 0}
+/* 场景公共 */
+.sbar{display:flex;justify-content:space-between;padding:12px 18px 2px;font-size:12px;font-weight:700;color:#333}
+</style>
+</head>
+<body>
+<div class="hero"><div class="wrap">
+  <div class="tag-row">
+    <span class="badge version">v2.8.3.2</span>
+    <span class="badge">行程页整改 + 玻璃回归修复 + 双 bug</span>
+    <span class="badge waiting">待审批 · 未施工</span>
+  </div>
+  <h1>三张截图，我逐个<em>认账</em>：玻璃的账我认，<br>发白的账在 V2.8.2 的<em>灰度矩阵</em>，乱序的账在<em>排序键</em></h1>
+  <p class="sub">
+    ① 卡片发白 = V2.8.2 灰度矩阵数学错误（随主页回退消失）；② 顶栏「灰板」= 我 3.1 的高光跨度回归，给出补丁；③ <b>主页不重设计，整体回退 v2.7（提交 c3e6f07）</b>，乱序问题随之消失；④ <b>行程详情页 = 本轮设计主角</b>（04 节高保真稿）；⑤ <code style="font-family:var(--mono);color:#7dd3fc">funds_sync</code> = 云端未执行 db_v271.sql。审批后施工，不编译 APK、不提交 git。
+  </p>
+</div></div>
+<!-- 一、三图诊断 -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">01</span><h2>三张截图的病理报告</h2></div>
+  <p class="sec-desc">每一条都给出代码级根因，可在施工后逐条验收。</p>
+  <div class="diag3">
+    <div class="card">
+      <h3>📷 截图 1 · 卡片发白 <span class="sev high">高 · 确诊</span></h3>
+      <p><b style="color:var(--txt)">不是玻璃的锅。</b>V2.8.2 S3「已结束降饱和」的矩阵写错了：</p>
+      <div class="math">矩阵 [0.5,0.5,0.5] ⇒ R'=G'=B'=(R+G+B)/2<br>蓝 #4F8EF7 (79,142,247) ⇒ (234,234,234) 近白！</div>
+      <p style="margin-top:8px">注释写的是 saturation 0.5，实际效果是「过曝提亮」：饱和蓝变成近白灰，白字 / 白 pill 全部不可读。正确做法是亮度保持的去饱和矩阵（0.213/0.715/0.072 系数）。</p>
+    </div>
+    <div class="card">
+      <h3>📷 截图 1 · 顶栏「灰板」 <span class="sev high">高 · 我的回归</span></h3>
+      <p>3.1 我给玻璃加的「顶边受光高光」<b>跨度算错了</b>：<code>LinearGradient(end: Alignment(0, 0.14))</code> 在 Alignment 坐标系里覆盖了 <b>57% 高度</b>（本意 10%），加上全宽 <code>outlineVariant α0.35</code> 深描边 → 吸顶栏成了压在页面上的灰板。修复：高光真 10% 跨度、描边按档位减淡、thin 档 tint 再降。</p>
+    </div>
+    <div class="card">
+      <h3>📷 截图 2 · 详情页逻辑混乱 <span class="sev mid">中 · 重设计</span></h3>
+      <p>① 玻璃 tab 胶囊悬在封面上=灰板；② 「已绑定旅行团」说明卡 + 5 图标大白卡占首屏 1/4，说明文案是噪音；③ 「行程概览」折叠卡、D1/D2 chips、每日安排三层重复导航；④ 信息层级无主次。→ 见 03 节重设计。</p>
+    </div>
+    <div class="card">
+      <h3>📷 截图 3 · funds_sync 报错 <span class="sev high">高 · 云端缺表</span></h3>
+      <p><code>PGRST205</code> = Supabase 云端<b>不存在 funds_sync 表</b>——v2.7.1 的迁移 SQL（<code>docs/db_v271.sql</code>，含 funds_sync / inbox_items_sync 建表 + RLS）<b>没有在 Supabase 执行过</b>。客户端引擎推 funds 时命中缺表。<b>数据侧需要你在 Supabase SQL Editor 执行 docs/db_v271.sql</b>（我没有你的云端凭据，代不了手）；代码侧我会把硬报错转成人话 + 修复指引（见 05 节）。</p>
+    </div>
+    <div class="card">
+      <h3>🫥 行程卡乱序 <span class="sev high">高 · 确诊</span></h3>
+      <p>三个因素叠加：<br>① 默认排序 <code>recent</code> 按 <code>updatedAt</code> 排——同步拉取 / 后台写入都会触碰它，顺序当场重排；<br>② Dart <code>List.sort</code> <b>非稳定排序</b>，updatedAt 相同（如同步批次同毫秒写入）时每次重建顺序随机翻转；<br>③ <code>StaggerIn(index)</code> 随重建重播入场动画，把顺序变化放大成「乱跳」。</p>
+    </div>
+    <div class="card">
+      <h3>✅ 不背锅的部分</h3>
+      <p>截图 2 详情页的蓝封面正常、截图 3 同步中心列表本身渲染正常；底栏胶囊、Sheet 类玻璃在两图中表现正常。本轮不动这些。</p>
+    </div>
+  </div>
+</section>
+<style>
+/* 行程首页场景 */
+.tbg{position:absolute;inset:0;background:#f0f2ef}
+.tappbar{position:absolute;top:0;left:0;right:0;padding-top:26px;z-index:5}
+.tappbar .icons{display:flex;gap:13px;justify-content:flex-end;padding:4px 18px;font-size:14px;color:#444}
+.tappbar .big{font-size:26px;font-weight:900;padding:2px 20px 8px;color:#14161a}
+.appbar-before{backdrop-filter:blur(14px) saturate(.92);-webkit-backdrop-filter:blur(14px) saturate(.92);
+  background:rgba(228,232,230,.44);border-bottom:1px solid rgba(90,105,100,.35);
+  box-shadow:inset 0 22px 26px -18px rgba(255,255,255,.6)}
+.appbar-after{backdrop-filter:blur(24px) saturate(.9);-webkit-backdrop-filter:blur(24px) saturate(.9);
+  background:rgba(248,250,249,.42);box-shadow:inset 0 -0.5px 0 rgba(15,23,42,.08)}
+.tgroup{font-size:14px;font-weight:800;padding:10px 20px 2px}
+.tgroup small{display:block;font-size:10px;font-weight:500;color:#8a929c}
+.tcard{margin:8px 20px 0;border-radius:18px;height:120px;padding:12px 14px;position:relative;overflow:hidden;color:#fff}
+.tcard.gray{background:#e9eaea;color:#b9bdbd}
+.tcard.gray .tp{background:#fff}
+.tcard.blue{background:linear-gradient(140deg,#4f8ef7,#2456c4)}
+.tcard.teal{background:linear-gradient(140deg,#5fb89a,#2e7d5b)}
+.tcard .tp{display:inline-block;background:rgba(255,255,255,.24);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:2px 9px;font-size:9px;font-weight:700}
+.tcard .tn{font-size:16px;font-weight:900;margin-top:16px}
+.tcard .td{font-size:9.5px;opacity:.9;margin-top:2px}
+.tcard .tbar{position:absolute;left:14px;right:14px;bottom:10px;height:3px;border-radius:2px;background:rgba(255,255,255,.35)}
+.tcard .tbar i{position:absolute;left:0;top:0;bottom:0;width:55%;background:#fff;border-radius:2px}
+.tcard .wm{position:absolute;right:10px;top:10px;font-size:26px;opacity:.45;transform:rotate(-10deg)}
+.tmore{margin:8px 20px 0;text-align:center;font-size:10.5px;color:#0c8a50;font-weight:700;padding:8px;background:#fff;border-radius:12px}
+.fabg{position:absolute;right:16px;bottom:86px;background:linear-gradient(140deg,#19c37d,#0da35f);color:#fff;
+  font-size:12px;font-weight:800;border-radius:999px;padding:10px 16px;box-shadow:0 8px 20px rgba(13,163,95,.4);z-index:6}
+.tnav{position:absolute;left:12px;right:12px;bottom:10px;border-radius:26px;padding:8px 4px;display:flex;text-align:center;z-index:5;
+  backdrop-filter:blur(30px) saturate(.85);-webkit-backdrop-filter:blur(30px) saturate(.85);
+  background:rgba(250,251,252,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 12px 30px rgba(15,23,42,.2)}
+.tnav .nb{flex:1;font-size:15px}
+.tnav .nb span{display:block;font-size:9px;font-weight:600;color:#4c5563}
+.tnav .nb.on span{color:#0a7d49;font-weight:800}
+/* 详情页场景 */
+.dcover{margin:52px 20px 0;border-radius:20px;background:linear-gradient(140deg,#4f8ef7,#2456c4);color:#fff;padding:14px 16px;height:120px;position:relative}
+.dcover .dn{font-size:19px;font-weight:900}
+.dcover .dd{font-size:10px;opacity:.92;margin-top:3px}
+.dcover .dp{display:inline-block;background:rgba(255,255,255,.24);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:2px 9px;font-size:9px;font-weight:700;margin-top:8px;margin-right:6px}
+.dtabs{margin:10px 20px 0;border-radius:16px;display:flex;text-align:center;padding:5px}
+.dtabs.before{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:rgba(214,219,217,.5);border:1px solid rgba(90,105,100,.3)}
+.dtabs.after{background:#fff;border:1px solid rgba(15,23,42,.07);box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.dtabs .dt{flex:1;font-size:11px;padding:7px 0;color:#5c6470;font-weight:600;border-radius:12px}
+.dtabs .dt.on{color:#fff;font-weight:800}
+.dtabs.before .dt.on{background:#0da35f}
+.dtabs.after .dt.on{background:#0da35f}
+.dquick{display:flex;gap:8px;margin:10px 20px 0}
+.dquick .qi{flex:1;background:#fff;border:1px solid rgba(15,23,42,.06);border-radius:12px;text-align:center;padding:8px 0;font-size:15px}
+.dquick .qi span{display:block;font-size:8.5px;color:#5c6470;font-weight:600;margin-top:1px}
+.dbind{margin:10px 20px 0;background:#fff;border-radius:14px;padding:10px 12px;font-size:10.5px;color:#0c8a50;font-weight:700;text-align:center}
+.dsec{display:flex;align-items:center;margin:12px 20px 0}
+.dsec .a{font-size:13.5px;font-weight:800}
+.dsec .b{font-size:9.5px;color:#8a929c;margin-left:8px}
+.dchiprow{display:flex;gap:8px;margin:8px 20px 0}
+.dchip{background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:12px;padding:6px 12px;font-size:10.5px;font-weight:700;color:#333}
+.dchip.on{background:#0da35f;color:#fff;border-color:#0da35f}
+.dchip small{display:block;font-size:8.5px;font-weight:500;opacity:.8}
+.dday{display:flex;align-items:center;gap:8px;margin:12px 20px 0}
+.dday .dg{background:#0da35f;color:#fff;border-radius:999px;font-size:9px;font-weight:800;padding:3px 9px}
+.dday .dl{font-size:11.5px;font-weight:800}
+.dday .dc{font-size:9.5px;color:#8a929c}
+.dfab{position:absolute;right:16px;bottom:86px;background:linear-gradient(140deg,#19c37d,#0da35f);color:#fff;font-size:12px;font-weight:800;border-radius:999px;padding:10px 16px;box-shadow:0 8px 20px rgba(13,163,95,.4);z-index:6}
+/* 参数表/范围/审批 复用简洁风 */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+th{background:var(--panel-2);text-align:left;padding:11px 15px;font-size:12px;color:var(--txt-2);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 15px;border-bottom:1px solid rgba(36,48,65,.6);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td code{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:2px 6px;border-radius:5px;color:#a5c8f0}
+td .new{color:var(--green);font-weight:700}
+.scope-list{list-style:none;margin-top:6px}
+.scope-list li{display:flex;gap:10px;padding:7px 0;font-size:13px;color:var(--txt-2);border-bottom:1px dashed rgba(36,48,65,.6)}
+.scope-list li:last-child{border:none}
+.scope-list b{color:var(--txt);font-weight:600}
+.scope-list .f{font-family:var(--mono);font-size:11.5px;color:#a5c8f0}
+.scope-list .pin{flex:0 0 18px;text-align:center}
+.scope-list.do .pin{color:var(--green)}
+.scope-list.dont .pin{color:var(--red)}
+.approve{margin-top:52px;border:1px solid rgba(18,183,106,.4);border-radius:18px;
+  background:linear-gradient(160deg,rgba(18,183,106,.08),rgba(18,183,106,.02));padding:32px;text-align:center}
+.approve h2{font-size:21px;font-weight:800}
+.approve p{color:var(--txt-2);font-size:14px;margin:8px auto 20px;max-width:660px}
+.btn-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn{font-size:14px;font-weight:700;border-radius:12px;padding:12px 24px;border:1px solid var(--line);background:var(--panel-2);color:var(--txt-2)}
+.btn.primary{background:linear-gradient(140deg,#17c078,#0e9d5c);color:#fff;border:none;box-shadow:0 8px 24px rgba(18,183,106,.35)}
+.btn.ghost{color:var(--amber);border-color:rgba(245,166,35,.4)}
+.btn small{display:block;font-size:11px;font-weight:500;opacity:.85;margin-top:2px}
+.approve .hint{margin-top:18px;font-size:12px;color:var(--txt-3)}
+</style>
+
+<!-- 二、玻璃修复 -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">02</span><h2>玻璃全 App 发白：根因确诊 + 已修复 ✅</h2></div>
+  <p class="sec-desc">你的反馈「<b style="color:var(--txt)">所有玻璃特效全发白</b>」就是确诊关键：全 App 同时发白 = 存在一层<b style="color:var(--txt)">统一叠加在所有玻璃内容之上</b>的东西。排查结论：3.1 我在 GlassSurface 里新增的 <code style="font-family:var(--mono);font-size:13px;color:#7dd3fc">foregroundDecoration</code> 白色渐变幕——前景层画在<b style="color:var(--txt)">内容之上</b>，白 α0.5 的渐变罩住上半截（且 Alignment 坐标算错实际覆盖 57% 高度）；玻璃收口是单点实现，51 处使用全部中招。叠加链：tint 白 + 对角柔光白 + 前景白幕 = 三层同向叠白 → 漂白。<b style="color:var(--green)">以下修复已施工完毕（代码已改，静态检查零诊断）：</b></p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>层</th><th>3.1 现状（事故）</th><th>3.2 修复（已落地）</th></tr></thead>
+    <tbody>
+      <tr><td><b>前景白幕</b><br><span style="font-size:11px;color:var(--txt-3)">glass_surface.dart · 元凶</span></td>
+        <td>白色渐变 α0.5 罩内容上半部 57%，全 App 玻璃同时发白</td>
+        <td><code><span class="new">彻底删除渐变幕</span></code>，前景只保留 1px 低 α 白受光环——「画在内容之上」的层从此永不放白色填充</td></tr>
+      <tr><td><b>对角柔光</b><br><span style="font-size:11px;color:var(--txt-3)">内容之下的背景层</span></td>
+        <td>白 α0.55，与 tint / 白幕三层同向叠白</td>
+        <td><code><span class="new">α0.55 → 0.35</span></code>（深色 0.22→0.18）</td></tr>
+      <tr><td><b>内圈白描边</b></td>
+        <td>α0.55（也画在内容之上，同样参与叠白）</td>
+        <td><code><span class="new">α0.55 → 0.30</span></code>（深色 0.10→0.08）</td></tr>
+      <tr><td><b>外圈深描边</b></td>
+        <td>全档统一 α0.35，吸顶栏全宽重描边非常显眼</td>
+        <td>按档位：<code><span class="new">thin 0.18 / regular 0.28 / thick 0.35</span></code></td></tr>
+      <tr><td><b>thin 档 tint</b></td>
+        <td>0.44，顶部偏灰白</td>
+        <td><code><span class="new">0.44 → 0.36</span></code>（深色 0.38→0.34），顶栏回归轻透</td></tr>
+    </tbody>
+  </table></div>
+  <div class="anno" style="margin-top:14px"><b>全量排查结论（「继续找」的结果）：</b>① <code>foregroundDecoration</code> 全 lib 仅 glass_surface 一处，元凶唯一，单点修复即 51 处使用全部恢复；② 除 GlassSurface 外无其他「白色填充叠在玻璃上」的代码路径；③ 已结束卡发白是独立 bug（V2.8.2 灰度矩阵），随主页回退 v2.7 一并消失。真机验收时请重点确认：吸顶栏 / 胶囊底栏 / 工具箱 Sheet / 记一笔键盘 / 应用锁——这五处应恢复轻透玻璃质感。</div>
+</section>
+<!-- 三、主页回退 v2.7 -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">03</span><h2>行程主页：不做重设计，整体回退 v2.7</h2></div>
+  <p class="sec-desc">按你的指示，主页不做任何「新设计」。V2.7 末期状态 = 提交 <code style="font-family:var(--mono);font-size:13px;color:#7dd3fc">c3e6f07</code>，直接以 git 恢复该文件，2.8 期间堆上去的增量全部撤掉：</p>
+  <div class="diag3">
+    <div class="card">
+      <h3>🗑 回退移除（2.8 增量）</h3>
+      <ul class="scope-list dont" style="margin-top:10px">
+        <li><span class="pin">✕</span><span><b>顶栏搜索框 + 排序菜单</b>（V2.8.2 S3）——「乱序」的直接来源：recent 排序依赖 updatedAt，同步一碰就重排</span></li>
+        <li><span class="pin">✕</span><span><b>D 环徽章 + 进行中光晕描边</b>（V2.8.2 S3）</span></li>
+        <li><span class="pin">✕</span><span><b>「已结束降饱和」灰度矩阵</b>（V2.8.2 S3）——<b>截图 1 发白的元凶，随回退直接消失</b></span></li>
+        <li><span class="pin">✕</span><span><b>扫码入口 / 同步状态胶囊</b>（V2.8.1 S7）——顶栏恢复 2.7 的三个动作</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>📦 回退保留（2.7 原貌）</h3>
+      <ul class="scope-list do" style="margin-top:10px">
+        <li><span class="pin">▸</span><span><b>GlassAppBar 大标题「芥舟」</b>（2.7 已有）</span></li>
+        <li><span class="pin">▸</span><span><b>五态分组 + 渐变封面大卡 + 视差水印 + 进度条</b></span></li>
+        <li><span class="pin">▸</span><span><b>骨架屏 / StaggerIn 入场 / 今日卡 / 攻略入口</b></span></li>
+        <li><span class="pin">▸</span><span><b>列表顺序 = 创建时间倒序（稳定）</b>——「随便滑动顺序就变」随 recent 排序一起消失</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="anno" style="margin-top:16px"><b>实现方式：</b><code style="font-family:var(--mono);font-size:12px;color:#7dd3fc">git checkout c3e6f07 -- lib/features/trips/screens/trips_home_screen.dart</code>（单文件恢复，其余文件不动；恢复后跑引用核查——2.7 版引用的共享件 API 均未变更，预期直接编译通过）。附注：StaggerIn 动画重播是 2.7 就存在的行为，回退后与 2.7 完全一致，不在本次范围内。</div>
+</section>
+
+<!-- 四、详情页重设计（主角） -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">04</span><h2>行程详情页重设计（本轮主角）</h2></div>
+  <p class="sec-desc">先说清现状为什么乱——你截图 2 里从上到下出现了 <b style="color:var(--txt)">10 层</b>东西，其中 4 层在做同一件事（导航/概览），第一屏真正的内容被压到屏外。按你的最新指示定案：<b style="color:var(--txt)">① 锦囊页签删除，城市贴士并入「攻略」；② 装配改半屏抽屉（不全屏、不占页签位）；③ 大纲收进「更多」；④ 页面底部停靠位改「时间线 | 攻略」双段切换</b>。详情页从 4 页签收敛为双视图 + 两个工具抽屉。</p>
+  <div class="phone-row" style="grid-template-columns:minmax(300px,400px) 1fr;align-items:start">
+    <div class="phone-block" style="max-width:400px">
+      <div class="phone-label"><span class="pl-tag after">AFTER · 高保真</span><span class="pl-note">tab 已移至底部停靠</span></div>
+      <div style="width:100%;max-width:360px;height:720px;margin:0 auto;border-radius:40px;overflow:hidden;position:relative;border:6px solid #232a35;box-shadow:0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;background:#f0f2ef;font-size:14px;color:#1a1d21">
+        <div style="background:linear-gradient(160deg,#4f8ef7,#2456c4);color:#fff;padding:14px 18px 36px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700"><span>11:42</span><span>▲ ▮ ▉</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+            <span style="font-size:16px">←</span>
+            <span style="font-size:10px;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:3px 10px;font-weight:700">🧳 已关联账本 · 厦门二日</span>
+            <span style="font-size:14px">⋯</span>
+          </div>
+          <div style="font-size:24px;font-weight:900;margin-top:14px">厦门</div>
+          <div style="font-size:11px;opacity:.92;margin-top:4px">📍 厦门，泉州，福州，漳州 · 9月12日-13日</div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(255,255,255,.24);border:1px solid rgba(255,255,255,.45);border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:700">已结束</span>
+            <span style="font-size:10px;opacity:.92">共 2 天 · 7 个安排 · ¥1,280</span>
+          </div>
+        </div>
+        <div style="margin:-26px 16px 0;background:#fff;border-radius:16px;padding:10px 6px;display:flex;box-shadow:0 6px 18px rgba(15,23,42,.14);position:relative;z-index:2">
+          <div style="flex:1;text-align:center;font-size:15px">🗺<div style="font-size:8.5px;color:#5c6470;font-weight:600;margin-top:1px">地图</div></div>
+          <div style="flex:1;text-align:center;font-size:15px">🖼<div style="font-size:8.5px;color:#5c6470;font-weight:600;margin-top:1px">相册</div></div>
+          <div style="flex:1;text-align:center;font-size:15px">💰<div style="font-size:8.5px;color:#5c6470;font-weight:600;margin-top:1px">账本</div></div>
+          <div style="flex:1;text-align:center;font-size:15px">⋯<div style="font-size:8.5px;color:#5c6470;font-weight:600;margin-top:1px">更多</div></div>
+        </div>
+        <div style="display:flex;gap:8px;margin:14px 16px 0;align-items:center">
+          <div style="background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:12px;padding:6px 12px;font-size:11px;font-weight:700;color:#333">全部</div>
+          <div style="background:#0da35f;color:#fff;border:1px solid #0da35f;border-radius:12px;padding:6px 12px;font-size:11px;font-weight:800">D1 · 9月12日</div>
+          <div style="background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:12px;padding:6px 12px;font-size:11px;font-weight:700;color:#333">D2 · 9月13日</div>
+          <div style="margin-left:auto;background:#e8f7f0;border:1px solid rgba(13,163,95,.35);border-radius:10px;padding:6px 10px;font-size:10.5px;font-weight:800;color:#0c8a50">🧩 装配</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin:14px 16px 0">
+          <span style="background:#0da35f;color:#fff;border-radius:999px;font-size:9px;font-weight:800;padding:3px 9px">Day 1</span>
+          <span style="font-size:12px;font-weight:800">9月12日 周六</span>
+          <span style="font-size:9.5px;color:#8a929c">3 个安排 · ¥420</span>
+          <span style="margin-left:auto;color:#8a929c">⋮</span>
+        </div>
+        <div style="margin:8px 16px 0">
+          <div style="background:#fff;border-radius:14px;padding:11px 13px;display:flex;gap:10px;align-items:center;border:1px solid rgba(15,23,42,.05)">
+            <span style="width:10px;height:10px;border-radius:50%;background:#0da35f;flex:0 0 10px"></span>
+            <div style="flex:1"><div style="font-size:12.5px;font-weight:700">鼓浪屿半日漫步</div><div style="font-size:9.5px;color:#8a929c">09:00 - 12:30 · ¥100</div></div><span style="color:#c0c6cd">›</span>
+          </div>
+          <div style="background:#fff;border-radius:14px;padding:11px 13px;display:flex;gap:10px;align-items:center;border:1px solid rgba(15,23,42,.05);margin-top:8px">
+            <span style="width:10px;height:10px;border-radius:50%;background:#3b82f6;flex:0 0 10px"></span>
+            <div style="flex:1"><div style="font-size:12.5px;font-weight:700">轮渡往返</div><div style="font-size:9.5px;color:#8a929c">13:00 · ¥35</div></div><span style="color:#c0c6cd">›</span>
+          </div>
+          <div style="background:#fff;border-radius:14px;padding:11px 13px;display:flex;gap:10px;align-items:center;border:1px solid rgba(15,23,42,.05);margin-top:8px">
+            <span style="width:10px;height:10px;border-radius:50%;background:#f5a623;flex:0 0 10px"></span>
+            <div style="flex:1"><div style="font-size:12.5px;font-weight:700">中山路晚餐</div><div style="font-size:9.5px;color:#8a929c">18:30 · ¥285</div></div><span style="color:#c0c6cd">›</span>
+          </div>
+        </div>
+        <div style="flex:1"></div>
+        <div style="margin:0 16px;position:relative;z-index:3">
+          <div style="background:#fff;border-radius:18px;padding:5px;display:flex;box-shadow:0 8px 24px rgba(15,23,42,.18)">
+            <div style="flex:1;background:#0da35f;color:#fff;border-radius:14px;padding:9px 0;text-align:center;font-size:12px;font-weight:800">≡ 时间线</div>
+            <div style="flex:1;text-align:center;padding:9px 0;font-size:12px;color:#5c6470;font-weight:600">📖 攻略</div>
+          </div>
+          <div style="position:absolute;right:14px;top:-56px;background:linear-gradient(140deg,#19c37d,#0da35f);color:#fff;font-size:11.5px;font-weight:800;border-radius:999px;padding:10px 16px;box-shadow:0 8px 20px rgba(13,163,95,.4)">＋ 添加安排</div>
+        </div>
+        <div style="margin:10px 12px 12px;border-radius:26px;padding:8px 4px;display:flex;text-align:center;background:rgba(250,251,252,.9);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 6px 18px rgba(15,23,42,.12)">
+          <div style="flex:1;font-size:14px">✦<div style="font-size:8.5px;color:#4c5563;font-weight:600">AI</div></div>
+          <div style="flex:1;font-size:14px">🗒<div style="font-size:8.5px;color:#4c5563;font-weight:600">清单</div></div>
+          <div style="flex:1;font-size:14px">🧭<div style="font-size:8.5px;color:#0a7d49;font-weight:800">行程</div></div>
+          <div style="flex:1;font-size:14px">💳<div style="font-size:8.5px;color:#4c5563;font-weight:600">账本</div></div>
+          <div style="flex:1;font-size:14px">👤<div style="font-size:8.5px;color:#4c5563;font-weight:600">我的</div></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>区</th><th>设计决定</th><th>旧元素去向</th></tr></thead>
+        <tbody>
+          <tr><td><b>A 沉浸封面</b></td><td>渐变延伸到状态栏（现状已有，保留并<b>收窄 176→约 150</b>）；合并展示：城市名 / 路线·日期 / 状态+天数+<b>费用合计</b></td><td>蓝封面保留；「共 2 天」pill 并入文字行</td></tr>
+          <tr><td><b>B 绑定徽章</b></td><td>封面顶部中央一枚胶囊：「🧳 已关联账本 · 团名」，点击直达账本；未绑定时显示「＋ 关联旅行团」</td><td><b>「已绑定旅行团·点击账本查看关联账单」说明条删除</b></td></tr>
+          <tr><td><b>C 快捷行</b></td><td>封面底边悬浮一张白色快捷卡（地图/相册/攻略/账本/更多），卡片式但<b>高度减半</b>，压在封面与背景交界处形成过渡</td><td>5 图标大白卡收窄为此卡；不再是独立大区块</td></tr>
+          <tr><td><b>D 底部双段</b></td><td>原四页签底部停靠位改为<b>「≡ 时间线 | 📖 攻略」双段切换</b>（实色胶囊，悬浮于全局底栏上方）。时间线=按天安排主视图；攻略=目的地攻略视图（<b>锦囊页签删除，城市贴士并入此处</b>，复用 330 城攻略库）</td><td>时间轴/大纲/装配/锦囊四页签全部取消；KitTab 删除</td></tr>
+          <tr><td><b>D+ 装配抽屉</b></td><td>Day chips 行右端「🧩 装配」按钮 → <b>半屏拖拽抽屉</b>（不全屏、不占页签），想去池点击落点、容量条、30s 撤销引擎原样保留，视图重设计（见 04+）</td><td>全屏 AssemblePanel 改抽屉宿主</td></tr>
+          <tr><td><b>D+ 更多菜单</b></td><td>快捷卡「⋯ 更多」→ 工具抽屉：<b>大纲</b>（文本编辑+导入导出）及低频工具收纳于此</td><td>大纲退出页签，功能不删</td></tr>
+          <tr><td><b>E 日期栏</b></td><td>「全部 / D1 / D2…」横滑 chips = 唯一的 day 导航，选中态绿底；chips 数据即概览（每天安排数并入 chip）</td><td><b>「行程概览」折叠卡删除</b>——费用合计上封面，天气/清单移入「更多」或当天分组头</td></tr>
+          <tr><td><b>F 当天安排</b></td><td>Day 分组头 + 时间轴条目卡（类型色节点，现状组件保留）直接开列；<b>删除「每日安排·轻点编辑·长按更多操作」大标题</b>（操作提示放 Day 头的 ⋮ 菜单）</td><td>重复的 SectionHeader 删除</td></tr>
+        </tbody>
+      </table></div>
+      <div class="anno" style="margin-top:14px"><b>首屏收益（375×812 基准）：</b>旧版首屏被「说明条+图标卡+概览折叠」占满，第一个安排卡在 ~620px 处；新版首屏直接看到 <b>Day 1 的 3 个安排卡</b>。信息不减：绑定关系→徽章、费用→封面、天气→「更多」面板、操作提示→Day 菜单。<b>数据逻辑零改动</b>，全部为视图层重排。</div>
+    </div>
+  </div>
+</section>
+<!-- 04+ 装配抽屉 + 大纲 -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">04+</span><h2>装配半屏抽屉重设计 + 大纲入「更多」</h2></div>
+  <p class="sec-desc">装配（=想去装配台）不再全屏：从时间线视图 Day 行的「🧩 装配」唤起<b style="color:var(--txt)">半屏拖拽抽屉</b>，落点/撤销/容量引擎零改动；大纲收进「更多」工具抽屉，文本编辑与往返导入导出功能不删。</p>
+  <div class="phone-row">
+    <div class="phone-block">
+      <div class="phone-label"><span class="pl-tag after">大纲 · AFTER</span><span class="pl-note">入口=「更多」抽屉 · 文本框→结构化卡流</span></div>
+      <div style="width:100%;max-width:300px;height:600px;margin:0 auto;border-radius:36px;overflow:hidden;position:relative;border:6px solid #232a35;box-shadow:0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;background:#f0f2ef;color:#1a1d21">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px 8px">
+          <span style="font-size:14px;font-weight:800">大纲</span>
+          <span style="font-size:10px;color:#5c6470">✎ 文本编辑 · ⇅ 导入导出 · ⋯</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 16px 0">
+          <span style="background:#0da35f;color:#fff;border-radius:999px;font-size:8.5px;font-weight:800;padding:2px 8px">Day 1</span>
+          <span style="font-size:11px;font-weight:800">9月12日</span>
+          <span style="font-size:9px;color:#8a929c">4 个安排</span>
+        </div>
+        <div style="margin:8px 16px 0;background:#fff;border-radius:12px;padding:8px 11px;font-size:11px;font-weight:600;display:flex;gap:8px;align-items:center"><span style="color:#0da35f">●</span>鼓浪屿半日漫步<span style="margin-left:auto;color:#c0c6cd">›</span></div>
+        <div style="margin:6px 16px 0;background:#fff;border-radius:12px;padding:8px 11px;font-size:11px;font-weight:600;display:flex;gap:8px;align-items:center"><span style="color:#3b82f6">●</span>轮渡往返<span style="margin-left:auto;color:#c0c6cd">›</span></div>
+        <div style="margin:6px 16px 0;background:#fff;border-radius:12px;padding:8px 11px;font-size:11px;font-weight:600;display:flex;gap:8px;align-items:center"><span style="color:#f5a623">●</span>中山路晚餐<span style="margin-left:auto;color:#c0c6cd">›</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px 0">
+          <span style="background:#6b7280;color:#fff;border-radius:999px;font-size:8.5px;font-weight:800;padding:2px 8px">Day 2</span>
+          <span style="font-size:11px;font-weight:800">9月13日</span>
+          <span style="font-size:9px;color:#8a929c">3 个安排</span>
+        </div>
+        <div style="margin:8px 16px 0;background:#fff;border-radius:12px;padding:8px 11px;font-size:11px;font-weight:600;display:flex;gap:8px;align-items:center"><span style="color:#0da35f">●</span>环岛路骑行<span style="margin-left:auto;color:#c0c6cd">›</span></div>
+        <div style="flex:1"></div>
+        <div style="margin:10px 16px 14px;background:#eef2f0;border:1px dashed rgba(15,23,42,.18);border-radius:12px;padding:8px 11px;font-size:9.5px;color:#5c6470">
+          💡 想去池已收拢至「装配」页 —— 大纲不再重复放置
+        </div>
+      </div>
+      <div class="anno"><b>变化：</b><ul>
+        <li>主体从「裸文本框」改为<b>按天分组的结构化大纲卡流</b>（数据就是现有正式卡，零新增）</li>
+        <li>文本编辑器 / 导入导出（往返式，功能不删）收进顶部「✎ / ⇅」，导入仍是强确认流程</li>
+        <li><b>迷你想去池侧栏移除</b>——想去池唯一入口 = 装配台，消除两处重复</li>
+      </ul></div>
+    </div>
+    <div class="phone-block">
+      <div class="phone-label"><span class="pl-tag after">攻略视图 · AFTER</span><span class="pl-note">底部双段第二页 · 锦囊并入此处</span></div>
+      <div style="width:100%;max-width:300px;height:600px;margin:0 auto;border-radius:36px;overflow:hidden;position:relative;border:6px solid #232a35;box-shadow:0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;background:#f0f2ef;color:#1a1d21">
+        <div style="background:linear-gradient(140deg,#5fb89a,#2e7d5b);color:#fff;padding:14px 16px 12px">
+          <div style="font-size:10px;opacity:.85">已为你命中目的地攻略</div>
+          <div style="font-size:17px;font-weight:900;margin-top:2px">🏙 厦门</div>
+          <div style="font-size:9.5px;opacity:.9;margin-top:3px">38 条本地贴士 · 按你的行程天自动分组</div>
+        </div>
+        <div style="display:flex;gap:8px;margin:10px 16px 0">
+          <div style="background:#0da35f;color:#fff;border-radius:999px;padding:4px 12px;font-size:10px;font-weight:800">全部</div>
+          <div style="background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:999px;padding:4px 12px;font-size:10px;font-weight:700;color:#333">景点</div>
+          <div style="background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:999px;padding:4px 12px;font-size:10px;font-weight:700;color:#333">美食</div>
+          <div style="background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:999px;padding:4px 12px;font-size:10px;font-weight:700;color:#333">交通</div>
+          <div style="background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:999px;padding:4px 12px;font-size:10px;font-weight:700;color:#333">贴士</div>
+        </div>
+        <div style="margin:10px 16px 0;background:#fff;border-radius:12px;padding:9px 11px">
+          <div style="font-size:11px;font-weight:800">🎫 鼓浪屿船票要提前买</div>
+          <div style="font-size:9.5px;color:#8a929c;margin-top:2px">轮渡旺季现场无票，建议提前 1-2 天在官方渠道购入</div>
+        </div>
+        <div style="margin:8px 16px 0;background:#fff;border-radius:12px;padding:9px 11px">
+          <div style="font-size:11px;font-weight:800">🦞 八市海鲜加工避坑</div>
+          <div style="font-size:9.5px;color:#8a929c;margin-top:2px">自选加工店先问清加工费，称重前沥水</div>
+        </div>
+        <div style="margin:8px 16px 0;background:#fff;border-radius:12px;padding:9px 11px">
+          <div style="font-size:11px;font-weight:800">🚲 环岛路骑行最佳时段</div>
+          <div style="font-size:9.5px;color:#8a929c;margin-top:2px">16:00 后逆风小、日晒弱，白城→黄厝段最顺</div>
+        </div>
+        <div style="flex:1"></div>
+        <div style="margin:10px 16px 14px;text-align:center;font-size:9px;color:#8a929c">未命中城市时：显示空态 + 「手动选城」入口（330 城）</div>
+      </div>
+      <div class="anno"><b>变化（锦囊并入攻略）：</b><ul>
+        <li>原锦囊四栏硬并排 → <b>城市头卡 + 分组 chips + 纵向内容卡</b>，单手可读</li>
+        <li>锦囊页签删除，城市贴士作为攻略的「本地贴士」分组呈现；KitTab 移除</li>
+        <li>内容数据完全复用既有攻略库（330 城），未命中给空态引导</li>
+      </ul></div>
+    </div>
+    <div class="phone-block">
+      <div class="phone-label"><span class="pl-tag after">装配 · 半屏抽屉</span><span class="pl-note">不全屏 · 引擎零改动</span></div>
+      <div style="width:100%;max-width:300px;height:600px;margin:0 auto;border-radius:36px;overflow:hidden;position:relative;border:6px solid #232a35;box-shadow:0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;background:#f0f2ef;color:#1a1d21">
+        <div style="height:150px;background:linear-gradient(140deg,#4f8ef7,#2456c4);position:relative;flex:0 0 150px">
+          <div style="position:absolute;inset:0;background:rgba(13,17,23,.5)"></div>
+          <div style="position:absolute;left:16px;bottom:14px;color:rgba(255,255,255,.92);font-size:11px;font-weight:800">厦门 · 时间线视图（抽屉后方压暗）</div>
+        </div>
+        <div style="flex:1;background:#fbfcfc;border-radius:20px 20px 0 0;margin-top:-14px;padding:8px 16px 0;display:flex;flex-direction:column;box-shadow:0 -8px 24px rgba(15,23,42,.18);position:relative;z-index:2">
+          <div style="width:36px;height:4.5px;border-radius:999px;background:rgba(0,0,0,.22);margin:0 auto 8px"></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12.5px;font-weight:800">想去装配台</span>
+            <div style="margin-left:auto;display:flex;gap:6px">
+              <span style="background:#0da35f;color:#fff;border-radius:9px;padding:3px 10px;font-size:9.5px;font-weight:800">D1</span>
+              <span style="background:#fff;border:1px solid rgba(15,23,42,.1);border-radius:9px;padding:3px 10px;font-size:9.5px;font-weight:700;color:#333">D2</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <div style="flex:1;height:5px;border-radius:3px;background:rgba(15,23,42,.08)"><div style="width:55%;height:100%;border-radius:3px;background:#0da35f"></div></div>
+            <span style="font-size:9px;color:#0c8a50;font-weight:800">5h / 9h</span>
+          </div>
+          <div style="margin:10px 0 0;font-size:10px;font-weight:800;color:#5c6470">想去池 · 点击即落点到 D1</div>
+          <div style="margin:6px 0 0;background:#fff;border-radius:12px;padding:9px 11px;display:flex;gap:8px;align-items:center;border:1px solid rgba(15,23,42,.05)"><span style="font-size:13px">☕</span><div style="flex:1"><div style="font-size:11px;font-weight:700">沙坡尾咖啡馆</div><div style="font-size:9px;color:#8a929c">约 1.5h · ★★★</div></div><span style="font-size:9px;color:#0c8a50;font-weight:800">落点 →</span></div>
+          <div style="margin:6px 0 0;background:#fff;border-radius:12px;padding:9px 11px;display:flex;gap:8px;align-items:center;border:1px solid rgba(15,23,42,.05)"><span style="font-size:13px">🏛</span><div style="flex:1"><div style="font-size:11px;font-weight:700">厦门大学周边</div><div style="font-size:9px;color:#8a929c">约 2h · ★★</div></div><span style="font-size:9px;color:#0c8a50;font-weight:800">落点 →</span></div>
+          <div style="margin:6px 0 0;background:#fff;border-radius:12px;padding:9px 11px;display:flex;gap:8px;align-items:center;opacity:.55"><span style="font-size:13px">🏖</span><div style="flex:1"><div style="font-size:11px;font-weight:700">黄厝海滨</div><div style="font-size:9px;color:#8a929c">约 2h · 与已有卡时间窗重叠</div></div><span style="font-size:9px;color:#e5484d;font-weight:800">置灰</span></div>
+          <div style="flex:1"></div>
+          <div style="border-top:1px dashed rgba(15,23,42,.15);padding:8px 0 12px;font-size:9.5px;color:#5c6470">D1 已排：鼓浪屿 09:00 · 轮渡 13:00 · 中山路 18:30（只读缩略 · 落点后 30s 内可撤销）</div>
+        </div>
+      </div>
+      <div class="anno"><b>变化：</b><ul>
+        <li><b>全屏页 → 半屏拖拽抽屉</b>（min 45% / max 90%），后方时间线压暗可见，落点后关闭即见新卡</li>
+        <li>引擎零改动：findSlot 落点 / 30s 撤销 / 容量条 / 备胎 / 换天建议全部保留</li>
+        <li>入口 = 时间线 Day 行「🧩 装配」；成为全 App 想去池唯一入口</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- 五、两个 bug -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">05</span><h2>两个 bug 的修复方案</h2></div>
+  <div class="diag3">
+    <div class="card">
+      <h3>🫥 行程卡乱序 → 随主页回退自动解决</h3>
+      <p style="font-size:13px;color:var(--txt-2)">
+        乱序三因：<code>recent</code> 排序依赖 updatedAt（同步一碰就重排）+ Dart sort 非稳定（键并列时随机翻转）+ 入场动画重播放大感知。<br>
+        <b style="color:var(--txt)">回退 v2.7 后前两者直接消失</b>（2.7 无排序菜单，列表按创建时间稳定排列）；动画重播是 2.7 原有行为，保持不动——主页与 2.7 完全对齐。
+      </p>
+    </div>
+    <div class="card">
+      <h3>☁️ funds_sync PGRST205 → 双侧修复</h3>
+      <p style="font-size:13px;color:var(--txt-2)">
+        <b style="color:var(--txt)">数据侧（需要你操作）</b>：在 Supabase SQL Editor 执行 <code>docs/db_v271.sql</code>（建 funds_sync / inbox_items_sync + RLS，脚本自带对账查询）。<br>
+        <b style="color:var(--txt)">代码侧（我来改）</b>：同步引擎捕获 PGRST205 → 不再裸抛 PostgrestException，转译为「云端缺少 v2.7.1 数据表」+ 指引文案；同步中心错误卡显示指引 + 一键复制脚本路径。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 六、施工范围 -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">06</span><h2>施工范围</h2></div>
+  <div class="diag3">
+    <div class="card">
+      <h3 style="font-size:15px">✅ 将修改（约 7 个文件）</h3>
+      <ul class="scope-list do">
+        <li><span class="pin">▸</span><span><b>玻璃 3.1 补丁</b>（<b>已施工完毕</b>）：删前景白幕 / 分档描边 / thin tint 0.36<br><span class="f">glass_surface.dart · tokens.dart · 测试基线 ✅</span></span></li>
+        <li><span class="pin">▸</span><span><b>行程主页整体回退 v2.7</b>（单文件 git 恢复 c3e6f07；发白与乱序随之消失）<br><span class="f">trips_home_screen.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>详情页重排</b>：封面徽章 / 快捷卡 / <b>tab 底部停靠</b> / 删概览折叠卡<br><span class="f">trip_detail_screen.dart · trip_detail_tabs.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>大纲改结构化卡流</b>：文本编辑/导入导出收抽屉，想去池侧栏移除<br><span class="f">outline_panel.dart · trip_tab_panels.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>锦囊改纵向分组</b>：城市头卡 + chips + 内容卡；未命中空态<br><span class="f">kit 面板（guide 视图层）</span></span></li>
+        <li><span class="pin">▸</span><span><b>装配台轻调</b>：落点暗示 + 推荐度 + 置灰原因（引擎不动）<br><span class="f">assemble_panel.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>PGRST205 友好化</b>：错误转译 + 指引<br><span class="f">sync_engine.dart · 同步中心 UI</span></span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px">🚫 不做 / 需要你</h3>
+      <ul class="scope-list dont">
+        <li><span class="pin">!</span><span><b>你需在 Supabase 执行 docs/db_v271.sql</b>（funds_sync 报错的数据侧修复，我无云端凭据）</span></li>
+        <li><span class="pin">✕</span><span>不动 trip_detail 的数据逻辑 / 引擎（纯视图层重排）</span></li>
+        <li><span class="pin">✕</span><span>不编译 APK、不提交 git</span></li>
+        <li><span class="pin">✕</span><span>AlertDialog / SnackBar 一致性债务仍留待后续版本</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="approve">
+    <h2>🧭 v2.8.3.2：详情页重设计（主角）+ 主页回退 + 玻璃补丁 + 修 bug</h2>
+    <p>04 节为行程详情页高保真方案（区位 A~F + 元素去向表，数据逻辑零改动）；主页按你的要求 git 回退 v2.7，不做新设计。</p>
+    <div class="btn-row">
+      <div class="btn primary">批准，开始施工<small>全部范围</small></div>
+      <div class="btn ghost">只批回退+补丁+修bug<small>详情页重设计另议</small></div>
+      <div class="btn">需要调整<small>请在对话中说明</small></div>
+    </div>
+    <div class="hint">※ 按钮为示意，请直接在对话中回复审批意见。</div>
+  </div>
+</section>
+
+<footer style="margin-top:44px;text-align:center;color:var(--txt-3);font-size:12px">v2.8.3.2 · 行程页整改设计审核稿 · 2026-09-19</footer>
+</body>
+</html>

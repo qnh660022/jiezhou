@@ -20,8 +20,8 @@ import '../../theme/tokens.dart';
 /// ```
 /// ClipRRect(borderRadius)
 ///   └ BackdropFilter(ImageFilter.compose(blur(σtier,σtier), ColorFilter.saturate(sat)))
-///       └ Container(decoration: tint底 + 对角柔光 + 外圈深 hairline + 双层阴影,
-///                   foregroundDecoration: 内圈白描边 + 顶边受光高光)
+///       └ Container(decoration: tint底 + 对角柔光(内容之下) + 外圈深 hairline + 双层阴影,
+///                   foregroundDecoration: 1px 低α白受光环——绝不放白色渐变幕)
 ///           └ child
 /// ```
 /// 档位修正表（阴影倍率 / tint 倍率）：
@@ -121,14 +121,22 @@ class GlassSurface extends StatelessWidget {
     final highlight = dark
         ? GlassTokens.highlightAlphaDark
         : GlassTokens.highlightAlphaLight;
-    final topSheen = dark
-        ? GlassTokens.topSheenAlphaDark
-        : GlassTokens.topSheenAlphaLight;
     final innerEdge =
         dark ? GlassTokens.innerEdgeDark : GlassTokens.innerEdgeLight;
+    // 外圈深色 hairline 按档位分强度：吸顶栏（thin，全宽）最忌重描边。
     final outerEdge = dark
-        ? GlassTokens.outerEdgeAlphaDark
-        : GlassTokens.outerEdgeAlphaLight;
+        ? switch (level) {
+            GlassLevel.navBar => GlassTokens.outerEdgeThinDark,
+            GlassLevel.floatingCard => GlassTokens.outerEdgeRegularDark,
+            GlassLevel.sheet || GlassLevel.overlay =>
+              GlassTokens.outerEdgeThickDark,
+          }
+        : switch (level) {
+            GlassLevel.navBar => GlassTokens.outerEdgeThinLight,
+            GlassLevel.floatingCard => GlassTokens.outerEdgeRegularLight,
+            GlassLevel.sheet || GlassLevel.overlay =>
+              GlassTokens.outerEdgeThickLight,
+          };
     final shadowMul = _shadowMul(level);
     final ambientA = (dark ? _ambientAlphaDark : _ambientAlphaLight) * shadowMul;
     final keyA = (dark ? _keyAlphaDark : _keyAlphaLight) * shadowMul;
@@ -145,8 +153,7 @@ class GlassSurface extends StatelessWidget {
         ],
         stops: const [0, 0.30],
       ),
-      // 外圈深色 hairline：负责在浅色页面上勾出玻璃轮廓（旧全周白描边在
-      // 白底上不可见，是「边界糊掉」的根因）。
+      // 外圈深色 hairline：负责在浅色页面上勾出玻璃轮廓。
       border: Border.all(
         color: scheme.outlineVariant.withValues(alpha: outerEdge),
       ),
@@ -164,23 +171,22 @@ class GlassSurface extends StatelessWidget {
       ],
     );
 
-    // 前景层：内圈白受光环 + 顶边受光高光（画在内容之上，代替 inset 阴影）。
+    // V2.8.3.2 发白事故修正：前景层只保留 1px 低 α 白受光环。
+    // 3.1 曾在此叠加「顶边白色渐变幕」（白 α0.5，且 Alignment 坐标算错
+    // 实际覆盖 57% 高度）——前景层画在内容之上，导致全 App 玻璃同时发白；
+    // 且它与 tint / 对角柔光同向叠白。现彻底移除渐变幕，受光感由
+    // 背景对角柔光（内容之下）+ 低 α 内圈描边承担。
     final foregroundDecoration = BoxDecoration(
       borderRadius: radius,
       border: Border.all(color: Colors.white.withValues(alpha: innerEdge)),
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: const Alignment(0.0, 0.14),
-        colors: [
-          Colors.white.withValues(alpha: topSheen),
-          Colors.white.withValues(alpha: 0),
-        ],
-        stops: const [0, 1.0],
-      ),
     );
 
-    final degraded =
-        fallbackOpaque || MediaQuery.disableAnimationsOf(context);
+    // V2.8.3.2：降级只看 fallbackOpaque。
+    // 旧逻辑把 `disableAnimations`（系统「移除动画」/省电模式）也当降级触发，
+    // 导致这类设备上全 App 玻璃变成不透明灰板（「发灰/发白」投诉的第二个来源）。
+    // 「移除动画」≠「降低透明度」，Flutter 也未暴露 Reduce Transparency，
+    // 故移除该触发，玻璃在所有正常设备上保持实时模糊。
+    final degraded = fallbackOpaque;
     final surface = degraded
         ? ClipRRect(
             borderRadius: radius,

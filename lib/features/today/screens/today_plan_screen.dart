@@ -18,6 +18,7 @@ import '../../trips/trip_utils.dart';
 import '../today_providers.dart';
 import '../today_scope.dart';
 import '../widgets/today_surface.dart';
+import '../../../theme/app_icons.dart';
 
 /// 今日安排：时间线 + 本地勾选。
 class TodayPlanScreen extends ConsumerStatefulWidget {
@@ -69,7 +70,7 @@ class _TodayPlanScreenState extends ConsumerState<TodayPlanScreen> {
       return Scaffold(
         appBar: GlassAppBar(title: tripName),
         body: const EmptyState(
-          emoji: '🧭',
+          icon: AppIcons.compass,
           title: '行程不存在或已删除',
           message: '回到行程列表重新看看',
         ),
@@ -98,7 +99,7 @@ class _TodayPlanScreenState extends ConsumerState<TodayPlanScreen> {
           ? const Center(child: CircularProgressIndicator())
           : items.isEmpty
               ? const EmptyState(
-                  emoji: '🗓️',
+                  icon: AppIcons.calendar,
                   title: '今天还没有安排',
                   message: '去行程页给今天添两个想去的地方吧',
                 )

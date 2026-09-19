@@ -65,7 +65,7 @@ class GroupListScreen extends ConsumerWidget {
               error: (e, _) => const EmptyState(icon: Icons.error_outline_rounded, title: '加载失败'),
               data: (groups) => groups.isEmpty
                   ? EmptyState(
-                      emoji: '👥',
+                      icon: AppIcons.members,
                       title: '一个团都还没有',
                       message: '先建个团，再拉上伙伴们一起记',
                       actionLabel: '新建旅行团',

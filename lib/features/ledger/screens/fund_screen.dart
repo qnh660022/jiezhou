@@ -47,7 +47,7 @@ class FundScreen extends ConsumerWidget {
     }
     if (group.isPersonal) {
       return const EmptyState(
-        emoji: '💰',
+        icon: AppIcons.coins,
         title: '个人账本无需公费池',
         message: '公费池面向多人共同消费场景，个人账本可直接记账。',
       );
@@ -349,7 +349,7 @@ class _CreateFundFormState extends ConsumerState<_CreateFundForm> {
     final members = widget.members;
     if (members.isEmpty) {
       return const EmptyState(
-        emoji: '👥',
+        icon: AppIcons.members,
         title: '还没有成员',
         message: '先添加同行成员，再设立旅行基金。',
       );

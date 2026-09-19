@@ -18,6 +18,7 @@ import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 const List<String> kTripEmojis = [
   '✈️', '🏖️', '⛰️', '🏙️', '🎒', '🚗', '🏕️', '🎡', '🛳️', '🗺️',
@@ -68,9 +69,8 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
+    showAppSnackBar(context, message);
   }
 
   Future<void> _loadExisting(String id) async {
