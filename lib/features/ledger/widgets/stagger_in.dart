@@ -143,8 +143,13 @@ class HeaderIconButton extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Material(
-          color: scheme.surfaceContainerLow.withValues(alpha: 0.9),
-          shape: const CircleBorder(),
+          // V2.8.3.1：顶栏圆钮改实色 + 细描边（原「毛玻璃底」α0.9 无模糊、
+          // 叠在 GlassAppBar 玻璃上发灰；实色与全 App 条目语言一致）。
+          color: scheme.surfaceContainerHigh,
+          shape: CircleBorder(
+            side: BorderSide(
+                color: scheme.outlineVariant.withValues(alpha: 0.35)),
+          ),
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: () {

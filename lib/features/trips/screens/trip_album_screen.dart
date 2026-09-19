@@ -10,12 +10,14 @@ import '../../../data/providers.dart';
 import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
 import '../../../platform/file_image.dart';
 
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../../../theme/app_icons.dart';
 
 /// 行程相册页（路由 extra 传行程 id）
 class TripAlbumScreen extends ConsumerStatefulWidget {
@@ -127,15 +129,15 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
 
   Future<void> _deletePhoto(String id) async {
     HapticFeedback.mediumImpact();
-    await showDangerConfirmSheet(
-      context,
+    // V2.8.2 S6：并入统一 L2 危险确认（showDangerConfirm）
+    final ok = await showDangerConfirm(
+      context: context,
       title: '删除这张照片？',
-      message: '此操作不可恢复',
-      onConfirm: () async {
-        await ref.read(tripsRepoProvider).deletePhoto(id);
-        _toast('已删除');
-      },
+      body: '删除 1 张照片，此操作不可恢复。',
     );
+    if (!ok) return;
+    await ref.read(tripsRepoProvider).deletePhoto(id);
+    _toast('已删除');
   }
 
   @override
@@ -148,7 +150,7 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
     if (tripId == null) {
       return Scaffold(
         appBar: GlassAppBar(title: '相册'),
-        body: const EmptyState(emoji: '🖼️', title: '未找到行程'),
+        body: const EmptyState(icon: Icons.image_outlined, title: '未找到行程'),
       );
     }
     return Scaffold(

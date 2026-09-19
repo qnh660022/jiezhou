@@ -40,7 +40,7 @@ void main() {
     }
 
     Future<void> gotoProfile(WidgetTester tester) async {
-      await tester.tap(find.text('👤').first);
+      await tester.tap(find.text('我的').first);
       await tester.pumpAndSettle();
     }
 

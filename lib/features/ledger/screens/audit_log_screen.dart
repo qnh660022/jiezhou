@@ -13,6 +13,7 @@ import '../../../data/repo/observability_repo.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../theme/tokens.dart';
 import '../observability_providers.dart';
+import '../../../theme/app_icons.dart';
 
 class AuditLogScreen extends ConsumerStatefulWidget {
   const AuditLogScreen({super.key});
@@ -45,7 +46,7 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
             child: async.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (_, _) => const EmptyState(
-                  emoji: '😵', title: '读不出变更记录', message: '稍后再试试'),
+                  icon: Icons.error_outline_rounded, title: '读不出变更记录', message: '稍后再试试'),
               data: (logs) {
                 if (logs.isEmpty) {
                   return const EmptyState(

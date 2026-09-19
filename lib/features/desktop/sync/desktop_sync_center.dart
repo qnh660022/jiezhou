@@ -13,6 +13,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../data/providers.dart' show tripsRepoProvider;
 import '../../../export/backup_format.dart';
 import '../../../export/share_helper.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/ledger_providers.dart';
 import 'sync_code.dart';
@@ -111,23 +112,50 @@ class _SyncCenterDialogState extends ConsumerState<_SyncCenterDialog> {
       });
 
   Future<bool> _askMergeOrReplace() async {
-    return (await showDialog<bool>(
+    // V2.8.2 S6：AlertDialog → 统一可拖拽抽屉（L3 选择抽屉：合并 / 覆盖恢复）
+    return await showDraggableSheet<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('导入全量备份'),
-            content: const Text('选择「合并」会把数据按最新时间合并进本机；选择「覆盖恢复」会先清空本机全部数据再导入。'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('合并')),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                    backgroundColor: Theme.of(ctx).colorScheme.error,
-                    foregroundColor: Theme.of(ctx).colorScheme.onError),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('覆盖恢复'),
+          initialChildSize: 0.4,
+          minChildSize: 0.3,
+          builder: (sheetContext, scrollController) => ListView(
+            controller: scrollController,
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
+            children: [
+              Text('导入全量备份',
+                  style: Theme.of(sheetContext)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: Spacing.xs),
+              Text(
+                '「合并」会把数据按最新时间合并进本机；'
+                '「覆盖恢复」会先清空本机全部数据再导入。',
+                style: Theme.of(sheetContext)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(sheetContext).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: Spacing.sm),
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: const Text('合并'),
+                subtitle: const Text('保留本机数据，按最新时间合并'),
+                onTap: () => Navigator.of(sheetContext).pop(false),
+              ),
+              ListTile(
+                leading: Icon(Icons.restart_alt_rounded,
+                    color: Theme.of(sheetContext).colorScheme.error),
+                title: Text('覆盖恢复',
+                    style: TextStyle(
+                        color: Theme.of(sheetContext).colorScheme.error,
+                        fontWeight: FontWeight.w700)),
+                subtitle: const Text('先清空本机全部数据再导入'),
+                onTap: () => Navigator.of(sheetContext).pop(true),
               ),
             ],
           ),
-        )) ??
+        ) ??
         false;
   }
 

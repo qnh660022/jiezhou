@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../domain/outline_parser.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 
 /// 导入执行结果（宿主回填，用于导入报告）。
@@ -260,47 +261,66 @@ class _OutlinePanelState extends State<OutlinePanel> {
     );
   }
 
+  /// 覆盖整程强确认（V2.8.2 S6：AlertDialog → 统一可拖拽抽屉，
+  /// 保留「勾选已知晓不可恢复」强确认口径与禁用态确认钮）。
   Future<bool?> _confirmOverwrite(BuildContext context, OutlineImportPlan plan) {
     final scheme = Theme.of(context).colorScheme;
     var acknowledged = false;
-    return showDialog<bool>(
+    return showDraggableSheet<bool>(
       context: context,
-      useRootNavigator: true,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('覆盖整程'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '将删除现有 $currentCardCountLabel 张卡，'
-                '并按大纲重建 ${plan.cardCount} 张。该操作不可恢复。',
-                style: Theme.of(dialogContext).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: Spacing.md),
-              CheckboxListTile(
-                value: acknowledged,
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                activeColor: scheme.error,
-                title: const Text('我已了解该操作不可恢复'),
-                onChanged: (v) => setDialogState(() => acknowledged = v ?? false),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('取消')),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: acknowledged ? scheme.error : scheme.onSurfaceVariant,
-              ),
-              onPressed:
-                  acknowledged ? () => Navigator.of(dialogContext).pop(true) : null,
-              child: const Text('确认覆盖'),
+      initialChildSize: 0.4,
+      minChildSize: 0.3,
+      builder: (dialogContext, scrollController) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => ListView(
+          controller: scrollController,
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
+          children: [
+            Text('覆盖整程',
+                style: Theme.of(dialogContext)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: Spacing.sm),
+            Text(
+              '将删除现有 $currentCardCountLabel 张卡，'
+              '并按大纲重建 ${plan.cardCount} 张。该操作不可恢复。',
+              style: Theme.of(dialogContext).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: Spacing.md),
+            CheckboxListTile(
+              value: acknowledged,
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              activeColor: scheme.error,
+              title: const Text('我已了解该操作不可恢复'),
+              onChanged: (v) => setDialogState(() => acknowledged = v ?? false),
+            ),
+            const SizedBox(height: Spacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('取消'),
+                  ),
+                ),
+                const SizedBox(width: Spacing.md),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: acknowledged
+                          ? scheme.error
+                          : scheme.onSurfaceVariant,
+                    ),
+                    onPressed: acknowledged
+                        ? () => Navigator.of(dialogContext).pop(true)
+                        : null,
+                    child: const Text('确认覆盖'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

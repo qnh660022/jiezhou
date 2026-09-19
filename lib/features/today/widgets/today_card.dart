@@ -18,6 +18,7 @@ import '../../../theme/tokens.dart';
 import '../../trips/trip_widgets.dart' show SectionCard;
 import '../today_providers.dart';
 import '../today_scope.dart';
+import '../../../theme/app_icons.dart';
 
 /// 行程页底部「今日」行卡：只在有进行中行程时出现。
 class TodayCard extends ConsumerWidget {
@@ -82,7 +83,8 @@ class TodayCard extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(Spacing.md),
               ),
               child:
-                  Icon(Icons.near_me_rounded, size: 19, color: scheme.primary),
+                  // V2.8.2 S3：图标砖换 AppIcons.compass
+                  Icon(AppIcons.compass, size: 19, color: scheme.primary),
             ),
             const SizedBox(width: Spacing.md),
             Expanded(

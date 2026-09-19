@@ -16,6 +16,7 @@ import '../ledger_providers.dart';
 import '../widgets/conflict_badge.dart';
 import 'fund_sheets.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../theme/app_icons.dart';
 
 /// 💰 公款池详情（S8）：一池一管理人；入金 prepay / 出金 normal，
 /// 余额为派生展示量（只统计未入账账单），「谁该退多少」由结算引擎产出。
@@ -42,7 +43,7 @@ class FundScreen extends ConsumerWidget {
   Widget _body(BuildContext context, WidgetRef ref, LedgerGroupView? group,
       List<LedgerMemberView> members, List<FundView> funds) {
     if (group == null) {
-      return const EmptyState(emoji: '📁', title: '还没有账本', message: '先创建一个旅行账本');
+      return const EmptyState(icon: Icons.folder_outlined, title: '还没有账本', message: '先创建一个旅行账本');
     }
     if (group.isPersonal) {
       return const EmptyState(

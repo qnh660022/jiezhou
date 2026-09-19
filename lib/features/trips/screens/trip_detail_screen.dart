@@ -18,15 +18,19 @@ import '../../../domain/outline_parser.dart';
 import '../../ledger/ledger_providers.dart';
 import '../trip_template_store.dart';
 import '../widgets/assemble_panel.dart';
+import '../widgets/trip_detail_tabs.dart';
 import '../widgets/trip_tab_panels.dart';
 
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
+import '../../../shared/widgets/pressable_scale.dart';
 import '../../../shared/widgets/progress_ring.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
+import '../../../theme/app_icons.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
@@ -114,26 +118,19 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
     if (id == null) {
       return Scaffold(
         appBar: GlassAppBar(title: '行程详情'),
-        body: const EmptyState(emoji: '🧳', title: '未找到行程', message: '返回重新进入试试'),
+        body: const EmptyState(icon: AppIcons.compass, title: '未找到行程', message: '返回重新进入试试'),
       );
     }
     return Scaffold(
       appBar: GlassAppBar(
         title: '行程详情',
         scrollController: _scroll,
+        // V2.8.2 S5：页签层视觉基线 —— 玻璃 SegmentedTab（仅页签层，
+        // 四页签可见性维持 V2.7.2 口径）
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(44),
-          child: TabBar(
-            controller: _tabCtrl ??= TabController(length: 4, vsync: this),
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: const [
-              Tab(text: '时间轴'),
-              Tab(text: '大纲'),
-              Tab(text: '装配'),
-              Tab(text: '锦囊'),
-            ],
-          ),
+          preferredSize: const Size.fromHeight(50),
+          child: TripDetailTabs(
+              controller: _tabCtrl ??= TabController(length: 4, vsync: this)),
         ),
       ),
       body: TabBarView(
@@ -144,19 +141,28 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
         stream: _tripStream ??= ref.read(tripsRepoProvider).watchTrip(id),
         builder: (context, tripSnap) {
           if (tripSnap.connectionState == ConnectionState.waiting) {
-            return const _DetailSkeleton();
+            // V2.8.2 S6：骨架→内容 300ms 淡接 morph
+            return const AnimatedSwitcher(
+              duration: Duration(milliseconds: 300),
+              child: _DetailSkeleton(key: ValueKey('detail-skeleton')),
+            );
           }
           final trip = tripSnap.data;
           if (trip == null) {
             return const EmptyState(
-                emoji: '🧳', title: '行程不存在或已被删除', message: '回到列表看看其他旅程吧');
+                icon: AppIcons.compass, title: '行程不存在或已被删除', message: '回到列表看看其他旅程吧');
           }
           _currentTrip = trip;
           return StreamBuilder<List<TripItem>>(
             stream: _itemsStream ??= ref.read(tripsRepoProvider).watchItems(id),
             builder: (context, itemsSnap) {
               final items = itemsSnap.data ?? const <TripItem>[];
-              return _DetailBody(
+              // V2.8.2 S6：骨架→内容 300ms 淡接 morph
+              return AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: KeyedSubtree(
+                  key: const ValueKey('detail-content'),
+                  child: _DetailBody(
                 trip: trip,
                 items: items,
                 scrollController: _scroll,
@@ -198,22 +204,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   }
                 },
                 onBatchDelete: (ids) async {
-                  showDangerConfirmSheet(
-                    context,
+                  // V2.8.2 S6：并入统一 L2 危险确认（showDangerConfirm）
+                  final ok = await showDangerConfirm(
+                    context: context,
                     title: '删除 ${ids.length} 项安排？',
-                    message: '关联账单会保留，但解除与本安排的绑定。该操作不可恢复。',
-                    onConfirm: () async {
-                      await ref.read(tripsRepoProvider).batchDelete(trip.id, ids);
-                      if (mounted) {
-                        setState(() {
-                          _multiSelect = false;
-                          _selectedIds.clear();
-                        });
-                        _toast('已删除 ${ids.length} 项');
-                      }
-                    },
+                    body: '共 ${ids.length} 项安排将被删除，关联账单会保留但解除绑定，不可恢复。',
                   );
+                  if (!ok) return;
+                  await ref.read(tripsRepoProvider).batchDelete(trip.id, ids);
+                  if (mounted) {
+                    setState(() {
+                      _multiSelect = false;
+                      _selectedIds.clear();
+                    });
+                    _toast('已删除 ${ids.length} 项');
+                  }
                 },
+              ),
+                ),
               );
             },
           );
@@ -359,18 +367,18 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
               icon: Icons.delete_outline_rounded,
               label: '删除安排',
               danger: true,
-              onTap: () {
+              onTap: () async {
                 Navigator.of(sheetContext).pop();
-                showDangerConfirmSheet(
-                  context,
+                // V2.8.2 S6：并入统一 L2 危险确认（showDangerConfirm）
+                final ok = await showDangerConfirm(
+                  context: context,
                   title: '删除「${item.name}」？',
-                  message: '关联账单会保留，但解除与本安排的绑定。',
-                  onConfirm: () async {
-                    HapticFeedback.mediumImpact();
-                    await repo.deleteItem(item.id); // ASSUMED(t2): 仅清 expense.tripItemId
-                    if (mounted) _toast('已删除');
-                  },
+                  body: '删除 1 项安排，关联账单会保留但解除绑定，不可恢复。',
                 );
+                if (!ok) return;
+                HapticFeedback.mediumImpact();
+                await repo.deleteItem(item.id); // ASSUMED(t2): 仅清 expense.tripItemId
+                if (mounted) _toast('已删除');
               },
             ),
           ],
@@ -654,7 +662,7 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen>
                   final list = snap.data ?? const <Expense>[];
                   if (list.isEmpty) {
                     return const EmptyState(
-                        emoji: '🧾', title: '还没有关联账单', message: '记账时选择本行程即可关联到这里');
+                        icon: AppIcons.wallet, title: '还没有关联账单', message: '记账时选择本行程即可关联到这里');
                   }
                   var total = 0;
                   for (final e in list) {
@@ -1328,10 +1336,11 @@ class _HeaderHero extends StatelessWidget {
                       height: 48,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
+                        // V2.8.3.1：封面签条统一走 GlassTokens
+                        color: Colors.white.withValues(alpha: GlassTokens.coverPillFillAlpha),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.28)),
+                            color: Colors.white.withValues(alpha: GlassTokens.coverPillBorderAlpha)),
                       ),
                       child:
                           Text(trip.emoji, style: const TextStyle(fontSize: 26, height: 1)),
@@ -1357,6 +1366,28 @@ class _HeaderHero extends StatelessWidget {
 
 
 /// 天气条：FutureBuilder + 骨架降级，服务未实现/失败时整条隐藏
+/// V2.8.2 S1：天气 emoji → 图标渲染映射（数据字段 iconEmoji 只读不动）。
+/// 8 常见天气 + fallback；未知 emoji 原样显示（静默降级，guideRef 同哲学）。
+IconData? weatherIconFor(String emoji) {
+  final map = <String, IconData>{
+    '☀️': Icons.wb_sunny_rounded,
+    '🌤': Icons.wb_sunny_rounded,
+    '⛅': Icons.cloud_rounded,
+    '🌥': Icons.cloud_rounded,
+    '☁️': Icons.cloud_rounded,
+    '多云': Icons.cloud_rounded,
+    '🌧': Icons.water_drop_rounded,
+    '🌧️': Icons.water_drop_rounded,
+    '⛈': Icons.bolt_rounded,
+    '⛈️': Icons.bolt_rounded,
+    '🌨': Icons.ac_unit_rounded,
+    '❄️': Icons.ac_unit_rounded,
+    '🌫': Icons.blur_on_rounded,
+    '🌫️': Icons.blur_on_rounded,
+  };
+  return map[emoji.trim()];
+}
+
 class _WeatherStrip extends StatelessWidget {
   const _WeatherStrip({
     required this.trip,
@@ -1407,7 +1438,12 @@ class _WeatherStrip extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(d.iconEmoji, style: const TextStyle(fontSize: 16)),
+                    // V2.8.2 S1：天气图标渲染映射（未知 emoji 原样回退）
+                    if (weatherIconFor(d.iconEmoji) != null)
+                      Icon(weatherIconFor(d.iconEmoji),
+                          size: 16, color: scheme.onSurfaceVariant)
+                    else
+                      Text(d.iconEmoji, style: const TextStyle(fontSize: 16)),
                     const SizedBox(width: 6),
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -2419,9 +2455,11 @@ class _HeaderPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.22),
+        // V2.8.3.1：封面签条统一走 GlassTokens
+        color: Colors.white.withValues(alpha: GlassTokens.coverPillFillAlpha),
         borderRadius: AppRadius.capsule,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+        border: Border.all(
+            color: Colors.white.withValues(alpha: GlassTokens.coverPillBorderAlpha)),
       ),
       child: Text(text,
           style: TextStyle(
@@ -2518,7 +2556,13 @@ class _QuickActionsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     Widget action(IconData icon, String label, VoidCallback onTap) {
+      // V2.8.2 S6：快捷卡接 PressableScale（按压缩放；点按仍由内层 InkWell 承接）
       return Expanded(
+        child: PressableScale(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
         child: InkWell(
           borderRadius: AppRadius.input,
           onTap: () {
@@ -2539,6 +2583,7 @@ class _QuickActionsCard extends StatelessWidget {
               ],
             ),
           ),
+        ),
         ),
       );
     }
@@ -2675,7 +2720,7 @@ Future<void> _saveAsTemplate(BuildContext context, String tripId) async {
 
 /// 详情加载骨架
 class _DetailSkeleton extends StatelessWidget {
-  const _DetailSkeleton();
+  const _DetailSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {

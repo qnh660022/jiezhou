@@ -271,10 +271,12 @@ class _HeroCard extends StatelessWidget {
                 height: 76,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.24),
+                  // V2.8.3.1：封面签条统一走 GlassTokens
+                  color: Colors.white.withValues(alpha: GlassTokens.coverPillFillAlpha),
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.4), width: 1.5),
+                      color: Colors.white.withValues(alpha: GlassTokens.coverPillBorderAlpha),
+                      width: 1.5),
                 ),
                 child: Text(visual.icon, style: const TextStyle(fontSize: 40)),
               ),
@@ -287,7 +289,8 @@ class _HeroCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: Spacing.md, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.26),
+                        // V2.8.3.1：封面签条统一走 GlassTokens
+                        color: Colors.white.withValues(alpha: GlassTokens.coverPillFillAlpha),
                         borderRadius: AppRadius.capsule,
                       ),
                       child: Text(

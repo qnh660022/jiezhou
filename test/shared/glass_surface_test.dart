@@ -34,12 +34,13 @@ BoxDecoration? _glassDecorationOf(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('1. 四档 level：tint/阴影按修正表缩放', (tester) async {
+  testWidgets('1. 四档 level：材质分档 tint / 阴影按修正表缩放（V2.8.3.1）', (tester) async {
+    // V2.8.3.1 材质分档：navBar→thin、sheet/overlay→thick、floatingCard→regular
     final expectTint = {
-      GlassLevel.navBar: GlassTokens.tintAlphaLight * 1.0,
-      GlassLevel.sheet: GlassTokens.tintAlphaLight * 1.0,
-      GlassLevel.floatingCard: GlassTokens.tintAlphaLight * 0.92,
-      GlassLevel.overlay: GlassTokens.tintAlphaLight * 0.95,
+      GlassLevel.navBar: GlassTokens.tintAlphaThinLight * 1.0,
+      GlassLevel.sheet: GlassTokens.tintAlphaThickLight * 1.0,
+      GlassLevel.floatingCard: GlassTokens.tintAlphaRegularLight * 0.92,
+      GlassLevel.overlay: GlassTokens.tintAlphaThickLight * 0.95,
     };
     final expectShadowMul = {
       GlassLevel.navBar: 0.6,
@@ -56,14 +57,14 @@ void main() {
       expect(base.alpha, ((expectTint[level]!) * 255).round(),
           reason: '$level tint α=${expectTint[level]}');
       expect(deco.boxShadow!.length, 2, reason: '$level 双层阴影');
-      expect(deco.boxShadow![0].blurRadius, 40);
-      expect(deco.boxShadow![0].offset, const Offset(0, 18));
-      // 环影 α = 0.10 × 档位倍率（浅色）；α 有 8bit 量化，容差 1.5/255
+      expect(deco.boxShadow![0].blurRadius, 36);
+      expect(deco.boxShadow![0].offset, const Offset(0, 14));
+      // 环影 α = 0.13 × 档位倍率（浅色）；α 有 8bit 量化，容差 1.5/255
       final ambient = deco.boxShadow![0].color.alpha / 255;
-      expect(ambient, closeTo(0.10 * expectShadowMul[level]!, 1.5 / 255),
+      expect(ambient, closeTo(0.13 * expectShadowMul[level]!, 1.5 / 255),
           reason: '$level 环影倍率');
       expect(deco.gradient, isA<LinearGradient>(), reason: '$level 前景高光');
-      expect((deco.gradient as LinearGradient).stops!.last, 0.38);
+      expect((deco.gradient as LinearGradient).stops!.last, 0.30);
     }
   });
 
@@ -144,8 +145,8 @@ void main() {
         brightness: Brightness.dark));
     await tester.pump();
     final deco = _glassDecorationOf(tester)!;
-    expect(deco.color!.alpha, (GlassTokens.tintAlphaDark * 255).round(),
-        reason: '深色 tint 档');
+    expect(deco.color!.alpha, (GlassTokens.tintAlphaThickDark * 255).round(),
+        reason: '深色 tint 档（thick）');
     final hl = (deco.gradient as LinearGradient).colors.first.alpha / 255;
     expect(hl, closeTo(GlassTokens.highlightAlphaDark, 0.001), reason: '深色高光档');
   });
@@ -172,15 +173,26 @@ void main() {
     expect(Spacing.xxl, 24);
     expect(Spacing.xxxl, 32);
     expect(Spacing.huge, 48);
-    // 新增玻璃令牌按规格逐字段
-    expect(GlassTokens.sigma, 28);
-    expect(GlassTokens.tintAlphaLight, 0.52);
-    expect(GlassTokens.tintAlphaDark, 0.42);
-    expect(GlassTokens.highlightAlphaLight, 0.65);
+    // V2.8.3.1 玻璃令牌重校准（材质分档 + 去饱和翻转）
+    expect(GlassTokens.sigmaThin, 24);
+    expect(GlassTokens.sigmaRegular, 28);
+    expect(GlassTokens.sigmaThick, 32);
+    expect(GlassTokens.sigma, GlassTokens.sigmaRegular);
+    expect(GlassTokens.tintAlphaThinLight, 0.44);
+    expect(GlassTokens.tintAlphaRegularLight, 0.58);
+    expect(GlassTokens.tintAlphaThickLight, 0.68);
+    expect(GlassTokens.tintAlphaThinDark, 0.38);
+    expect(GlassTokens.tintAlphaRegularDark, 0.48);
+    expect(GlassTokens.tintAlphaThickDark, 0.54);
+    expect(GlassTokens.tintAlphaLight, GlassTokens.tintAlphaRegularLight);
+    expect(GlassTokens.tintAlphaDark, GlassTokens.tintAlphaRegularDark);
+    expect(GlassTokens.highlightAlphaLight, 0.55);
     expect(GlassTokens.highlightAlphaDark, 0.22);
-    expect(GlassTokens.edgeAlphaLight, 0.28);
-    expect(GlassTokens.edgeAlphaDark, 0.07);
-    expect(GlassTokens.saturation, 1.35);
+    expect(GlassTokens.innerEdgeLight, 0.55);
+    expect(GlassTokens.innerEdgeDark, 0.10);
+    expect(GlassTokens.outerEdgeAlphaLight, 0.35);
+    expect(GlassTokens.outerEdgeAlphaDark, 0.35);
+    expect(GlassTokens.saturation, 0.92);
   });
 
   test('9. B1 收口：lib 内 BackdropFilter 仅 glass_surface.dart 一处实现', () {

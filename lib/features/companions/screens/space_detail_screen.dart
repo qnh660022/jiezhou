@@ -25,6 +25,7 @@ import '../../../data/repo/travel_spaces_repo.dart' show spaceActionLabel;
 import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/widgets/collab_polling_scope.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -629,20 +630,13 @@ class _TripSectionState extends ConsumerState<_TripSection> {
   }
 
   Future<void> _deleteItem(_ItemView v) async {
-    final ok = await showDialog<bool>(
+    // V2.8.2 S6：AlertDialog → 统一 L2 危险确认抽屉（body 含影响数量）
+    final ok = await showDangerConfirm(
       context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('删除这条安排？'),
-        content: Text('「${v.name}」会从所有旅伴的设备上消失。'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(d, false), child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(d, true), child: const Text('删除')),
-        ],
-      ),
+      title: '删除这条安排？',
+      body: '删除 1 条安排「${v.name}」，会从所有旅伴的设备上消失。',
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     final err = await SpaceActions.deleteTripItem(ref,
         spaceId: widget.space.id, itemId: v.id, summary: v.name);
     if (!mounted) return;
@@ -1366,20 +1360,15 @@ class _MembersSectionState extends ConsumerState<_MembersSection> {
   }
 
   Future<void> _leave() async {
-    final ok = await showDialog<bool>(
+    // V2.8.2 S6：AlertDialog → 统一 L2 确认抽屉（退出为中性偏危险操作，
+    // 数据保留可重加入，走中性确认口径）
+    final ok = await showConfirmSheet(
       context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('退出这个空间？'),
-        content: const Text('退出后你不再看到空间里的行程与账本；重新加入需要新的邀请码。'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(d, false), child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(d, true), child: const Text('退出')),
-        ],
-      ),
+      title: '退出这个空间？',
+      body: '退出后你不再看到空间里的行程与账本；重新加入需要新的邀请码。',
+      confirmLabel: '退出',
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     final err = await SpaceActions.leave(ref, widget.space.id);
     if (!mounted) return;
     if (err.isEmpty) {
@@ -1645,20 +1634,13 @@ class _SpaceSettingsSheetState extends ConsumerState<_SpaceSettingsSheet> {
   }
 
   Future<void> _delete() async {
-    final ok = await showDialog<bool>(
+    // V2.8.2 S6：AlertDialog → 统一 L2 危险确认抽屉（body 含影响数量）
+    final ok = await showDangerConfirm(
       context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('删除空间？'),
-        content: const Text('空间、成员与邀请码都会失效；协作动态会保留为只读残档。'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(d, false), child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(d, true), child: const Text('删除')),
-        ],
-      ),
+      title: '删除空间？',
+      body: '删除 1 个空间：成员与邀请码全部失效；协作动态会保留为只读残档。',
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     final err = await SpaceActions.deleteSpace(ref, widget.space.id);
     if (!mounted) return;
     if (err.isEmpty) {

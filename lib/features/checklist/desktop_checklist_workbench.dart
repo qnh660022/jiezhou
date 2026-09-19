@@ -8,6 +8,7 @@ import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
 import '../../../data/seed/checklist_templates.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import 'widgets/checklist_progress_card.dart';
 import 'widgets/checklist_segmented_control.dart';
@@ -76,41 +77,54 @@ class _DesktopChecklistWorkbenchState
     }
     final textCtl = TextEditingController(text: editItem?.label ?? '');
     var category = editItem?.category ?? presetCategory ?? kChecklistCategories.first.key;
-    final result = await showDialog<bool>(
+    // V2.8.2 S6：AlertDialog → 统一 L4 表单抽屉
+    final result = await showDraggableSheet<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlgState) => AlertDialog(
-          title: Text(editItem == null ? '添加事项' : '编辑事项'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+      initialChildSize: 0.42,
+      minChildSize: 0.3,
+      builder: (ctx, scrollController) => StatefulBuilder(
+        builder: (ctx, setDlgState) => ListView(
+          controller: scrollController,
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
+          children: [
+            Text(editItem == null ? '添加事项' : '编辑事项',
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: Spacing.md),
+            TextField(
+              controller: textCtl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: '事项内容'),
+            ),
+            const SizedBox(height: Spacing.md),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: category,
+                items: [
+                  for (final c in kChecklistCategories)
+                    DropdownMenuItem(value: c.key, child: Text('${c.icon} ${c.name}')),
+                ],
+                onChanged: (v) => setDlgState(() => category = v ?? category),
+              ),
+            ),
+            const SizedBox(height: Spacing.lg),
+            Row(
               children: [
-                TextField(
-                  controller: textCtl,
-                  autofocus: true,
-                  decoration: const InputDecoration(labelText: '事项内容'),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('取消'),
+                  ),
                 ),
-                const SizedBox(height: Spacing.md),
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    value: category,
-                    items: [
-                      for (final c in kChecklistCategories)
-                        DropdownMenuItem(value: c.key, child: Text('${c.icon} ${c.name}')),
-                    ],
-                    onChanged: (v) => setDlgState(() => category = v ?? category),
+                const SizedBox(width: Spacing.md),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('保存'),
                   ),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('保存'),
             ),
           ],
         ),

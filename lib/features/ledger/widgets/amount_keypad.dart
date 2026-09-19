@@ -52,7 +52,9 @@ class AmountKeypad extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
           child: Material(
-            color: color ?? scheme.surfaceContainerHigh.withValues(alpha: 0.6),
+            // V2.8.3.1：键帽改实色 —— 半透明键帽叠在玻璃 Sheet 上会发灰
+            //（玻璃叠玻璃反模式），核心记账流程主视觉优先保对比。
+            color: color ?? scheme.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(keyRadius),
             clipBehavior: Clip.antiAlias,
             child: InkWell(

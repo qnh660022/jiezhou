@@ -19,6 +19,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/ledger_providers.dart';
 import '../trip_template_store.dart';
+import '../../../theme/app_icons.dart';
 
 class TripTemplatesScreen extends ConsumerWidget {
   const TripTemplatesScreen({super.key});
@@ -30,7 +31,7 @@ class TripTemplatesScreen extends ConsumerWidget {
       appBar: GlassAppBar(title: '行程模板库'),
       body: templatesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => EmptyState(emoji: '😵', title: '模板加载失败'),
+        error: (e, _) => EmptyState(icon: Icons.error_outline_rounded, title: '模板加载失败'),
         data: (templates) {
           if (templates.isEmpty) {
             return EmptyState(

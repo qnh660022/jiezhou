@@ -79,17 +79,28 @@ Future<void> showLedgerToolbox(
             Padding(
               padding: const EdgeInsets.only(bottom: Spacing.sm),
               child: Material(
-                color: Theme.of(sheetContext)
+                // V2.8.3.1：玻璃叠玻璃修正 —— 条目从半透明面（α0.5）改为实色
+                // surfaceContainerHigh + 细描边，容器是唯一一块玻璃。
+                color: Theme.of(sheetContext).colorScheme.surfaceContainerHigh,
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppRadius.input,
+                  side: BorderSide(
+                    color: Theme.of(sheetContext)
                         .colorScheme
-                        .surfaceContainerHighest
-                        .withValues(alpha: 0.5),
-                borderRadius: AppRadius.input,
+                        .outlineVariant
+                        .withValues(alpha: 0.35),
+                  ),
+                ),
                 clipBehavior: Clip.antiAlias,
                 child: ListTile(
                   leading: Icon(e.icon, color: Theme.of(sheetContext).colorScheme.primary),
                   title: Text(e.title,
                       style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text(e.subtitle, style: Theme.of(sheetContext).textTheme.bodySmall),
+                  subtitle: Text(e.subtitle,
+                      style: Theme.of(sheetContext)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w500)),
                   trailing: const Icon(Icons.chevron_right_rounded, size: 20),
                   onTap: e.onTap,
                 ),

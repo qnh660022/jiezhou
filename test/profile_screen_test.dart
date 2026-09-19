@@ -32,7 +32,7 @@ void main() {
 
   Future<void> gotoProfile(WidgetTester tester) async {
     // 首帧 Splash 会触发导航到行程 Tab；以底栏 emoji 定位「我的」
-    final emoji = find.text('👤').first;
+    final emoji = find.text('我的').first;
     await tester.tap(emoji);
     await tester.pumpAndSettle();
     expect(find.text('我的'), findsWidgets); // 页面大标题出现

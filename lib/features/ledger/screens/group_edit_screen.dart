@@ -101,15 +101,25 @@ class _GroupEditScreenState extends ConsumerState<GroupEditScreen> {
             ),
           ),
           const SizedBox(height: Spacing.xl),
-          TextField(
-            controller: _nameController,
-            autofocus: !editing,
-            maxLength: 20,
-            style: Theme.of(context).textTheme.titleMedium,
-            decoration: InputDecoration(
-              hintText: _kind == 'personal' ? '账本的名字，如「我的日常」' : '团的名字，如「大理四人组」',
+          // V2.8.2 S6：团卡→团编辑名称 Hero（编辑态才与团卡同 tag 成对）
+          Hero(
+            tag: editing
+                ? 'group-name-${GoRouterState.of(context).uri.queryParameters['id'] ?? ''}'
+                : 'group-name-new',
+            child: Material(
+              type: MaterialType.transparency,
+              child: TextField(
+                controller: _nameController,
+                autofocus: !editing,
+                maxLength: 20,
+                style: Theme.of(context).textTheme.titleMedium,
+                decoration: InputDecoration(
+                  hintText:
+                      _kind == 'personal' ? '账本的名字，如「我的日常」' : '团的名字，如「大理四人组」',
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
             ),
-            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: Spacing.lg),
           // S4：账本类型（仅新建时可选；已有账本改类型会改变历史语义，故只读展示）。

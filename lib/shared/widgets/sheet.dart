@@ -33,9 +33,11 @@ Future<T?> showDraggableSheet<T>({
     isDismissible: isDismissible,
     backgroundColor: Colors.transparent,
     elevation: 0,
-    // V2.8.1 S2：barrier 0.4 → 0.32（预览图的 barrier 模糊为浏览器演示效果，
-    // Flutter 端全屏 BackdropFilter 成本过高，不做 —— 偏差登记）。
-    barrierColor: Colors.black.withValues(alpha: 0.32),
+    // V2.8.3.1：barrier 0.32 → 0.38（Apple「忙碌背景解法①」：弹窗场景先适度
+    // 暗化背景，让高饱和色斑进入玻璃前被中和；但不至于压死玻璃感）。
+    // 预览图的 barrier 模糊为浏览器演示效果，Flutter 端全屏 BackdropFilter
+    // 成本过高，不做 —— 偏差登记维持。
+    barrierColor: Colors.black.withValues(alpha: 0.38),
     builder: (sheetContext) {
       return DraggableScrollableSheet(
         expand: false,

@@ -57,12 +57,19 @@ class BillDetailSheet extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge),
             ),
-            MoneyText(
-                expense.type == ExpenseType.refund
-                    ? -expense.amountCents
-                    : expense.amountCents,
-                fontSize: AppFontSizes.headline,
-                semanticColor: true),
+            // V2.8.2 S6：与账单行金额成对的 Hero（金额连续过渡终点）
+            Hero(
+              tag: 'bill-amount-${expense.id}',
+              child: Material(
+                type: MaterialType.transparency,
+                child: MoneyText(
+                    expense.type == ExpenseType.refund
+                        ? -expense.amountCents
+                        : expense.amountCents,
+                    fontSize: AppFontSizes.headline,
+                    semanticColor: true),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: Spacing.md),
@@ -338,9 +345,16 @@ class _LinkedTripSectionState extends ConsumerState<_LinkedTripSection> {
                 ]),
               ),
             );
-        // V2.8.1 S9：关联行程卡玻璃化 + ⋯ 菜单收纳「解除关联」（L2 危险态）
-        return GlassSurface(
-          level: GlassLevel.floatingCard,
+        // V2.8.3.1：玻璃叠玻璃修正 —— 本卡位于玻璃 Sheet（SheetContainer）内，
+        // 嵌套 GlassSurface 会导致双份 BackdropFilter + 发灰观感（iOS 26
+        // Liquid Glass 层级规则：玻璃不能采样玻璃）。改实色卡 + 细描边。
+        return Container(
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHigh,
+            borderRadius: AppRadius.card,
+            border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.35)),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(Spacing.md),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

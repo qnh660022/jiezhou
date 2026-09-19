@@ -22,6 +22,9 @@ Future<void> showShareLinkSheet(BuildContext context,
     {required String entityType, required String entityId}) {
   return showModalBottomSheet(
     context: context,
+    // V2.8.3.1：对齐统一弹层入口 —— 根导航（避免被悬浮底栏遮挡）+ 统一 barrier。
+    useRootNavigator: true,
+    barrierColor: Colors.black.withValues(alpha: 0.38),
     isScrollControlled: true,
     builder: (_) => _ShareLinkSheet(entityType: entityType, entityId: entityId),
   );

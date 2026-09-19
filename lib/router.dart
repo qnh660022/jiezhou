@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'theme/app_icons.dart';
 import 'features/ai/screens/ai_chat_screen.dart';
 import 'features/ai/screens/ai_settings_screen.dart';
 import 'features/checklist/desktop_checklist_workbench.dart';
@@ -434,13 +435,13 @@ class HomeShell extends StatelessWidget {
   // 原生含 AI Tab，共 5 项；Web 屏蔽 AI，仅 4 项（需与 branches 个数一一对应）。
   static List<CapsuleTabItem> get _tabs {
     final base = <CapsuleTabItem>[
-      const CapsuleTabItem(emoji: '📋', label: '清单'),
-      const CapsuleTabItem(emoji: '🧳', label: '行程'),
-      const CapsuleTabItem(emoji: '💰', label: '账本'),
-      const CapsuleTabItem(emoji: '👤', label: '我的'),
+      const CapsuleTabItem(emoji: '📋', label: '清单', icon: AppIcons.clip),
+      const CapsuleTabItem(emoji: '🧳', label: '行程', icon: AppIcons.compass),
+      const CapsuleTabItem(emoji: '💰', label: '账本', icon: AppIcons.wallet),
+      const CapsuleTabItem(emoji: '👤', label: '我的', icon: AppIcons.user),
     ];
     if (kIsWeb) return base;
-    return [const CapsuleTabItem(emoji: '🤖', label: 'AI'), ...base];
+    return [const CapsuleTabItem(emoji: '🤖', label: 'AI', icon: AppIcons.spark), ...base];
   }
 
   @override

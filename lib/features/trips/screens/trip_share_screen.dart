@@ -18,6 +18,7 @@ import '../trip_utils.dart';
 import '../trip_widgets.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/share_link_sheet.dart';
+import '../../../theme/app_icons.dart';
 
 /// 分享行程海报页
 class TripShareScreen extends ConsumerStatefulWidget {
@@ -49,7 +50,7 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
     }
     final tripId = _tripId;
     if (tripId == null) {
-      return Scaffold(appBar: GlassAppBar(title: '分享行程'), body: const EmptyState(emoji: '🔗', title: '未找到行程'));
+      return Scaffold(appBar: GlassAppBar(title: '分享行程'), body: const EmptyState(icon: Icons.link_rounded, title: '未找到行程'));
     }
     return Scaffold(
       appBar: GlassAppBar(title: '分享行程'),
@@ -57,7 +58,7 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
         stream: _tripStream ??= ref.read(tripsRepoProvider).watchTrip(tripId),
         builder: (context, snap) {
           final trip = snap.data;
-          if (trip == null) return const EmptyState(emoji: '🔗', title: '行程不存在');
+          if (trip == null) return const EmptyState(icon: Icons.link_rounded, title: '行程不存在');
           return StreamBuilder<List<TripItem>>(
             stream: _itemsStream ??= ref.read(tripsRepoProvider).watchItems(tripId),
             builder: (context, itemsSnap) {
@@ -272,9 +273,11 @@ class _PosterBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.2),
+        // V2.8.3.1：海报签条统一走 GlassTokens
+        color: Colors.white.withValues(alpha: GlassTokens.coverPillFillAlpha),
         borderRadius: AppRadius.capsule,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+        border: Border.all(
+            color: Colors.white.withValues(alpha: GlassTokens.coverPillBorderAlpha)),
       ),
       child: Text(text,
           style: TextStyle(

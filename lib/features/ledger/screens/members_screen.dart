@@ -17,6 +17,7 @@ import '../widgets/member_avatar.dart';
 import 'invite_companion_sheet.dart';
 import '../widgets/stagger_in.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../theme/app_icons.dart';
 
 /// 👤 成员管理：八色轮换头像、新增改名、被引用拦截。
 class MembersScreen extends ConsumerWidget {
@@ -60,7 +61,7 @@ class MembersScreen extends ConsumerWidget {
                       ],
                     ),
                     error: (e, _) =>
-                        const EmptyState(emoji: '😵', title: '成员加载失败'),
+                        const EmptyState(icon: Icons.error_outline_rounded, title: '成员加载失败'),
                     data: (list) {
                       if (list.isEmpty) {
                         return ListView(children: [
@@ -366,6 +367,9 @@ class _InviteTile extends ConsumerWidget {
           onTap: () => signedIn
               ? showModalBottomSheet(
                   context: context,
+                  // V2.8.3.1：对齐统一弹层入口（根导航 + 统一 barrier）。
+                  useRootNavigator: true,
+                  barrierColor: Colors.black.withValues(alpha: 0.38),
                   builder: (_) => InviteCompanionSheet(groupId: groupId!),
                 )
               : context.push('/profile/cloud'),

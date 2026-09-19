@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import '../../../data/db/database.dart';
 import '../../../data/repo/trips_repo.dart';
 import '../../../domain/day_shift_engine.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 
 /// 「插入一天」天序面板（纯内容，宿主决定容器）。
@@ -113,7 +114,12 @@ Future<int?> showDayInsertPicker(BuildContext context, {required int n}) {
     useRootNavigator: true,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (_) => DayInsertPickerPanel(n: n, onPick: Navigator.of(context).pop),
+    // V2.8.3.1：内容包 SheetSurface（此前透明底上裸放内容，会与页面文字重叠，
+    // 与 sheet.dart 登记的「字与底面重叠」同根因）；barrier 对齐统一入口。
+    barrierColor: Colors.black.withValues(alpha: 0.38),
+    builder: (_) => SheetSurface(
+      child: DayInsertPickerPanel(n: n, onPick: Navigator.of(context).pop),
+    ),
   );
 }
 
@@ -129,11 +135,15 @@ Future<RemoveMode?> showDayRemovePicker(
     useRootNavigator: true,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (_) => DayRemovePickerPanel(
-      k: k,
-      n: n,
-      affectedCount: affectedCount,
-      onPick: Navigator.of(context).pop,
+    // V2.8.3.1：同上 —— 补包 SheetSurface + 统一 barrier。
+    barrierColor: Colors.black.withValues(alpha: 0.38),
+    builder: (_) => SheetSurface(
+      child: DayRemovePickerPanel(
+        k: k,
+        n: n,
+        affectedCount: affectedCount,
+        onPick: Navigator.of(context).pop,
+      ),
     ),
   );
 }
@@ -141,6 +151,7 @@ Future<RemoveMode?> showDayRemovePicker(
 // ===== 完整流程（桌面 Workbench 用；弹面板 + 执行引擎 + 落库） =====
 
 /// 桌面：插入一天完整流程。
+/// V2.8.2 S6：AlertDialog → 统一可拖拽抽屉（L3 选择抽屉口径）。
 Future<void> runInsertDayDialog(
   BuildContext context, {
   required TripsRepository repo,
@@ -149,12 +160,17 @@ Future<void> runInsertDayDialog(
 }) async {
   final n = tripDaysOf(trip.startEpochDay, trip.endEpochDay);
   if (n < 1) return;
-  final k = await showDialog<int>(
+  final k = await showDraggableSheet<int>(
     context: context,
-    useRootNavigator: true,
-    builder: (dialogContext) => AlertDialog(
-      contentPadding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.md, Spacing.lg, Spacing.sm),
-      content: DayInsertPickerPanel(n: n, onPick: Navigator.of(dialogContext).pop),
+    initialChildSize: 0.44,
+    minChildSize: 0.28,
+    builder: (dialogContext, scrollController) => ListView(
+      controller: scrollController,
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.md, Spacing.lg, Spacing.xl),
+      children: [
+        DayInsertPickerPanel(n: n, onPick: Navigator.of(dialogContext).pop),
+      ],
     ),
   );
   if (k == null || !context.mounted) return;
@@ -179,17 +195,23 @@ Future<void> runRemoveDayDialog(
 }) async {
   final n = tripDaysOf(trip.startEpochDay, trip.endEpochDay);
   if (n < 2 || k < 1 || k > n) return;
-  final mode = await showDialog<RemoveMode>(
+  // V2.8.2 S6：AlertDialog → 统一可拖拽抽屉
+  final mode = await showDraggableSheet<RemoveMode>(
     context: context,
-    useRootNavigator: true,
-    builder: (dialogContext) => AlertDialog(
-      contentPadding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.md, Spacing.lg, Spacing.sm),
-      content: DayRemovePickerPanel(
-        k: k,
-        n: n,
-        affectedCount: affectedCount,
-        onPick: Navigator.of(dialogContext).pop,
-      ),
+    initialChildSize: 0.44,
+    minChildSize: 0.28,
+    builder: (dialogContext, scrollController) => ListView(
+      controller: scrollController,
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.md, Spacing.lg, Spacing.xl),
+      children: [
+        DayRemovePickerPanel(
+          k: k,
+          n: n,
+          affectedCount: affectedCount,
+          onPick: Navigator.of(dialogContext).pop,
+        ),
+      ],
     ),
   );
   if (mode == null || !context.mounted) return;

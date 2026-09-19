@@ -26,7 +26,8 @@ class ChecklistSegmentedControl extends StatelessWidget {
       height: 46,
       margin: const EdgeInsets.symmetric(horizontal: Spacing.xl),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow.withValues(alpha: 0.92),
+        // V2.8.3.1：实色轨底（半透明填充入玻璃 Sheet 会双半透发灰）
+        color: scheme.surfaceContainerLow,
         borderRadius: AppRadius.capsule,
         border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.55)),
       ),

@@ -13,6 +13,7 @@ import '../ledger_providers.dart';
 import '../widgets/category_icon_box.dart';
 import '../widgets/stagger_in.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../theme/app_icons.dart';
 
 /// 🏷️ 分类管理：内置 7 类锁定展示 + 自定义增删（被引用拦截）。
 class CategoriesScreen extends ConsumerWidget {
@@ -38,7 +39,7 @@ class CategoriesScreen extends ConsumerWidget {
             )
           : categoriesAsync.when(
               loading: () => const SizedBox.shrink(),
-              error: (e, _) => const EmptyState(emoji: '😵', title: '加载失败'),
+              error: (e, _) => const EmptyState(icon: Icons.error_outline_rounded, title: '加载失败'),
               data: (all) {
                 final builtin = all.where((c) => c.builtin).toList();
                 final custom = all.where((c) => !c.builtin).toList();

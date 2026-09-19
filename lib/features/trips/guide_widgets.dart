@@ -17,7 +17,9 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../data/guide/guide_models.dart';
+import '../../shared/widgets/pressable_scale.dart';
 import '../../shared/widgets/section_header.dart';
+import '../../theme/app_icons.dart';
 import '../../theme/tokens.dart';
 import 'trip_widgets.dart' show SectionCard;
 
@@ -61,31 +63,32 @@ class GuideSectionStyle {
 }
 
 /// 六栏样式（tone 用语义色 + primary 派生，绝不硬编码随机色值）。
+/// V2.8.2 S4：六栏图标全部换装 AppIcons（12% 主色底语言不变）。
 GuideSectionStyle guideSectionStyle(BuildContext context, String key) {
   final scheme = Theme.of(context).colorScheme;
   return switch (key) {
     'prep' => GuideSectionStyle(
-        icon: Icons.event_available_rounded,
+        icon: AppIcons.calendar,
         hint: '预约 · 季节 · 天数',
         tone: scheme.primary),
     'spots' => GuideSectionStyle(
-        icon: Icons.photo_camera_rounded,
+        icon: AppIcons.camera,
         hint: '必去 · 经典 · 小众',
         tone: scheme.tertiary),
     'food' => GuideSectionStyle(
-        icon: Icons.restaurant_rounded,
+        icon: AppIcons.food,
         hint: '招牌菜 · 老店 · 街区',
         tone: SemanticColors.warning),
     'transport' => GuideSectionStyle(
-        icon: Icons.directions_transit_rounded,
+        icon: AppIcons.car,
         hint: '机场 · 地铁 · 打车',
         tone: scheme.secondary),
     'tips' => GuideSectionStyle(
-        icon: Icons.report_problem_rounded,
+        icon: AppIcons.bolt,
         hint: '排队 · 黄牛 · 闭馆',
         tone: SemanticColors.expense),
     _ => GuideSectionStyle(
-        icon: Icons.payments_rounded,
+        icon: AppIcons.coins,
         hint: '住宿 · 餐饮 · 门票',
         tone: SemanticColors.income),
   };
@@ -196,12 +199,13 @@ class GuideCityHero extends StatelessWidget {
             spacing: Spacing.sm,
             runSpacing: Spacing.sm,
             children: [
+              // V2.8.2 S4：城市头统计胶囊图标化（AppIcons 换装）
               GuideStatChip(
-                  icon: Icons.place_rounded, text: '$spots 个景点/美食'),
+                  icon: AppIcons.compass, text: '$spots 个景点/美食'),
               GuideStatChip(
-                  icon: Icons.schedule_rounded, text: '约 $readingMinutes 分钟读完'),
+                  icon: AppIcons.clock, text: '约 $readingMinutes 分钟读完'),
               GuideStatChip(
-                  icon: Icons.verified_rounded, text: sourceLabel),
+                  icon: AppIcons.check, text: sourceLabel),
             ],
           ),
         ],
@@ -310,10 +314,14 @@ class GuideSectionGrid extends StatelessWidget {
                 for (final key in GuideCity.sectionKeys)
                   SizedBox(
                     width: w,
-                    child: _SectionTile(
-                      sectionKey: key,
-                      items: sections[key] ?? const [],
+                    // V2.8.2 S6：攻略宫格接 PressableScale（按压缩放 0.97）
+                    child: PressableScale(
                       onTap: () => onTap(key),
+                      child: _SectionTile(
+                        sectionKey: key,
+                        items: sections[key] ?? const [],
+                        onTap: () => onTap(key),
+                      ),
                     ),
                   ),
               ],
@@ -700,19 +708,9 @@ class GuideItemRow extends StatelessWidget {
               spacing: Spacing.sm,
               runSpacing: Spacing.xs,
               children: [
-                for (final m in _meta())
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: Spacing.sm, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerLow,
-                      borderRadius: AppRadius.capsule,
-                    ),
-                    child: Text(m,
-                        style: TextStyle(
-                            fontSize: AppFontSizes.caption - 1,
-                            color: scheme.onSurfaceVariant)),
-                  ),
+                // V2.8.2 S4：meta 分色 —— 地址 outline 边框 / tag 主色 8% 底 /
+                // 建议时长 amber 8% 底；其余保持既有中性底。
+                for (final m in _meta()) _MetaChip(meta: m),
               ],
             ),
           ],
@@ -742,27 +740,78 @@ class GuideItemRow extends StatelessWidget {
   }
 
   /// 副信息：景点/美食给 区域 · 标签 · 时长；交通给 线路。
-  List<String> _meta() {
+  /// V2.8.2 S4：附带 kind 供 meta 分色（addr/tag/duration/neutral）。
+  List<GuideItemMeta> _meta() {
     switch (sectionKey) {
       case 'spots':
         return [
           if ((item['addr'] ?? '').toString().isNotEmpty)
-            item['addr'].toString(),
-          if ((item['tag'] ?? '').toString().isNotEmpty) item['tag'].toString(),
+            GuideItemMeta(item['addr'].toString(), 'addr'),
+          if ((item['tag'] ?? '').toString().isNotEmpty)
+            GuideItemMeta(item['tag'].toString(), 'tag'),
           if ((item['timeText'] ?? '').toString().isNotEmpty)
-            '建议 ${item['timeText']}',
+            GuideItemMeta('建议 ${item['timeText']}', 'duration'),
         ];
       case 'food':
         return [
-          if ((item['area'] ?? '').toString().isNotEmpty) item['area'].toString(),
+          if ((item['area'] ?? '').toString().isNotEmpty)
+            GuideItemMeta(item['area'].toString(), 'addr'),
         ];
       case 'transport':
         return [
-          if ((item['line'] ?? '').toString().isNotEmpty) item['line'].toString(),
+          if ((item['line'] ?? '').toString().isNotEmpty)
+            GuideItemMeta(item['line'].toString(), 'neutral'),
         ];
       default:
         return const [];
     }
+  }
+}
+
+/// 条目 meta 值 + 语义 kind（S4 分色依据）。
+class GuideItemMeta {
+  const GuideItemMeta(this.text, this.kind);
+  final String text;
+  final String kind;
+}
+
+/// meta 胶囊：地址 outline 边框 / tag 主色 8% 底 / 建议时长 amber 8% 底。
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({required this.meta});
+
+  final GuideItemMeta meta;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (bg, fg, hasBorder) = switch (meta.kind) {
+      'addr' => (null, scheme.onSurfaceVariant, true),
+      'tag' => (
+          scheme.primary.withValues(alpha: 0.08),
+          scheme.primary,
+          false
+        ),
+      'duration' => (
+          SemanticColors.warning.withValues(alpha: 0.08),
+          SemanticColors.warning,
+          false
+        ),
+      _ => (scheme.surfaceContainerLow, scheme.onSurfaceVariant, false),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.sm, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: AppRadius.capsule,
+        border: hasBorder
+            ? Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.7))
+            : null,
+      ),
+      child: Text(meta.text,
+          style: TextStyle(
+              fontSize: AppFontSizes.caption - 1, color: fg)),
+    );
   }
 }
 

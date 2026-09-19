@@ -1,4 +1,5 @@
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
@@ -700,6 +701,25 @@ class _InsightsCapsule extends ConsumerWidget {
 // 分类占比圆盘
 // ---------------------------------------------------------------------------
 
+/// V2.8.2 S6：扇区「扫过」插值（600ms easeOutCubic 的 t ∈ [0,1]）。
+///
+/// 返回 t 时刻各扇区可见值：饼图从起始角顺时针扫过 t×360°，
+/// 扇区 i 的可见量 = clamp(swept - 前序累计, 0, 自身值)。
+/// t≥1 或总量为 0 时直接返回原值（终态）。测试桩：`v282_s6` 用例直接断言。
+@visibleForTesting
+List<double> pieSweepValues(List<double> cents, double t) {
+  final total = cents.fold<double>(0, (s, v) => s + v);
+  if (total <= 0 || t >= 1) return [...cents];
+  final swept = t * total;
+  final out = <double>[];
+  var acc = 0.0;
+  for (final v in cents) {
+    out.add((swept - acc).clamp(0.0, v));
+    acc += v;
+  }
+  return out;
+}
+
 class _CategoryPie extends StatelessWidget {
   const _CategoryPie({required this.breakdown, this.range});
 
@@ -720,12 +740,26 @@ class _CategoryPie extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // V2.8.2 S6：扇区 600ms 扫过（easeOutCubic；disableAnimations 直接终态）
+    final disabled = MediaQuery.disableAnimationsOf(context);
+    if (disabled) return _chart(context, 1);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, _) => _chart(context, t),
+    );
+  }
+
+  Widget _chart(BuildContext context, double t) {
     final scheme = Theme.of(context).colorScheme;
+    final swept = pieSweepValues(
+        [for (final row in breakdown.take(8)) row.cents.toDouble()], t);
     final sections = <PieChartSectionData>[
-      for (final row in breakdown.take(8))
+      for (var i = 0; i < breakdown.take(8).length; i++)
         PieChartSectionData(
-          value: row.cents.toDouble().clamp(1, double.infinity),
-          color: AvatarPalette.colorForName(row.category.key),
+          value: swept[i].clamp(0.0001, double.infinity),
+          color: AvatarPalette.colorForName(breakdown[i].category.key),
           radius: 46,
           showTitle: false,
         ),
@@ -828,6 +862,18 @@ class _DailyBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // V2.8.2 S6：柱状从 0 生长（600ms easeOutCubic；disableAnimations 直接终态）
+    final disabled = MediaQuery.disableAnimationsOf(context);
+    if (disabled) return _chart(context, 1);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, _) => _chart(context, t),
+    );
+  }
+
+  Widget _chart(BuildContext context, double t) {
     final scheme = Theme.of(context).colorScheme;
     final shown = daily.length <= 14 ? daily : daily.sublist(daily.length - 14);
     final maxCents = shown.fold<int>(1, (m, d) => d.cents > m ? d.cents : m);
@@ -884,7 +930,8 @@ class _DailyBars extends StatelessWidget {
                               x: i,
                               barRods: [
                                 BarChartRodData(
-                                  toY: shown[i].cents.toDouble(),
+                                  // V2.8.2 S6：生长插值（t=1 终态即真实值）
+                                  toY: shown[i].cents.toDouble() * t,
                                   width: 10,
                                   borderRadius: BorderRadius.circular(5),
                                   gradient: LinearGradient(
@@ -1003,7 +1050,8 @@ class _MemberRankingState extends State<_MemberRanking> {
                           builder: (context, t, _) => LinearProgressIndicator(
                             value: t.clamp(0.02, 1.0),
                             minHeight: 8,
-                            backgroundColor: scheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                            // V2.8.3.1：实色轨道（半透明轨道叠底会发灰）
+                            backgroundColor: scheme.surfaceContainerHighest,
                             color: _valueOf(row) >= 0 ? scheme.primary : scheme.error,
                           ),
                         ),

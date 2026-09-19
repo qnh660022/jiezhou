@@ -4,11 +4,13 @@ import '../../theme/tokens.dart';
 import 'glass_surface.dart';
 
 /// 底栏 Tab 数据
+/// V2.8.2 S1：新增 [icon]（JieZhouIcons）；[emoji] 保留兼容（Web 桌面底栏继续用）。
 class CapsuleTabItem {
-  const CapsuleTabItem({required this.emoji, required this.label});
+  const CapsuleTabItem({required this.emoji, required this.label, this.icon});
 
   final String emoji;
   final String label;
+  final IconData? icon;
 }
 
 /// 悬浮胶囊底栏：毛玻璃 + 选中弹性缩放 + 触觉反馈
@@ -91,7 +93,15 @@ class _CapsuleTab extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(item.emoji, style: TextStyle(fontSize: selected ? 23 : 20)),
+            if (item.icon != null)
+              Icon(item.icon,
+                  size: selected ? 24 : 22,
+                  color: selected ? selectedColor : idleColor)
+            else
+              Text(item.emoji,
+                  style: TextStyle(
+                      fontSize: selected ? 23 : 20,
+                      color: selected ? selectedColor : idleColor)),
             const SizedBox(height: 2),
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),

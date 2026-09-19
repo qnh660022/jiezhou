@@ -1,0 +1,49 @@
+芥舟 V2.8.2 + V2.8.3.1 构建日志
+=====================================
+构建时间 : 2026-09-19 11:17 (本地)
+版本     : 2.8.3+2831 (versionName 2.8.3 / versionCode 2831)
+产物     : build\app\outputs\flutter-apk\app-release.apk (33.4 MB / 35,029,988 字节)
+目标架构 : android-arm64
+构建方式 : powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_apk.ps1 -Release -Arch arm64
+
+工具链（scripts/env.local.ps1）
+-------------------------------------
+JAVA_HOME            : D:\AI\env\jdk\jdk-17.0.2
+ANDROID_HOME         : D:\AI\env\android-sdk
+FLUTTER_ROOT         : D:\AI\env\flutter
+GRADLE_USER_HOME     : D:\AI\env\gradle-home
+PUB_HOSTED_URL       : https://pub.flutter-io.cn
+FLUTTER_STORAGE_BASE : https://storage.flutter-io.cn
+
+云端密钥注入（Supabase，§3.2.2 契约）
+-------------------------------------
+脚本输出确认: "Supabase endpoint injection: ENABLED (from env.local.ps1)"
+  --dart-define=SUPABASE_URL=https://yxclvavejcxhkobnldyx.supabase.co
+  --dart-define=SUPABASE_ANON_KEY=sb_publishable_***（env.local.ps1，已 gitignore 不入库）
+
+构建门禁（脚本内建，逐项通过）
+-------------------------------------
+1) flutter pub get                                   OK
+2) dart run build_runner build --delete-conflicting  OK
+3) flutter analyze   （要求 0 error）                OK：0 error / 353 存量 info/warning（历史放行）
+4) flutter test      （要求全绿）                    OK：931 全绿（861 基线 + 70 新增）
+
+构建输出
+-------------------------------------
+Running Gradle task 'assembleRelease'...  281.9s
+Font asset "JieZhouIcons.ttf"        tree-shaken: 8792 -> 5512 bytes (-37.3%)
+Font asset "MaterialIcons-Regular.otf" tree-shaken: 1645184 -> 34604 bytes (-97.9%)
+Font asset "CupertinoIcons.ttf"      tree-shaken: 257628 -> 848 bytes (-99.7%)
+√ Built build\app\outputs\flutter-apk\app-release.apk (33.4MB)
+
+签名验证（apksigner verify --print-certs）
+-------------------------------------
+Signer #1 certificate DN    : CN=Travel Assistant, OU=Dev, O=Travel, L=Shanghai, ST=Shanghai, C=CN
+Signer #1 SHA-256 digest    : 4469f25aa6a9402f12aaf0cfa4cd4f9cc9c77cf8be37408b24833e4e0a85ea28
+密钥库                      : android/app/release-key.jks（android/key.properties 引用，不入库）
+验证结论                    : ✅ 正式签名有效
+
+Git 提交
+-------------------------------------
+提交内容 : V2.8.2 S1~S7 全阶段 + V2.8.3.1 玻璃重设计补丁 + 测试 70 例 + 交付文档
+推送状态 : 未推送（按指令仅本地提交）

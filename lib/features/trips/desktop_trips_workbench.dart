@@ -9,6 +9,7 @@ import '../../../core/date_utils.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
 import '../../../export/share_helper.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../theme/tokens.dart';
 import 'screens/item_edit_screen.dart';
@@ -20,6 +21,7 @@ import 'widgets/day_ops_sheet.dart';
 import 'widgets/trip_tab_panels.dart';
 import '../desktop/desktop_context_menu.dart';
 import '../desktop/desktop_utils.dart';
+import '../../theme/app_icons.dart';
 
 /// 行程分支在桌面态的首屏（替代 TripsHomeScreen）。
 class DesktopTripsWorkbench extends ConsumerStatefulWidget {
@@ -86,10 +88,10 @@ class _DesktopTripsWorkbenchState extends ConsumerState<DesktopTripsWorkbench> {
   Future<void> _deleteTrip(Trip t, WidgetRef ref) async {
     final ok = await _confirm(
       title: '删除「${t.name}」？',
-      message: '安排、相册将一并删除，账单自动解绑，此操作不可恢复。',
+      message: '删除 1 个行程：安排、相册将一并删除，账单自动解绑，此操作不可恢复。',
       danger: true,
     );
-    if (ok != true) return;
+    if (!ok) return;
     await ref.read(tripsRepoProvider).deleteTrip(t.id);
     _toast('行程已删除');
   }
@@ -137,24 +139,14 @@ class _DesktopTripsWorkbenchState extends ConsumerState<DesktopTripsWorkbench> {
             onTap: () => _deleteTrip(t, ref)),
       ];
 
-  Future<T?> _confirm<T>({required String title, String? message, bool danger = false}) {
-    final scheme = Theme.of(context).colorScheme;
-    return showDialog<T>(
+  /// V2.8.2 S6：AlertDialog → 统一 L2 确认抽屉（showConfirmSheet 唯一出口）。
+  Future<bool> _confirm({required String title, String? message, bool danger = false}) {
+    return showConfirmSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: message == null ? null : Text(message),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          FilledButton(
-            style: danger
-                ? FilledButton.styleFrom(backgroundColor: scheme.error, foregroundColor: scheme.onError)
-                : null,
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
+      title: title,
+      body: message ?? title,
+      confirmLabel: danger ? '删除' : '确定',
+      danger: danger,
     );
   }
 
@@ -307,8 +299,8 @@ class _DesktopTripsWorkbenchState extends ConsumerState<DesktopTripsWorkbench> {
                   onPressed: () async {
                     final ok = await _confirm(
                         title: '归档所选 ${_picked.length} 个行程？',
-                        message: '归档后折叠到列表尾部。');
-                    if (ok != true) return;
+                        message: '归档 ${_picked.length} 个行程，归档后折叠到列表尾部。');
+                    if (!ok) return;
                     final repo = ref.read(tripsRepoProvider);
                     for (final id in _picked) {
                       await repo.archiveTrip(id, true);
@@ -323,9 +315,9 @@ class _DesktopTripsWorkbenchState extends ConsumerState<DesktopTripsWorkbench> {
                   onPressed: () async {
                     final ok = await _confirm(
                         title: '删除所选 ${_picked.length} 个行程？',
-                        message: '此操作不可恢复。',
+                        message: '删除 ${_picked.length} 个行程：安排、相册一并删除，账单自动解绑，不可恢复。',
                         danger: true);
-                    if (ok != true) return;
+                    if (!ok) return;
                     final repo = ref.read(tripsRepoProvider);
                     for (final id in _picked) {
                       await repo.deleteTrip(id);
@@ -352,7 +344,7 @@ class _DesktopTripsWorkbenchState extends ConsumerState<DesktopTripsWorkbench> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
-          return EmptyState(emoji: '😵', title: '加载失败', message: '${snap.error}');
+          return EmptyState(icon: Icons.error_outline_rounded, title: '加载失败', message: '${snap.error}');
         }
         final all = snap.data ?? const <Trip>[];
         final q = _search.text.trim().toLowerCase();
@@ -489,7 +481,7 @@ class _DesktopTripPane extends ConsumerWidget {
         }
         final trip = snap.data;
         if (trip == null) {
-          return const EmptyState(emoji: '🗂️', title: '行程不存在', message: '可能已被删除');
+          return const EmptyState(icon: AppIcons.clip, title: '行程不存在', message: '可能已被删除');
         }
         Widget centerView;
         switch (center) {
@@ -802,24 +794,13 @@ class _DesktopTripPane extends ConsumerWidget {
   }
 
   Future<void> _deleteTrip(BuildContext context, WidgetRef ref, Trip t) async {
-    final scheme = Theme.of(context).colorScheme;
-    final ok = await showDialog<bool>(
+    // V2.8.2 S6：AlertDialog → 统一 L2 危险确认抽屉
+    final ok = await showDangerConfirm(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('删除「${t.name}」？'),
-        content: const Text('安排、相册将一并删除，账单自动解绑，此操作不可恢复。'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: scheme.error, foregroundColor: scheme.onError),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除「${t.name}」？',
+      body: '删除 1 个行程：安排、相册将一并删除，账单自动解绑，此操作不可恢复。',
     );
-    if (ok != true) return;
+    if (!ok) return;
     await ref.read(tripsRepoProvider).deleteTrip(t.id);
   }
 }
@@ -976,7 +957,7 @@ class _DayItems extends ConsumerWidget {
         }
         final items = snap.data ?? const <TripItem>[];
         if (items.isEmpty) {
-          return const EmptyState(emoji: '📅', title: '还没有安排', message: '点右上角「添加安排」规划行程');
+          return const EmptyState(icon: AppIcons.calendar, title: '还没有安排', message: '点右上角「添加安排」规划行程');
         }
         // 按天分组
         final byDay = <int, List<TripItem>>{};
@@ -1127,7 +1108,7 @@ class _TimelineView extends ConsumerWidget {
         }
         final items = snap.data ?? const <TripItem>[];
         if (items.isEmpty) {
-          return const EmptyState(emoji: '📅', title: '还没有安排', message: '点右上角「添加安排」规划行程');
+          return const EmptyState(icon: AppIcons.calendar, title: '还没有安排', message: '点右上角「添加安排」规划行程');
         }
         final byDay = <int, List<TripItem>>{};
         for (final it in items) {

@@ -21,6 +21,7 @@ import '../widgets/group_summary_sheet.dart';
 import '../widgets/stagger_in.dart';
 import '../widgets/join_by_qr_tile.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../theme/app_icons.dart';
 
 /// 旅行团管理：切换、新建入口、专有 .tav 备份导入导出。
 class GroupListScreen extends ConsumerWidget {
@@ -61,7 +62,7 @@ class GroupListScreen extends ConsumerWidget {
             )
           : groupsAsync.when(
               loading: () => const SizedBox.shrink(),
-              error: (e, _) => const EmptyState(emoji: '😵', title: '加载失败'),
+              error: (e, _) => const EmptyState(icon: Icons.error_outline_rounded, title: '加载失败'),
               data: (groups) => groups.isEmpty
                   ? EmptyState(
                       emoji: '👥',
@@ -138,10 +139,19 @@ class GroupListScreen extends ConsumerWidget {
                                 ),
                                 title: Row(
                                   children: [
+                                    // V2.8.2 S6：团卡→团编辑名称 Hero
                                     Flexible(
-                                      child: Text(g.name,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context).textTheme.titleSmall),
+                                      child: Hero(
+                                        tag: 'group-name-${g.id}',
+                                        child: Material(
+                                          type: MaterialType.transparency,
+                                          child: Text(g.name,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleSmall),
+                                        ),
+                                      ),
                                     ),
                                     const SizedBox(width: Spacing.xs),
                                     // S4：账本类型标签 + 区别性图标。

@@ -5,12 +5,65 @@ import 'package:go_router/go_router.dart';
 import '../../../platform/app_lock.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../shared/copy_tokens.dart';
+import '../../../theme/app_icons.dart';
+import '../../../shared/widgets/brand_waves.dart';
 import '../../../theme/tokens.dart';
 
 /// 开屏页：渐变圆 Logo 分层入场，短暂停留后自动进入行程 Tab。
 ///
 /// 路由位于 `/`（顶层，不在底部导航壳内），到时 context.go('/trips')
 /// 以替换语义离开，返回键不会回到本页。
+/// V2.8.2 S2：舟身描边生长画笔（路径度量等效 stroke-dashoffset）。
+class _BoatStroke extends StatelessWidget {
+  const _BoatStroke({required this.progress});
+
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 56,
+      height: 56,
+      child: CustomPaint(
+        painter: _BoatStrokePainter(
+            color: scheme.onPrimary, progress: progress.clamp(0.0, 1.0)),
+        child: const Center(child: Icon(AppIcons.boat, size: 44)),
+      ),
+    );
+  }
+}
+
+class _BoatStrokePainter extends CustomPainter {
+  const _BoatStrokePainter({required this.color, required this.progress});
+
+  final Color color;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width * 0.1, size.height * 0.3)
+      ..lineTo(size.width * 0.9, size.height * 0.3)
+      ..lineTo(size.width * 0.75, size.height * 0.7)
+      ..lineTo(size.width * 0.25, size.height * 0.7)
+      ..close();
+    final metric = path.computeMetrics().first;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = color.withValues(alpha: 0.6)
+      ..strokeCap = StrokeCap.round;
+    final extracted =
+        metric.extractPath(0, metric.length * progress.clamp(0.0, 1.0));
+    canvas.drawPath(extracted, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BoatStrokePainter old) =>
+      old.progress != progress || old.color != color;
+}
+
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -23,10 +76,10 @@ class SplashScreen extends ConsumerStatefulWidget {
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
-  // 单一时间轴 600ms：Logo 全程缩放淡入，文案按 Interval 错峰入场
+  // V2.8.2 S2：900ms（舟身描边生长 900ms easeOutCubic）；总停留 1200ms 不变
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 600),
+    duration: const Duration(milliseconds: 900),
   )..forward();
 
   late final Animation<double> _logoScale =
@@ -62,6 +115,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     CurvedAnimation(parent: _controller, curve: const Interval(0.25, 1.0)),
   );
 
+  // V2.8.2 S2：双波纹扩散（错峰 Interval，于 1200ms 停留内收敛）
+  late final AnimationController _waves = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..forward();
+
   // 停留计时用第二时间轴驱动：与 vsync 帧同步推进，避免裸 Timer 在
   // 动画结束到触发之间产生无帧空窗（widget 测试的 pumpAndSettle 会
   // 提前返回，真机上亦消除对 wall-clock 的依赖）。
@@ -95,6 +154,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   void dispose() {
+    _waves.dispose();
     _dwell.dispose();
     _controller.dispose();
     super.dispose();
@@ -106,9 +166,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     ref.watch(themeProvider);
     final scheme = Theme.of(context).colorScheme;
 
+    // V2.8.2 S2：底色 primary 4% → surface 垂直渐变
     return Scaffold(
-      backgroundColor: scheme.surface,
-      body: Center(
+      body: DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            scheme.primary.withValues(alpha: 0.04),
+            scheme.surface,
+          ],
+        ),
+      ),
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -159,8 +230,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             ),
                           ],
                         ),
-                        child: const Center(
-                          child: Text('✈️', style: TextStyle(fontSize: 44)),
+                        // V2.8.2 S1+S2：品牌舟形 + 描边生长（900ms easeOutCubic）
+                        child: Center(
+                          child: AnimatedBuilder(
+                            animation: _controller,
+                            builder: (context, _) => _BoatStroke(
+                                progress: Curves.easeOutCubic
+                                    .transform(_controller.value)),
+                          ),
                         ),
                       ),
                     ),
@@ -190,8 +267,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 style: Theme.of(context).textTheme.labelSmall,
               ),
             ),
+            // V2.8.2 S2：双波纹母题（错峰展开，opacity 16%）
+            AnimatedBuilder(
+              animation: _waves,
+              builder: (context, _) => SizedBox(
+                width: 220,
+                child: BrandWaves(
+                  progress: Curves.easeOutCubic.transform(_waves.value),
+                ),
+              ),
+            ),
           ],
         ),
+      ),
       ),
     );
   }

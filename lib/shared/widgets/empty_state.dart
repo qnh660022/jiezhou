@@ -103,26 +103,15 @@ class _FloatingGlassDisc extends StatelessWidget {
   }
 
   Widget _disc(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    // V2.8.3.1：玻璃圆盘不再叠 primary 半透明渐变（双层半透导致发灰；
+    // 玻璃面只保留 GlassSurface 自身材质，单一玻璃容器原则）。
     return GlassSurface(
       level: GlassLevel.floatingCard,
       borderRadius: BorderRadius.circular(999),
-      child: Container(
+      child: SizedBox(
         width: 96,
         height: 96,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              scheme.primary.withValues(alpha: 0.12),
-              scheme.primary.withValues(alpha: 0.02),
-            ],
-          ),
-        ),
-        child: child,
+        child: Center(child: child),
       ),
     );
   }

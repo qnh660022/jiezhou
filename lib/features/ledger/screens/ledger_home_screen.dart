@@ -33,6 +33,7 @@ import '../widgets/stagger_in.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/sync_status_capsule.dart';
 import 'inbox_sheets.dart';
+import '../../../theme/app_icons.dart';
 
 /// 💰 记账 Tab 主页：当前团总览 + 余额榜 + 预算 + 最近账单流。
 class LedgerHomeScreen extends ConsumerWidget {
@@ -95,21 +96,31 @@ class LedgerHomeScreen extends ConsumerWidget {
           ],
         ),
         Expanded(
-          child: groupAsync.when(
-            loading: () => const _HomeSkeleton(),
-            error: (e, _) => const EmptyState(emoji: '😵', title: '加载失败了', message: '下拉重试或稍后再来看看'),
-            data: (group) {
-              if (group == null) {
-                return EmptyState(
-                  emoji: '💰',
-                  title: copy(CopyTokens.ledgerEmpty),
-                  message: copy(CopyTokens.ledgerEmptyAction),
-                  actionLabel: '新建旅行团',
-                  onAction: () => context.pushNamed('group-edit'),
-                );
-              }
-              return _LedgerBody(groupId: group.id);
-            },
+          // V2.8.2 S6：骨架→内容 300ms 淡接 morph
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: groupAsync.when(
+              loading: () => const _HomeSkeleton(key: ValueKey('home-skeleton')),
+              error: (e, _) => const KeyedSubtree(
+                key: ValueKey('home-error'),
+                child: EmptyState(icon: Icons.error_outline_rounded, title: '加载失败了', message: '下拉重试或稍后再来看看'),
+              ),
+              data: (group) {
+                if (group == null) {
+                  return KeyedSubtree(
+                    key: const ValueKey('home-empty'),
+                    child: EmptyState(
+                      emoji: '💰',
+                      title: copy(CopyTokens.ledgerEmpty),
+                      message: copy(CopyTokens.ledgerEmptyAction),
+                      actionLabel: '新建旅行团',
+                      onAction: () => context.pushNamed('group-edit'),
+                    ),
+                  );
+                }
+                return _LedgerBody(groupId: group.id);
+              },
+            ),
           ),
         ),
       ],
@@ -496,7 +507,9 @@ class _GlassGroupCard extends StatelessWidget {
           padding: const EdgeInsets.all(Spacing.xl),
           decoration: BoxDecoration(
             borderRadius: AppRadius.card,
-            // 主题主色柔光叠在玻璃 tint 之上（既有观感保留）
+            // V2.8.3.1：去双层 tint —— 移除 surfaceContainerLow 半透明层
+            //（与玻璃 tint 同源叠加导致发灰），仅保留语义色柔光
+            //（超支=error / 正常=primary，Apple「策略性 tint」用法）。
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -506,8 +519,8 @@ class _GlassGroupCard extends StatelessWidget {
                       scheme.error.withValues(alpha: 0.04),
                     ]
                   : [
-                      scheme.surfaceContainerLow.withValues(alpha: 0.24),
                       scheme.primary.withValues(alpha: 0.10),
+                      scheme.primary.withValues(alpha: 0.03),
                     ],
             ),
           ),
@@ -975,7 +988,7 @@ class _NoBillsHint extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: Spacing.huge),
       child: EmptyState(
-        emoji: '🧾',
+        icon: AppIcons.wallet,
         title: '还没记过账',
         message: '点右下角「记一笔」，旅途中的每笔开销都算得明明白白',
       ),
@@ -1421,7 +1434,7 @@ Future<void> _openGroupSwitcher(BuildContext context, WidgetRef ref) async {
 // ---------------------------------------------------------------------------
 
 class _HomeSkeleton extends StatelessWidget {
-  const _HomeSkeleton();
+  const _HomeSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {

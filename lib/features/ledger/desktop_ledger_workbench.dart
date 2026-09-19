@@ -30,6 +30,7 @@ import 'screens/budget_screen.dart';
 import 'screens/members_screen.dart';
 import '../desktop/desktop_context_menu.dart';
 import '../desktop/desktop_utils.dart';
+import '../../theme/app_icons.dart';
 
 /// 账本分支在桌面态的首屏（替代 LedgerHomeScreen）。
 class DesktopLedgerWorkbench extends ConsumerStatefulWidget {
@@ -269,7 +270,7 @@ class _DesktopLedgerWorkbenchState extends ConsumerState<DesktopLedgerWorkbench>
     final id = ref.watch(_ExpenseSelection.provider);
     if (id == null) {
       return const EmptyState(
-          emoji: '🧾', title: '选择左侧账单', message: '点选一笔消费即可查看详情、快速修改；右上「记一笔」录入新账单');
+          icon: AppIcons.wallet, title: '选择左侧账单', message: '点选一笔消费即可查看详情、快速修改；右上「记一笔」录入新账单');
     }
     return _ExpenseDetailPane(expenseId: id, onEdit: _editExpense);
   }
@@ -440,7 +441,7 @@ class _ExpenseList extends ConsumerWidget {
       error: (e, _) => Center(child: Text('$e')),
       data: (expenses) {
         if (expenses.isEmpty) {
-          return const EmptyState(emoji: '🧾', title: '还没有账单', message: '点右上「记一笔」开始记账');
+          return const EmptyState(icon: AppIcons.wallet, title: '还没有账单', message: '点右上「记一笔」开始记账');
         }
         final sorted = [...expenses]
           ..sort((a, b) {
@@ -697,7 +698,7 @@ class _ExpenseDetailPane extends ConsumerWidget {
     final expenses = ref.watch(expensesProvider).value ?? const <ExpenseRecord>[];
     final e = expenses.where((x) => x.id == expenseId).firstOrNull;
     if (e == null) {
-      return const EmptyState(emoji: '🗂️', title: '账单不存在', message: '可能已被删除');
+      return const EmptyState(icon: AppIcons.clip, title: '账单不存在', message: '可能已被删除');
     }
     final members = ref.watch(_MembersLite.provider);
     // V2.7.1 S7 · E2（宿主 B）：只读判定（未知角色按可写处理，RLS 兜底）。

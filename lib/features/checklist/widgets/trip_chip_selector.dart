@@ -111,7 +111,8 @@ class _ActionChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: 8),
         decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow.withValues(alpha: 0.9),
+          // V2.8.3.1：实色 chip（同 checklist_segmented_control，去双半透）
+          color: scheme.surfaceContainerLow,
           borderRadius: AppRadius.capsule,
           border: Border.all(color: scheme.outlineVariant),
         ),

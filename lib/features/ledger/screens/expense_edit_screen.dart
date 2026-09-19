@@ -883,7 +883,8 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+          // V2.8.3.1：实色 chip —— 半透明 chip 叠在玻璃金额卡上会发灰。
+          color: scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(label,

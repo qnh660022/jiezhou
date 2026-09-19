@@ -58,7 +58,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     // 底栏切到账本 Tab
-    await tester.tap(find.text('💰').first);
+    await tester.tap(find.text('账本').first);
     await tester.pumpAndSettle();
     return router;
   }

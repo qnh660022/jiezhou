@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>v2.8.3.1 毛玻璃整改 · 设计审核稿</title>
+<style>
+:root{
+  --bg:#0d1117;
+  --panel:#151b24;
+  --panel-2:#1a212c;
+  --line:#243041;
+  --txt:#e8edf4;
+  --txt-2:#9aa7b8;
+  --txt-3:#66748a;
+  --green:#12b76a;
+  --green-deep:#0e9d5c;
+  --amber:#f5a623;
+  --red:#ef5b5b;
+  --blue:#3b82f6;
+  --radius:14px;
+  --mono:'Cascadia Code','JetBrains Mono',Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:
+    radial-gradient(1200px 500px at 80% -100px, rgba(18,183,106,.08), transparent 60%),
+    radial-gradient(900px 400px at 10% 30%, rgba(59,130,246,.05), transparent 60%),
+    var(--bg);
+  color:var(--txt);
+  font-family:'PingFang SC','Microsoft YaHei','Segoe UI',sans-serif;
+  line-height:1.7;
+  padding-bottom:80px;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+
+/* ---------- 顶部 ---------- */
+.hero{padding:56px 0 30px;border-bottom:1px solid var(--line)}
+.hero .tag-row{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+  padding:5px 12px;border-radius:999px;border:1px solid var(--line);color:var(--txt-2);letter-spacing:.5px}
+.badge.version{color:var(--green);border-color:rgba(18,183,106,.35);background:rgba(18,183,106,.08)}
+.badge.waiting{color:var(--amber);border-color:rgba(245,166,35,.35);background:rgba(245,166,35,.08)}
+.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.hero h1{font-size:34px;font-weight:800;letter-spacing:.5px}
+.hero h1 em{font-style:normal;color:var(--green)}
+.hero .sub{color:var(--txt-2);margin-top:10px;font-size:15px;max-width:820px}
+.hero .sub b{color:var(--txt)}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:26px}
+.meta-item{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.meta-item .k{font-size:11px;color:var(--txt-3);text-transform:uppercase;letter-spacing:1.5px}
+.meta-item .v{font-size:14px;font-weight:600;margin-top:4px;color:var(--txt)}
+.meta-item .v.warn{color:var(--amber)}
+.meta-item .v.ok{color:var(--green)}
+
+/* ---------- 章节通用 ---------- */
+section{padding:52px 0 8px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.sec-no{font-family:var(--mono);font-size:13px;color:var(--green);font-weight:700;
+  border:1px solid rgba(18,183,106,.35);border-radius:8px;padding:2px 10px;background:rgba(18,183,106,.07)}
+.sec-head h2{font-size:24px;font-weight:800}
+.sec-desc{color:var(--txt-2);font-size:14.5px;margin-bottom:26px;max-width:900px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+
+/* ---------- 一、现状诊断 ---------- */
+.diag-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.diag-grid{grid-template-columns:1fr}}
+.diag-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.diag-card .dc-head{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.dc-head .shot{font-size:11px;font-weight:700;color:#fff;background:var(--panel-2);
+  border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-family:var(--mono)}
+.dc-head h3{font-size:16px;font-weight:700}
+.dc-head .sev{margin-left:auto;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
+.sev.high{color:#ffb4b4;background:rgba(239,91,91,.12);border:1px solid rgba(239,91,91,.35)}
+.sev.mid{color:#ffd88a;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.35)}
+.dc-body{padding:18px 20px}
+.issue{display:flex;gap:12px;padding:10px 0;border-bottom:1px dashed rgba(36,48,65,.8)}
+.issue:last-child{border-bottom:none}
+.issue .no{flex:0 0 22px;height:22px;border-radius:6px;background:rgba(239,91,91,.12);
+  color:var(--red);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.issue.mid .no{background:rgba(245,166,35,.1);color:var(--amber)}
+.issue h4{font-size:14px;font-weight:700}
+.issue p{font-size:13px;color:var(--txt-2);margin-top:2px}
+.issue p code{font-family:var(--mono);font-size:12px;color:#7dd3fc;background:rgba(56,142,255,.08);padding:1px 6px;border-radius:4px}
+.root-cause{margin-top:16px;background:rgba(239,91,91,.06);border:1px solid rgba(239,91,91,.25);
+  border-radius:10px;padding:14px 16px;font-size:13.5px}
+.root-cause b{color:var(--red)}
+.root-cause code{font-family:var(--mono);font-size:12.5px;color:#7dd3fc}
+</style>
+</head>
+<body>
+<style>
+/* ---------- 手机 mockup ---------- */
+.phone-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:26px;justify-items:center;align-items:start}
+.phone-block{width:100%;max-width:320px}
+.phone-label{display:flex;align-items:center;gap:10px;margin-bottom:12px;justify-content:center}
+.phone-label .pl-tag{font-size:12px;font-weight:800;letter-spacing:1px;padding:4px 14px;border-radius:999px}
+.pl-tag.before{color:#ffb4b4;border:1px solid rgba(239,91,91,.4);background:rgba(239,91,91,.1)}
+.pl-tag.after{color:#8af0bd;border:1px solid rgba(18,183,106,.45);background:rgba(18,183,106,.1)}
+.phone-label .pl-note{font-size:12px;color:var(--txt-3)}
+.phone{
+  width:100%;aspect-ratio:9/19;border-radius:38px;position:relative;overflow:hidden;
+  border:6px solid #232a35;box-shadow:0 24px 60px rgba(0,0,0,.5);background:#eef0f2;
+}
+.scene{position:absolute;inset:0;font-family:'PingFang SC','Microsoft YaHei',sans-serif;color:#1a1d21}
+.statusbar{display:flex;justify-content:space-between;align-items:center;padding:12px 18px 4px;font-size:12px;font-weight:700;color:#333}
+.statusbar .sb-icons{letter-spacing:2px;font-size:10px}
+/* —— 场景 A：账本首页（工具箱后面的背景）—— */
+.ledger-bg{position:absolute;inset:0;background:#f2f3f5;overflow:hidden}
+.blob{position:absolute;border-radius:50%;filter:blur(2px)}
+.blob-red{width:220px;height:220px;right:-60px;top:70px;
+  background:radial-gradient(circle at 35% 35%, #ff8a80, #e5484d 70%);opacity:.85}
+.blob-green{width:180px;height:180px;left:30px;bottom:60px;
+  background:radial-gradient(circle at 40% 40%, #6ee7a8, #12a35f 75%);opacity:.75}
+.blob-green2{width:120px;height:120px;right:20px;bottom:150px;
+  background:radial-gradient(circle at 40% 40%, #a7f3c9, #0f8f54 75%);opacity:.6}
+.toolrow{display:flex;gap:14px;justify-content:center;padding:14px 0 8px}
+.toolrow .tb{width:40px;height:40px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08);
+  display:flex;align-items:center;justify-content:center;font-size:16px}
+.ledger-cards{padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+.ledger-card{background:#fff;border-radius:16px;padding:14px;box-shadow:0 4px 14px rgba(0,0,0,.06);height:74px}
+.ledger-card.alert{background:linear-gradient(135deg,#ff8a80,#e5484d)}
+.ledger-card .bar{height:10px;border-radius:5px;background:#e7e9ec;width:70%}
+.ledger-card.alert .bar{background:rgba(255,255,255,.5)}
+.ledger-card .bar2{height:8px;border-radius:4px;background:#eef0f2;width:45%;margin-top:10px}
+.ledger-card.alert .bar2{background:rgba(255,255,255,.35)}
+/* —— 底部弹层 —— */
+.sheet{position:absolute;left:0;right:0;bottom:0;height:63%;
+  border-radius:24px 24px 0 0;display:flex;flex-direction:column;overflow:hidden}
+.sheet-before{
+  backdrop-filter:blur(14px) saturate(1.45);
+  -webkit-backdrop-filter:blur(14px) saturate(1.45);
+  background:rgba(230,232,235,.5);
+  border-top:1px solid rgba(255,255,255,.3);
+  box-shadow:0 -10px 40px rgba(0,0,0,.22);
+}
+.sheet-after{
+  backdrop-filter:blur(44px) saturate(.82);
+  -webkit-backdrop-filter:blur(44px) saturate(.82);
+  background:rgba(250,251,252,.60);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 0 0 1px rgba(255,255,255,.55),
+    0 -18px 44px rgba(15,23,42,.20);
+}
+.sheet .handle{width:36px;height:4.5px;border-radius:999px;background:rgba(0,0,0,.22);margin:10px auto 4px}
+.sheet-after .handle{background:rgba(0,0,0,.3)}
+.sheet-head{padding:6px 22px 10px}
+.sheet-head .t{font-size:19px;font-weight:800;color:#1a1d21}
+.sheet-head .st{font-size:12px;margin-top:1px}
+.sheet-before .sheet-head .st{color:#6b7280}
+.sheet-after .sheet-head .st{color:#5b6472;font-weight:500}
+.tool-list{padding:2px 16px;display:flex;flex-direction:column;gap:9px}
+.tool-item{display:flex;align-items:center;gap:12px;border-radius:14px;padding:11px 14px}
+.tool-item .ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;flex:0 0 38px}
+.tool-item .tx{flex:1;min-width:0}
+.tool-item .tt{font-size:14px;font-weight:800;color:#1a1d21}
+.tool-item .ts{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tool-item .chev{color:#9aa3ad;font-size:14px}
+/* Before：玻璃上叠半透明玻璃（反模式）*/
+.tool-item.before-item{
+  background:rgba(235,237,240,.55);
+  border:1px solid rgba(255,255,255,.35);
+}
+.tool-item.before-item .ts{color:#7a828c}
+.tool-item.before-item .ico{background:rgba(18,183,106,.16);color:#0c8a50}
+/* After：实色条目（单一玻璃容器原则）*/
+.tool-item.after-item{
+  background:#ffffff;
+  border:1px solid rgba(15,23,42,.06);
+  box-shadow:0 1px 3px rgba(15,23,42,.05);
+}
+.tool-item.after-item .ts{color:#5b6472;font-weight:500}
+.tool-item.after-item .ico{background:rgba(18,183,106,.12);color:#0c8a50}
+/* —— 场景 B：行程首页 —— */
+.trip-bg{position:absolute;inset:0;background:#f0f1f3}
+.trip-scroll{position:absolute;inset:0;animation:scrollY 9s ease-in-out infinite alternate}
+@keyframes scrollY{0%{transform:translateY(0)}100%{transform:translateY(-120px)}}
+.trip-toprow{display:flex;gap:16px;justify-content:flex-end;padding:14px 18px 0;font-size:15px}
+.trip-title{font-size:30px;font-weight:900;color:#14161a;padding:8px 20px 10px}
+.trip-sec{font-size:15px;font-weight:800;color:#1a1d21;padding:2px 20px 2px}
+.trip-sec small{display:block;font-size:11px;font-weight:500;color:#8a929c}
+.trip-card{margin:10px 20px 0;border-radius:20px;padding:16px;color:#fff;position:relative;overflow:hidden;
+  background:linear-gradient(140deg,#4f8ef7 0%,#2f6ae0 55%,#2456c4 100%);
+  box-shadow:0 10px 24px rgba(47,106,224,.28);height:128px}
+.trip-card .pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;
+  background:rgba(255,255,255,.22);border-radius:999px;padding:3px 10px}
+.trip-card .city{font-size:20px;font-weight:900;margin-top:8px}
+.trip-card .route{font-size:11px;opacity:.92;margin-top:3px}
+.trip-card .days{display:inline-block;font-size:10px;font-weight:700;background:rgba(255,255,255,.22);
+  border-radius:8px;padding:2px 8px;margin-top:8px}
+.trip-card .plane{position:absolute;right:14px;top:18px;font-size:34px;transform:rotate(-12deg)}
+.trip-card .prog{position:absolute;left:16px;right:16px;bottom:12px;height:3px;border-radius:2px;background:rgba(255,255,255,.35)}
+.trip-card .prog i{position:absolute;left:0;top:0;bottom:0;width:62%;background:#fff;border-radius:2px}
+.fab{position:absolute;right:18px;bottom:118px;background:linear-gradient(140deg,#19c37d,#0da35f);color:#fff;
+  font-size:13px;font-weight:800;border-radius:999px;padding:12px 18px;box-shadow:0 8px 20px rgba(13,163,95,.4);z-index:6}
+.dest-card{margin:14px 20px 0;background:#fff;border-radius:16px;padding:12px 14px;display:flex;gap:10px;align-items:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.06)}
+.dest-card .di{width:36px;height:36px;border-radius:10px;background:rgba(18,183,106,.12);display:flex;align-items:center;justify-content:center;font-size:16px}
+.dest-card .dt{font-size:13px;font-weight:800;color:#1a1d21}
+.dest-card .ds{font-size:10.5px;color:#8a929c}
+/* 顶栏（吸顶玻璃）*/
+.appbar{position:absolute;top:0;left:0;right:0;z-index:5;padding-top:26px}
+.appbar .ab-inner{padding:8px 20px 10px;font-size:22px;font-weight:900;color:#14161a}
+.appbar-before .ab-inner{ text-shadow:none }
+.appbar-before{
+  backdrop-filter:blur(12px) saturate(1.35);
+  -webkit-backdrop-filter:blur(12px) saturate(1.35);
+  background:rgba(238,240,242,.42);
+  border-bottom:1px solid rgba(255,255,255,.4);
+}
+.appbar-after{
+  backdrop-filter:blur(26px) saturate(.88);
+  -webkit-backdrop-filter:blur(26px) saturate(.88);
+  background:rgba(248,249,250,.48);
+  box-shadow:inset 0 -0.5px 0 rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.85);
+}
+.appbar-after .ab-inner{color:#101318}
+/* 底部胶囊导航 */
+.navbar{position:absolute;left:12px;right:12px;bottom:12px;border-radius:28px;padding:9px 6px 8px;z-index:5;
+  display:flex;text-align:center}
+.navbar .nb{flex:1;font-size:16px;line-height:1.15}
+.navbar .nb span{display:block;font-size:9.5px;margin-top:1px;font-weight:600}
+.navbar-before{
+  backdrop-filter:blur(14px) saturate(1.35);
+  -webkit-backdrop-filter:blur(14px) saturate(1.35);
+  background:rgba(236,238,240,.5);
+  border:1px solid rgba(255,255,255,.32);
+  box-shadow:0 10px 30px rgba(0,0,0,.16);
+}
+.navbar-before .nb{color:#5c6470}
+.navbar-before .nb.on{color:#0c8a50}
+.navbar-after{
+  backdrop-filter:blur(30px) saturate(.85);
+  -webkit-backdrop-filter:blur(30px) saturate(.85);
+  background:rgba(250,251,252,.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 0 0 1px rgba(255,255,255,.6),
+    0 14px 34px rgba(15,23,42,.22);
+}
+.navbar-after .nb{color:#4c5563;text-shadow:0 1px 0 rgba(255,255,255,.6)}
+.navbar-after .nb.on{color:#0a7d49;font-weight:800}
+/* 对比注解 */
+.anno{margin-top:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;font-size:12.5px;color:var(--txt-2)}
+.anno b{color:var(--txt)}
+.anno ul{margin:6px 0 0 18px}
+.anno li{margin:3px 0}
+
+/* ---------- 学习摘要 ---------- */
+.learn-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.learn-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+.learn-card .lc-ico{font-size:20px}
+.learn-card h3{font-size:15px;font-weight:800;margin:8px 0 6px}
+.learn-card h3 .src{font-size:11px;font-weight:600;color:var(--txt-3);margin-left:8px}
+.learn-card p{font-size:13px;color:var(--txt-2)}
+.learn-card p b{color:var(--green)}
+.quote{margin-top:18px;border-left:3px solid var(--green);padding:10px 18px;color:var(--txt-2);font-size:14px;font-style:italic}
+.quote b{color:var(--txt)}
+
+/* ---------- 策略三层 ---------- */
+.strategy{display:flex;flex-direction:column;gap:14px}
+.stg{display:grid;grid-template-columns:56px 1fr;gap:18px;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);padding:20px;align-items:start}
+.stg .ico{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;
+  background:rgba(18,183,106,.1);border:1px solid rgba(18,183,106,.3)}
+.stg h3{font-size:16px;font-weight:800}
+.stg h3 small{color:var(--txt-3);font-weight:600;margin-left:8px;font-size:12px}
+.stg p{font-size:13.5px;color:var(--txt-2);margin-top:4px}
+.stg p code{font-family:var(--mono);font-size:12px;color:#7dd3fc}
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{font-size:11.5px;font-family:var(--mono);background:var(--panel-2);border:1px solid var(--line);
+  color:var(--txt-2);border-radius:8px;padding:4px 10px}
+.chip.hot{color:#8af0bd;border-color:rgba(18,183,106,.4)}
+.chip.del{color:#ffb4b4;border-color:rgba(239,91,91,.35);text-decoration:line-through}
+</style>
+<style>
+/* ---------- 参数对照表 ---------- */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+th{background:var(--panel-2);text-align:left;padding:12px 16px;font-size:12px;color:var(--txt-2);
+  letter-spacing:1px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 16px;border-bottom:1px solid rgba(36,48,65,.6);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td code{font-family:var(--mono);font-size:12px;background:var(--panel-2);padding:2px 7px;border-radius:5px;color:#a5c8f0}
+td .old{color:var(--txt-3);text-decoration:line-through}
+td .new{color:var(--green);font-weight:700}
+td .why{color:var(--txt-2);font-size:12.5px}
+tr.hl td{background:rgba(18,183,106,.04)}
+
+/* ---------- 施工范围 ---------- */
+.scope-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:860px){.scope-grid{grid-template-columns:1fr}}
+.scope-list{list-style:none;margin-top:6px}
+.scope-list li{display:flex;gap:10px;padding:8px 0;font-size:13.5px;color:var(--txt-2);border-bottom:1px dashed rgba(36,48,65,.6)}
+.scope-list li:last-child{border:none}
+.scope-list li b{color:var(--txt);font-weight:600}
+.scope-list .f{font-family:var(--mono);font-size:12px;color:#a5c8f0}
+.scope-list .pin{flex:0 0 18px;text-align:center}
+.scope-list.do .pin{color:var(--green)}
+.scope-list.dont .pin{color:var(--red)}
+
+/* ---------- 审批区 ---------- */
+.approve{margin-top:56px;border:1px solid rgba(18,183,106,.4);border-radius:18px;
+  background:linear-gradient(160deg,rgba(18,183,106,.08),rgba(18,183,106,.02));padding:34px;text-align:center}
+.approve h2{font-size:22px;font-weight:800}
+.approve p{color:var(--txt-2);font-size:14px;margin:8px auto 22px;max-width:640px}
+.btn-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn{font-size:14px;font-weight:700;border-radius:12px;padding:12px 26px;cursor:default;border:1px solid var(--line);
+  background:var(--panel-2);color:var(--txt-2)}
+.btn.primary{background:linear-gradient(140deg,#17c078,#0e9d5c);color:#fff;border:none;
+  box-shadow:0 8px 24px rgba(18,183,106,.35)}
+.btn.ghost{color:var(--amber);border-color:rgba(245,166,35,.4)}
+.btn small{display:block;font-size:11px;font-weight:500;opacity:.85;margin-top:2px}
+.approve .hint{margin-top:20px;font-size:12px;color:var(--txt-3)}
+
+footer{margin-top:50px;text-align:center;color:var(--txt-3);font-size:12px}
+</style>
+
+<!-- ================= 顶部 ================= -->
+<div class="hero">
+  <div class="wrap">
+    <div class="tag-row">
+      <span class="badge version">v2.8.3.1</span>
+      <span class="badge">毛玻璃材质整改 · 设计审核稿</span>
+      <span class="badge waiting">待审批 · 未施工</span>
+    </div>
+    <h1>玻璃不该是<em>「蒙了一层脏雾」</em>，<br>而应是<em>「一块干净的光学玻璃」</em></h1>
+    <p class="sub">
+      针对两张实机截图（账本工具箱 Sheet / 行程首页）的毛玻璃问题，先学习 <b>iOS 26 Liquid Glass</b> 设计规范与 2025 玻璃拟态最佳实践，
+      再结合现有 <code style="font-family:var(--mono);font-size:13px;color:#7dd3fc">GlassSurface</code> 唯一实现进行<b>参数级 + 结构级</b>整改。
+      以下所有 Before / After 均为 CSS 光学模拟，供审批；<b>尚未改动任何 Dart 代码，不编译 APK，不提交 git。</b>
+    </p>
+    <div class="meta-grid">
+      <div class="meta-item"><div class="k">问题根因</div><div class="v warn">3 类（压不住 / 叠错层 / 缺精修）</div></div>
+      <div class="meta-item"><div class="k">学习来源</div><div class="v">Apple Liquid Glass · WWDC 2025</div></div>
+      <div class="meta-item"><div class="k">整改方式</div><div class="v ok">API 不变 · Token 重校准</div></div>
+      <div class="meta-item"><div class="k">预计施工面</div><div class="v warn">4 批次 · 约 34 个文件（详见 01+ / 第六节）</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 一、现状诊断 ================= -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">01</span><h2>现状诊断</h2></div>
+  <p class="sec-desc">对照两张截图与源码，问题可归为三类：<b style="color:var(--txt)">背景压不住、层级叠错了、光学没精修</b>。</p>
+  <div class="diag-grid">
+    <div class="diag-card">
+      <div class="dc-head">
+        <span class="shot">截图 1</span><h3>账本 · 工具箱 Sheet</h3><span class="sev high">严重</span>
+      </div>
+      <div class="dc-body">
+        <div class="issue"><span class="no">1</span><div>
+          <h4>背景色斑透出，「脏水感」</h4>
+          <p>首页的高饱和色块（红色预算告警渐变、绿色主色元素）被 <code>σ28</code> 模糊后仍以大色晕透出，
+          <code>tintAlphaLight=0.52</code> 的底色压不住 → 灰底上浮着红绿污渍。</p>
+        </div></div>
+        <div class="issue"><span class="no">2</span><div>
+          <h4>饱和度补偿火上浇油</h4>
+          <p><code>GlassTokens.saturation=1.35</code> 本意是补偿模糊发灰，但在高饱和背景上反而把透入的色斑<b>变得更艳</b>。</p>
+        </div></div>
+        <div class="issue"><span class="no">3</span><div>
+          <h4>玻璃叠玻璃（反模式）</h4>
+          <p>Sheet 本体是玻璃，内部条目又垫 <code>surfaceContainerHighest α0.5</code> 半透明面 → 双层半透叠加，文字发虚。</p>
+        </div></div>
+        <div class="issue"><span class="no">4</span><div>
+          <h4>遮罩太浅、文字欠对比</h4>
+          <p>barrier 仅 <code>black α0.32</code>；副标题 <code>bodySmall</code> 灰字直接坐在玻璃上，色斑区域对比度不足 <code>4.5:1</code>。</p>
+        </div></div>
+        <div class="root-cause">
+          <b>一句话根因：</b>现行参数是「低 tint + 增饱和」的组合——它适合干净背景，而账本首页恰恰是<b>高饱和色斑背景</b>，方向反了。
+        </div>
+      </div>
+    </div>
+    <div class="diag-card">
+      <div class="dc-head">
+        <span class="shot">截图 2</span><h3>行程首页 · 顶栏 + 胶囊底栏</h3><span class="sev mid">中等</span>
+      </div>
+      <div class="dc-body">
+        <div class="issue mid"><span class="no">1</span><div>
+          <h4>质感是「蒙雾」不是「玻璃」</h4>
+          <p>只有模糊 + 半透白，缺少 Liquid Glass 的关键光学细节：<b>受光内高光、双向描边、自适应阴影</b>。</p>
+        </div></div>
+        <div class="issue mid"><span class="no">2</span><div>
+          <h4>描边策略在浅色下失效</h4>
+          <p>全周白色描边 <code>α0.28</code> 在白色页面上不可见 → 玻璃边界糊掉，看不出「一块玻璃浮在内容上」。</p>
+        </div></div>
+        <div class="issue mid"><span class="no">3</span><div>
+          <h4>滚动内容经过时透色</h4>
+          <p>蓝色行程卡滚过底栏时，玻璃被「染蓝」，图标辨识度下降（本页下方可看动画对比）。</p>
+        </div></div>
+        <div class="root-cause" style="border-color:rgba(245,166,35,.35);background:rgba(245,166,35,.05)">
+          <b style="color:var(--amber)">结构是对的：</b>截图 2 的三层模型（内容层实色卡 / 导航层玻璃 / 悬浮 FAB）符合 Apple 规范，
+          问题只在<b>材质参数与光学精修</b>，不需要动布局。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ================= 01+ 全量排查 ================= -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">01+</span><h2>全量排查：v2.8 毛玻璃问题全景（约 34 个文件）</h2></div>
+  <p class="sec-desc">对全 lib/ 314 个 Dart 文件做系统性盘点。两张截图只是冰山一角——同类反模式遍布 5 大类。好消息：核心收口（GlassSurface / sheet.dart）本身是健康的，大部分问题在<b style="color:var(--txt)">使用侧</b>。</p>
+  <div class="learn-grid">
+    <div class="learn-card" style="border-color:rgba(239,91,91,.35)">
+      <div class="lc-ico">🚫</div>
+      <h3>A · 玻璃叠玻璃<span class="src">4 处 · 高 2</span></h3>
+      <p style="font-size:12.5px">
+        <b style="color:var(--red)">① bill_detail_sheet</b>：账单详情抽屉内「所属行程」卡又包 GlassSurface → BackdropFilter 嵌套（截图 1 工具箱同款根因）。<br>
+        ② ledger_home 预算卡：玻璃 tint 上再叠 gradient 半透明层。<br>
+        ③ empty_state：玻璃圆盘内再叠渐变，且放进 Sheet 时会套玻璃。<br>
+        ④ trips_home D 环徽章（并入 E 类白字问题）。
+      </p>
+    </div>
+    <div class="learn-card" style="border-color:rgba(239,91,91,.35)">
+      <div class="lc-ico">⌨️</div>
+      <h3>C · 半透明叠玻璃<span class="src">5 处 · 高 1</span></h3>
+      <p style="font-size:12.5px">
+        <b style="color:var(--red)">① amount_keypad</b>：记一笔键盘本体是玻璃 Sheet，键帽却用 α0.6 半透明 → <b>核心记账流程主视觉发灰</b>。<br>
+        ② expense_edit miniChip α0.55 叠玻璃金额卡。<br>
+        ③ stats 排行进度条 α0.7；④ checklist 分段控件 α0.9~0.92（入 Sheet 即双半透）；⑤ bill_detail chip 材质语言不一。
+      </p>
+    </div>
+    <div class="learn-card" style="border-color:rgba(239,91,91,.35)">
+      <div class="lc-ico">🕳️</div>
+      <h3>D · 悬浮层收口缺失<span class="src">6 组 · 高 1</span></h3>
+      <p style="font-size:12.5px">
+        <b style="color:var(--red)">① day_ops_sheet</b>：行程天数增删弹层透明背景但<b>漏包 SheetSurface</b> → 内容与页面文字重叠（sheet.dart 记录过的同根因 bug）。<br>
+        ② share_link_sheet / members_screen：modal 入口不走统一参数。<br>
+        ③ lock_screen PIN 键盘：不透明背景上放了 12 个玻璃键帽 → <b>模糊无内容可糊，纯 GPU 浪费</b>。<br>
+        ④「伪玻璃」4 处：trips_home / trip_detail / trip_share / item_detail 的手写白 α0.18~0.4 签条，无模糊、参数互不一致。
+      </p>
+    </div>
+    <div class="learn-card" style="border-color:rgba(245,166,35,.4)">
+      <div class="lc-ico">🎨</div>
+      <h3>E · 写死黑白不分深浅色<span class="src">7 处 · 高 1</span></h3>
+      <p style="font-size:12.5px">
+        <b style="color:var(--amber)">① trips_home D 环徽章</b>：浅色模式玻璃 tint 是浅色，上面却放 <b>Colors.white 白字白环</b> → 可读性风险。<br>
+        ② trip_detail 白 α0.18~0.35 背景/描边；③ item_detail 白 α0.24~0.4。<br>
+        豁免登记：trip_share 导出图、cover_watermark、qr_scan 黑 scrim（刻意设计）。
+      </p>
+    </div>
+    <div class="learn-card" style="border-color:rgba(36,48,65,1)">
+      <div class="lc-ico">✅</div>
+      <h3>B · 手写 BackdropFilter<span class="src">0 处 · 已收口</span></h3>
+      <p style="font-size:12.5px">全 lib 范围 <code style="font-family:var(--mono);font-size:11px;color:#7dd3fc">BackdropFilter/ImageFilter.blur</code> 仅存在于 glass_surface.dart —— S2 的收口策略是成功的，本次整改只需调 <b>GlassSurface 内部一处</b>即可全局生效。</p>
+    </div>
+    <div class="learn-card" style="border-color:rgba(245,166,35,.4)">
+      <div class="lc-ico">📋</div>
+      <h3>附带发现 · 弹层/提示不统一<span class="src">记录但不属玻璃</span></h3>
+      <p style="font-size:12.5px">① AlertDialog 残留 12 处/8 文件（confirm_sheet.dart 已声明唯一合法形态）；② 手写 SnackBar 约 40 处/30+ 文件（应走 showAppSnackBar）。属一致性债务，建议另立批次机械替换，不混入本次玻璃整改。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 二、先进设计学习 ================= -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">02</span><h2>先学后改：iOS 26 Liquid Glass 核心规范</h2></div>
+  <p class="sec-desc">提炼自 Apple「Adopting Liquid Glass」官方文档与社区完整技术参考（Conor Luddy, 2025-11 / 更新至 iOS 26.4），逐条映射到本项目问题。</p>
+  <div class="learn-grid">
+    <div class="learn-card">
+      <div class="lc-ico">🧊</div>
+      <h3>玻璃只给「浮在内容上的层」<span class="src">层级规则</span></h3>
+      <p>三层模型：<b>Content 层严禁玻璃</b>（列表、卡片、滚动内容）→ Navigation 层是玻璃唯一栖身处（顶栏 / 底栏 / Sheet / FAB / Toast）。
+      截图 2 的结构本身是合规的。</p>
+    </div>
+    <div class="learn-card">
+      <div class="lc-ico">🚫</div>
+      <h3>禁止玻璃叠玻璃<span class="src">GlassEffectContainer</span></h3>
+      <p>玻璃无法正确采样另一块玻璃。多个子元素必须<b>合并为单一玻璃容器</b>，内部条目用实色或 overlay 填充。
+      → 直接命中截图 1 的「Sheet 玻璃 + 条目 α0.5 半透明」反模式。</p>
+    </div>
+    <div class="learn-card">
+      <div class="lc-ico">🎚️</div>
+      <h3>材质分档，按需取「厚」<span class="src">ultraThin → ultraThick</span></h3>
+      <p>Apple 提供五档透明度。大面 Sheet / 对话框应取 <b>thick</b> 档（近实色）保证可读性；
+      顶栏取 thin 档透出滚动内容。现状是「全 App 一个 tint=0.52」，Sheet 与顶栏一样薄，必然压不住背景。</p>
+    </div>
+    <div class="learn-card">
+      <div class="lc-ico">🔍</div>
+      <h3>可读性是硬约束<span class="src">对比度 ≥ 4.5:1</span></h3>
+      <p>忙碌背景的三个官方解法：<b>① 背景暗化 black α0.3 ② 玻璃底渐变加深 ③ 策略性 tint</b>。
+      小字需更重字重 + 更高前景层级。对照截图 1：红斑上的灰字副标题正是违规点。</p>
+    </div>
+    <div class="learn-card">
+      <div class="lc-ico">✨</div>
+      <h3>光学精修造「玻璃感」<span class="src">高光 / 描边 / 阴影</span></h3>
+      <p>社区复刻配方：<b>对角白渐变 0.3→0</b> + <b>内侧 1px 白描边 α0.2~0.55</b> + <b>自适应阴影</b>（文字上方加深、亮背景减弱）。
+      现状单一白描边在浅色页面失效，正是「没有玻璃感、只有雾感」的原因。</p>
+    </div>
+    <div class="learn-card">
+      <div class="lc-ico">🎨</div>
+      <h3>饱和度应「降」不应「增」<span class="src">Tinted / 去饱和</span></h3>
+      <p>模糊已经混合了背景颜色，视觉发「脏」的来源正是残留的高饱和色斑。iOS 26 的 Tinted 模式与系统兜底都是
+      <b>加厚 + 去饱和</b>，而不是增饱和。现行 <code style="font-family:var(--mono);font-size:12px;color:#7dd3fc">saturation=1.35</code> 方向需翻转。</p>
+    </div>
+  </div>
+  <div class="quote">"Glass effects are powerful tools, but <b>restraint creates elegance</b>." —— 玻璃是强大的工具，克制才能产生优雅。（Apple 迁移指南结语）</div>
+</section>
+
+<!-- ================= 三、整改策略 ================= -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">03</span><h2>整改策略：三层修复</h2></div>
+  <p class="sec-desc">不做推倒重来。<code style="font-family:var(--mono);font-size:13px;color:#7dd3fc">GlassSurface</code> 的 API（4 个档位）保持不变，
+  51 个使用文件零改动；只重校准内部参数 + 修正两处结构错误。</p>
+  <div class="strategy">
+    <div class="stg">
+      <div class="ico">🛡️</div>
+      <div>
+        <h3>第一层：压得住<small>背景管理 —— 解决「脏水感」</small></h3>
+        <p>弹窗类场景把「背景 → 玻璃」的光路整体削弱：barrier 加深 + Sheet 材质加厚 + 去饱和，
+        三管齐下让高饱和色斑在进入玻璃前就被中和。顶栏仍保持薄，透出滚动内容。</p>
+        <div class="chip-row">
+          <span class="chip">barrier α <s>0.32</s> → <b style="color:var(--green)">0.38</b></span>
+          <span class="chip">sheet tint <s>0.52</s> → <b style="color:var(--green)">0.68</b></span>
+          <span class="chip">saturation <s>1.35</s> → <b style="color:var(--green)">0.92（去饱和）</b></span>
+          <span class="chip">sheet σ <s>28</s> → <b style="color:var(--green)">32</b></span>
+        </div>
+      </div>
+    </div>
+    <div class="stg">
+      <div class="ico">🧱</div>
+      <div>
+        <h3>第二层：叠得对<small>层级修正 —— 落实「单一玻璃容器」</small></h3>
+        <p>工具箱等 Sheet 内部条目从半透明面改为<b>实色 surfaceContainerHigh</b>，只保留外层容器一块玻璃；
+        在 <code>GlassSurface</code> 文档中登记层级规则，禁止嵌套使用（新增 assert 防回归）。</p>
+        <div class="chip-row">
+          <span class="chip del">ListTile 垫 α0.5 半透明面</span>
+          <span class="chip hot">→ 实色 surfaceContainerHigh + 细描边</span>
+        </div>
+      </div>
+    </div>
+    <div class="stg">
+      <div class="ico">💎</div>
+      <div>
+        <h3>第三层：修得精<small>光学精修 —— 从「蒙雾」到「玻璃」</small></h3>
+        <p>复刻 Liquid Glass 光学配方：<b>顶边受光内高光</b>（inset 0 1px 白）+ <b>双向描边</b>（外圈深色 hairline 保浅色可见 / 内圈白高光）
+        + <b>对角柔光渐变</b>收窄至 30% + <b>双层阴影</b>（大柔环影 + 近距关键影）。</p>
+        <div class="chip-row">
+          <span class="chip">inset 高光 0 1px white α0.95</span>
+          <span class="chip">外描边 outlineVariant α0.35</span>
+          <span class="chip">内描边 white α0.55</span>
+          <span class="chip">柔光 stop <s>0.38</s> → 0.30</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ================= 四、对比演示 ================= -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">04</span><h2>效果对比（CSS 光学模拟）</h2></div>
+  <p class="sec-desc">左侧按现行参数复刻截图观感，右侧为整改后。行程首页为<b>动态模拟</b>：卡片缓慢滚动，可直接观察玻璃在内容经过时的表现。</p>
+
+  <!-- 场景 A：工具箱 -->
+  <h3 style="font-size:17px;font-weight:800;margin:8px 0 18px">场景 A · 账本工具箱 Sheet（对应截图 1）</h3>
+  <div class="phone-row">
+    <div class="phone-block">
+      <div class="phone-label"><span class="pl-tag before">BEFORE · 现状</span><span class="pl-note">色斑透出 · 玻璃叠玻璃</span></div>
+      <div class="phone">
+        <div class="scene">
+          <div class="ledger-bg">
+            <div class="blob blob-red"></div>
+            <div class="blob blob-green"></div>
+            <div class="blob blob-green2"></div>
+            <div class="statusbar"><span>09:11</span><span class="sb-icons">▲ ▮ ▉</span></div>
+            <div class="toolrow"><span class="tb">🎯</span><span class="tb">🔁</span><span class="tb">👤</span><span class="tb">🔔</span><span class="tb">⬛</span><span class="tb">▦</span></div>
+            <div class="ledger-cards">
+              <div class="ledger-card alert"><div class="bar"></div><div class="bar2"></div></div>
+              <div class="ledger-card"><div class="bar"></div><div class="bar2"></div></div>
+              <div class="ledger-card"><div class="bar"></div><div class="bar2"></div></div>
+            </div>
+          </div>
+          <!-- barrier before -->
+          <div style="position:absolute;inset:0;background:rgba(0,0,0,.32)"></div>
+          <div class="sheet sheet-before">
+            <div class="handle"></div>
+            <div class="sheet-head"><div class="t">工具箱</div><div class="st">低频功能都收在这里</div></div>
+            <div class="tool-list">
+              <div class="tool-item before-item"><span class="ico">🕘</span><div class="tx"><div class="tt">变更记录</div><div class="ts">查看团内每一条数据改动痕迹</div></div><span class="chev">›</span></div>
+              <div class="tool-item before-item"><span class="ico">🔗</span><div class="tx"><div class="tt">局域网同步</div><div class="ts">与身边设备点对点互传数据（不上云）</div></div><span class="chev">›</span></div>
+              <div class="tool-item before-item"><span class="ico">📤</span><div class="tx"><div class="tt">CSV 导入</div><div class="ts">从表格文件批量带入账单</div></div><span class="chev">›</span></div>
+              <div class="tool-item before-item"><span class="ico">🗂️</span><div class="tx"><div class="tt">分类管理</div><div class="ts">内置分类之外的自定义分类</div></div><span class="chev">›</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>复刻的问题：</b><ul>
+        <li>红色预算卡 / 绿色元素以「污渍」形态透出玻璃</li>
+        <li>条目是半透明面叠在玻璃上（玻璃叠玻璃）</li>
+        <li>副标题灰字坐在红斑上，对比度不足</li>
+      </ul></div>
+    </div>
+    <div class="phone-block">
+      <div class="phone-label"><span class="pl-tag after">AFTER · 整改后</span><span class="pl-note">强模糊 + 去饱和 + 实色条目 · 保持透度</span></div>
+      <div class="phone">
+        <div class="scene">
+          <div class="ledger-bg">
+            <div class="blob blob-red"></div>
+            <div class="blob blob-green"></div>
+            <div class="blob blob-green2"></div>
+            <div class="statusbar"><span>09:11</span><span class="sb-icons">▲ ▮ ▉</span></div>
+            <div class="toolrow"><span class="tb">🎯</span><span class="tb">🔁</span><span class="tb">👤</span><span class="tb">🔔</span><span class="tb">⬛</span><span class="tb">▦</span></div>
+            <div class="ledger-cards">
+              <div class="ledger-card alert"><div class="bar"></div><div class="bar2"></div></div>
+              <div class="ledger-card"><div class="bar"></div><div class="bar2"></div></div>
+              <div class="ledger-card"><div class="bar"></div><div class="bar2"></div></div>
+            </div>
+          </div>
+          <!-- barrier after：适度加深 -->
+          <div style="position:absolute;inset:0;background:rgba(0,0,0,.38)"></div>
+          <div class="sheet sheet-after">
+            <div class="handle"></div>
+            <div class="sheet-head"><div class="t">工具箱</div><div class="st">低频功能都收在这里</div></div>
+            <div class="tool-list">
+              <div class="tool-item after-item"><span class="ico">🕘</span><div class="tx"><div class="tt">变更记录</div><div class="ts">查看团内每一条数据改动痕迹</div></div><span class="chev">›</span></div>
+              <div class="tool-item after-item"><span class="ico">🔗</span><div class="tx"><div class="tt">局域网同步</div><div class="ts">与身边设备点对点互传数据（不上云）</div></div><span class="chev">›</span></div>
+              <div class="tool-item after-item"><span class="ico">📤</span><div class="tx"><div class="tt">CSV 导入</div><div class="ts">从表格文件批量带入账单</div></div><span class="chev">›</span></div>
+              <div class="tool-item after-item"><span class="ico">🗂️</span><div class="tx"><div class="tt">分类管理</div><div class="ts">内置分类之外的自定义分类</div></div><span class="chev">›</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>关键变化：</b><ul>
+        <li>barrier α0.32→0.38，高饱和色斑先被压暗一轮</li>
+        <li>σ28→32 + 去饱和 0.92，残留色晕被中和为柔光而非污渍</li>
+        <li>tint 0.52→0.68（仍保留 32% 透度，玻璃感不丢），副标题改中灰 + 500 字重</li>
+        <li>条目改实色白卡，容器是唯一一块玻璃</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <!-- 场景 B：行程首页 -->
+  <h3 style="font-size:17px;font-weight:800;margin:44px 0 18px">场景 B · 行程首页 顶栏 + 胶囊底栏（对应截图 2 · 动态滚动）</h3>
+  <div class="phone-row">
+    <div class="phone-block">
+      <div class="phone-label"><span class="pl-tag before">BEFORE · 现状</span><span class="pl-note">蒙雾感 · 滚动时被染蓝</span></div>
+      <div class="phone">
+        <div class="scene">
+          <div class="trip-bg">
+            <div class="trip-scroll">
+              <div style="height:64px"></div>
+              <div class="trip-toprow"><span>⬛</span><span>🎯</span><span>👤</span><span>🔔</span><span>▦</span></div>
+              <div class="trip-title">芥舟</div>
+              <div class="trip-sec">已结束<small>2 个行程</small></div>
+              <div class="trip-card"><span class="pill">● 已结束</span><div class="city">厦门</div><div class="route">📍 厦门，泉州，福州，漳州 · 9月12日-13日</div><span class="days">共 2 天</span><span class="plane">✈️</span><div class="prog"><i></i></div></div>
+              <div class="trip-card"><span class="pill">● 已结束</span><div class="city">成都三日游</div><div class="route">📍 成都-北京 · 8月29日-31日</div><span class="days">共 3 天</span><span class="plane">✈️</span><div class="prog"><i></i></div></div>
+              <div class="dest-card"><span class="di">📖</span><div><div class="dt">目的地攻略</div><div class="ds">50 座热门城市 · 每城 15 分钟</div></div><span style="margin-left:auto;color:#c0c6cd">›</span></div>
+            </div>
+          </div>
+          <div class="appbar appbar-before"><div class="ab-inner" style="opacity:0">芥舟</div></div>
+          <div class="fab">＋ 新建行程</div>
+          <div class="navbar navbar-before">
+            <div class="nb">🤖<span>AI</span></div>
+            <div class="nb">📋<span>清单</span></div>
+            <div class="nb on">🧳<span>行程</span></div>
+            <div class="nb">💰<span>账本</span></div>
+            <div class="nb">👤<span>我的</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>复刻的问题：</b><ul>
+        <li>蓝卡滚过底栏时玻璃被染蓝，图标辨识度下降</li>
+        <li>白色描边在白色页面不可见，边界糊掉</li>
+        <li>顶栏偏「雾」，缺少受光边与方向性</li>
+      </ul></div>
+    </div>
+    <div class="phone-block">
+      <div class="phone-label"><span class="pl-tag after">AFTER · 整改后</span><span class="pl-note">thin/regular 分档 + 双描边 + 去饱和</span></div>
+      <div class="phone">
+        <div class="scene">
+          <div class="trip-bg">
+            <div class="trip-scroll">
+              <div style="height:64px"></div>
+              <div class="trip-toprow"><span>⬛</span><span>🎯</span><span>👤</span><span>🔔</span><span>▦</span></div>
+              <div class="trip-title">芥舟</div>
+              <div class="trip-sec">已结束<small>2 个行程</small></div>
+              <div class="trip-card"><span class="pill">● 已结束</span><div class="city">厦门</div><div class="route">📍 厦门，泉州，福州，漳州 · 9月12日-13日</div><span class="days">共 2 天</span><span class="plane">✈️</span><div class="prog"><i></i></div></div>
+              <div class="trip-card"><span class="pill">● 已结束</span><div class="city">成都三日游</div><div class="route">📍 成都-北京 · 8月29日-31日</div><span class="days">共 3 天</span><span class="plane">✈️</span><div class="prog"><i></i></div></div>
+              <div class="dest-card"><span class="di">📖</span><div><div class="dt">目的地攻略</div><div class="ds">50 座热门城市 · 每城 15 分钟</div></div><span style="margin-left:auto;color:#c0c6cd">›</span></div>
+            </div>
+          </div>
+          <div class="appbar appbar-after"><div class="ab-inner" style="opacity:0">芥舟</div></div>
+          <div class="fab">＋ 新建行程</div>
+          <div class="navbar navbar-after">
+            <div class="nb">🤖<span>AI</span></div>
+            <div class="nb">📋<span>清单</span></div>
+            <div class="nb on">🧳<span>行程</span></div>
+            <div class="nb">💰<span>账本</span></div>
+            <div class="nb">👤<span>我的</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="anno"><b>关键变化：</b><ul>
+        <li>底栏 regular 档：tint 0.60 + 去饱和，蓝卡经过不再染色</li>
+        <li>顶栏 thin 档：σ24 + tint 0.44，保留滚动内容透出感，滚动加深逻辑保留</li>
+        <li>外圈深色 hairline 在白底上「画出」玻璃轮廓，顶边内高光制造受光感</li>
+        <li>阴影改柔（blur36 / α0.13），玻璃「浮」感更自然</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+<!-- ================= 五、参数对照表 ================= -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">05</span><h2>Token 参数对照表</h2></div>
+  <p class="sec-desc">档位（navBar / sheet / floatingCard / overlay）API 不变，内部重映射为材质分档：<b style="color:var(--txt)">navBar→thin · sheet/floatingCard→regular(→thick) · overlay→ultraThick 预留</b>。</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Token / 位置</th><th>现状</th><th>新值（按档位）</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td><code>GlassTokens.saturation</code></td><td><code><span class="old">1.35</span></code></td><td><code><span class="new">0.92</span></code></td><td class="why">核心翻转：模糊后应<b>去饱和</b>中和色斑，而非增饱和提艳（脏感主因之一）</td></tr>
+        <tr><td><code>tintAlphaLight</code></td><td><code><span class="old">0.52</span> 全局单档</code></td><td><code><span class="new">thin .44 / regular .58 / thick .68</span></code></td><td class="why">材质分档但保住透度：Sheet 仍有 ~32% 透光，靠去饱和而非加白压脏</td></tr>
+        <tr><td><code>tintAlphaDark</code></td><td><code><span class="old">0.42</span></code></td><td><code><span class="new">thin .38 / regular .48 / thick .54</span></code></td><td class="why">深色模式同步分档，深色仍更低以透光感</td></tr>
+        <tr><td><code>GlassTokens.sigma</code></td><td><code><span class="old">28</span> 固定</code></td><td><code><span class="new">thin 24 / regular 28 / thick 32</span></code></td><td class="why">厚材质配大 σ，让残留色斑彻底融开</td></tr>
+        <tr><td><code>highlightAlphaLight</code></td><td><code><span class="old">0.65</span> 对角渐变 stop .38</code></td><td><code><span class="new">0.55 + inset 顶边线 + stop 0.30</span></code></td><td class="why">「顶边受光线 + 对角柔光」双层高光，更接近真实受光玻璃</td></tr>
+        <tr><td><code>edgeAlphaLight</code></td><td><code><span class="old">白 0.28</span> 单描边</code></td><td><code><span class="new">内白 0.55 + 外深 outlineVariant 0.35</span></code></td><td class="why">双描边：深色 hairline 负责在浅背景上勾出轮廓</td></tr>
+        <tr><td>阴影 ambient</td><td><code>blur40 y18 α0.10</code></td><td><code><span class="new">blur36 y14 α0.13</span></code></td><td class="why">略收紧更「浮」；档位倍率体系保留</td></tr>
+        <tr><td>阴影 key</td><td><code>blur10 y3 α0.08</code></td><td><code><span class="new">blur6 y2 α0.06</span></code></td><td class="why">关键影更细，避免「脏边」</td></tr>
+        <tr class="hl"><td><code>sheet.dart</code> barrier</td><td><code><span class="old">black α0.32</span></code></td><td><code><span class="new">black α0.38</span></code></td><td class="why">Apple「忙碌背景解法①」：适度暗化背景，但不至于压死玻璃感</td></tr>
+        <tr class="hl"><td>工具箱条目（ledger_toolbox_sheet）</td><td><code><span class="old">surfaceContainerHighest α0.5</span></code></td><td><code><span class="new">实色 surfaceContainerHigh</span></code></td><td class="why">消除玻璃叠玻璃；副标题字重 500 + 中灰前景</td></tr>
+        <tr><td>降级路径</td><td><code>disableAnimations → 不透明</code></td><td><code><span class="new">保留</span></code></td><td class="why">Reduce Transparency 兼容不动</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 六、施工范围 ================= -->
+<section class="wrap">
+  <div class="sec-head"><span class="sec-no">06</span><h2>预计施工范围：4 个批次 · 约 34 个文件</h2></div>
+  <p class="sec-desc">按「公共组件一处生效 → 高优页面 → 中优批次 → 豁免登记」排序。每批完成后可独立验收。</p>
+  <div class="scope-grid">
+    <div class="card">
+      <h3 style="font-size:15px;font-weight:800;margin-bottom:6px">批次一 · 材质基座（5 文件，全局生效）</h3>
+      <ul class="scope-list do">
+        <li><span class="pin">▸</span><span><b>Token 重校准 + 分档常量</b>（全局 σ / tint / 去饱和 / 双描边 / 高光 / 阴影）<br><span class="f">lib/theme/tokens.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>GlassSurface 内部重映射</b>（51 处使用全部受益，API 不变 + 防嵌套 assert）<br><span class="f">lib/shared/widgets/glass_surface.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>barrier α0.38 + 键盘避让保持</b><br><span class="f">lib/shared/widgets/sheet.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>工具箱条目改实色 + 文字层级</b>（截图 1 主场景）<br><span class="f">lib/features/ledger/widgets/ledger_toolbox_sheet.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>记一笔键盘键帽改不透明</b>（C 类最高危，核心流程）<br><span class="f">lib/features/ledger/widgets/amount_keypad.dart</span></span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px;font-weight:800;margin-bottom:6px">批次二 · 高优页面（6 文件）</h3>
+      <ul class="scope-list do">
+        <li><span class="pin">▸</span><span><b>账单详情抽屉去嵌套</b>：「所属行程」GlassSurface 改实色卡（A-①）<br><span class="f">lib/features/ledger/widgets/bill_detail_sheet.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>行程首页</b>：D 环徽章白字改自适应色 + 两个伪玻璃 pill 收编（A-④/E-①/D-④）<br><span class="f">lib/features/trips/screens/trips_home_screen.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>行程天数增删弹层补包 SheetSurface</b>（D-① 内容重叠 bug）<br><span class="f">lib/features/trips/widgets/day_ops_sheet.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>记一笔 miniChip 改实色</b>（C-②）<br><span class="f">lib/features/ledger/screens/expense_edit_screen.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>应用锁键盘去伪玻璃</b>：12 键帽 → 单面材质，消除 12 个无效 BackdropFilter（D-③）<br><span class="f">lib/features/lock/lock_screen.dart</span></span></li>
+        <li><span class="pin">▸</span><span><b>账本首页预算卡去双层 tint</b>（A-②）<br><span class="f">lib/features/ledger/screens/ledger_home_screen.dart</span></span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px;font-weight:800;margin-bottom:6px">批次三 · 中优一致性（约 15 文件）</h3>
+      <ul class="scope-list do">
+        <li><span class="pin">▸</span><span><b>伪玻璃签条统一参数</b>（trip_detail / trip_share / item_detail，白 α 各自为政 → 统一 token）</span></li>
+        <li><span class="pin">▸</span><span><b>空状态组件防嵌套 + 渐变去重</b>（empty_state）</span></li>
+        <li><span class="pin">▸</span><span><b>顶栏圆钮收编 GlassSurface</b>（stagger_in HeaderIconButton，波及 3 个页面顶栏）</span></li>
+        <li><span class="pin">▸</span><span><b>modal 入口统一</b>（share_link_sheet / members_screen 走统一 barrier）</span></li>
+        <li><span class="pin">▸</span><span><b>低优微调</b>：stats 进度条、checklist 分段控件、bill_detail chip 材质统一</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px;font-weight:800;margin-bottom:6px">豁免登记 + 明确不做</h3>
+      <ul class="scope-list dont">
+        <li><span class="pin">○</span><span><b>豁免（刻意设计，仅登记）</b>：trip_share 导出图白底、cover_watermark、qr_scan 黑 scrim、category_icon_box 高光</span></li>
+        <li><span class="pin">✕</span><span><b>AlertDialog 12 处 / SnackBar 40 处</b>：一致性债务，建议另立 v2.8.3.2 批次机械替换，不混入玻璃整改</span></li>
+        <li><span class="pin">✕</span><span><b>不编译 APK / 不提交 git</b></span></li>
+        <li><span class="pin">✕</span><span><b>不改 GlassSurface 公开 API</b>，不动页面布局结构，不做全屏 barrier 模糊</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 审批区 ================= -->
+<section class="wrap">
+  <div class="approve">
+    <h2>🧊 以上为 v2.8.3.1 毛玻璃整改完整方案（全量版）</h2>
+    <p>批准后按「批次一（材质基座，5 文件全局生效）→ 批次二（高优页面 6 文件）→ 批次三（一致性 15 文件）」施工；GlassSurface API 保持不变，不编译 APK、不提交 git。</p>
+    <div class="btn-row">
+      <div class="btn primary">批准全部 3 批次，开始施工<small>材质基座 + 高优页面 + 一致性</small></div>
+      <div class="btn ghost">先批批次一 + 二<small>一致性批次（批次三）验收后再说</small></div>
+      <div class="btn">需要调整<small>请在对话中说明修改意见</small></div>
+    </div>
+    <div class="hint">※ 本页按钮为示意，请直接在对话中回复审批意见。</div>
+  </div>
+</section>
+
+<footer>v2.8.3.1 · 毛玻璃材质整改设计审核稿 · 基于 iOS 26 Liquid Glass / Glassmorphism 2025 最佳实践 · 2026-09-19</footer>
+</body>
+</html>
+</body>
+</html>

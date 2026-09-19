@@ -22,6 +22,7 @@ import '../../ledger/widgets/category_icon_box.dart';
 import '../today_providers.dart';
 import '../widgets/money_hero_text.dart';
 import '../widgets/today_surface.dart';
+import '../../../theme/app_icons.dart';
 
 /// 今日花销详情：类目分布 + 流水。
 class TodaySpendScreen extends ConsumerStatefulWidget {
@@ -86,7 +87,7 @@ class _TodaySpendScreenState extends ConsumerState<TodaySpendScreen> {
           ? const Center(child: CircularProgressIndicator())
           : !summary.hasLedger
               ? EmptyState(
-                  emoji: '🔗',
+                  icon: Icons.link_rounded,
                   title: '关联账本后可用',
                   message: '把这趟行程挂到一本账本上，今日花销与预算余量自动汇总。',
                   actionLabel: '去关联账本',
@@ -100,7 +101,7 @@ class _TodaySpendScreenState extends ConsumerState<TodaySpendScreen> {
                       const Padding(
                         padding: EdgeInsets.only(top: Spacing.xl),
                         child: EmptyState(
-                          emoji: '🧾',
+                          icon: AppIcons.wallet,
                           title: '今天还没有记账',
                           message: '旅途中的每笔开销都记下来，回看不心虚',
                         ),

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/date_utils.dart';
 import '../../../data/db/database.dart';
@@ -13,13 +14,19 @@ import '../../../data/providers.dart';
 import '../../../export/share_helper.dart';
 
 import '../../../shared/app_meta.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/pressable_scale.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
+import '../../../theme/app_icons.dart';
+import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/progress_ring.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/widgets/join_by_qr_tile.dart';
+import '../widgets/cover_watermark.dart';
 import '../../today/widgets/today_card.dart';
 import '../guide_city_picker.dart' show showGuideCityPicker;
 import '../guide_widgets.dart' show GuideRouteArgs;
@@ -38,7 +45,25 @@ class TripsHomeScreen extends ConsumerStatefulWidget {
 
 class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
   final ScrollController _scroll = ScrollController();
+  // V2.8.2 S3：搜索 + 排序状态
+  bool _showSearch = false;
+  final _searchController = TextEditingController();
+  String _query = '';
+  String _sortMode = 'recent'; // recent | start | created（SharedPreferences app.trips.sort）
   bool _showArchived = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // V2.8.2 S3：恢复上次排序（app.trips.sort 持久化）
+    Future(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('app.trips.sort');
+      if (saved != null && saved != _sortMode && mounted) {
+        setState(() => _sortMode = saved);
+      }
+    });
+  }
 
   // 流与 build 解耦（防反复刷新）：只建一次，drift 流可安全重复订阅
   Stream<List<Trip>>? _tripsStream;
@@ -85,31 +110,98 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
             onPressed: _openMapSettings,
             icon: const Icon(Icons.tune_rounded),
           ),
+          // V2.8.2 S3：搜索 + 排序
+          IconButton(
+            tooltip: '搜索行程',
+            onPressed: () => setState(() => _showSearch = !_showSearch),
+            icon: const Icon(Icons.search_rounded),
+          ),
+          PopupMenuButton<String>(
+            tooltip: '排序方式',
+            icon: const Icon(Icons.sort_rounded),
+            onSelected: (v) async {
+              setState(() => _sortMode = v);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('app.trips.sort', v);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'recent', child: Text('最近活动')),
+              PopupMenuItem(value: 'start', child: Text('出发日期')),
+              PopupMenuItem(value: 'created', child: Text('创建时间')),
+            ],
+          ),
         ],
       ),
       body: Stack(
         children: [
+          if (_showSearch)
+            Positioned(
+              left: Spacing.xl,
+              right: Spacing.xl,
+              top: 0,
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _query = '');
+                    },
+                  ),
+                  hintText: '搜行程名或目的地…',
+                  isDense: true,
+                ),
+              ),
+            ),
           StreamBuilder<List<Trip>>(
         stream: _tripsStream ??= ref.read(tripsRepoProvider).watchTrips(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const _HomeSkeleton();
+            // V2.8.2 S6：骨架→内容 300ms 淡接 morph
+            return const AnimatedSwitcher(
+              duration: Duration(milliseconds: 300),
+              child: _HomeSkeleton(key: ValueKey('trips-skeleton')),
+            );
           }
           if (snap.hasError) {
-            return EmptyState(
-                emoji: '😵', title: '加载失败', message: '${snap.error}');
+            return AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: KeyedSubtree(
+                key: const ValueKey('trips-error'),
+                child: EmptyState(
+                    icon: Icons.error_outline_rounded,
+                    title: '加载失败',
+                    message: '${snap.error}'),
+              ),
+            );
           }
           final trips = snap.data ?? const <Trip>[];
           if (trips.isEmpty) {
-            return EmptyState(
-              emoji: '🧭',
-              title: copy(CopyTokens.tripsEmpty),
-              message: copy(CopyTokens.tripsEmptyAction),
-              actionLabel: '新建行程',
-              onAction: _createTrip,
+            return AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: KeyedSubtree(
+                key: const ValueKey('trips-empty'),
+                child: EmptyState(
+                  emoji: '🧭',
+                  title: copy(CopyTokens.tripsEmpty),
+                  message: copy(CopyTokens.tripsEmptyAction),
+                  actionLabel: '新建行程',
+                  onAction: _createTrip,
+                ),
+              ),
             );
           }
-          return _buildGroups(context, trips);
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: KeyedSubtree(
+              key: const ValueKey('trips-content'),
+              child: _buildGroups(context, trips),
+            ),
+          );
         },
       ),
           Positioned(
@@ -160,11 +252,33 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
       }
     }
     int sortAsc(Trip a, Trip b) => a.startEpochDay.compareTo(b.startEpochDay);
-    ongoing.sort(sortAsc);
-    upcoming.sort(sortAsc);
-    planning.sort(sortAsc);
-    ended.sort((a, b) => b.endEpochDay.compareTo(a.endEpochDay));
+    // V2.8.2 S3：排序菜单（最近活动 = updatedAt desc / 出发日期 / 创建时间）
+    if (_sortMode == 'created') {
+      final desc = (Trip a, Trip b) => b.createdAt.compareTo(a.createdAt);
+      ongoing.sort(desc);
+      upcoming.sort(desc);
+      planning.sort(desc);
+      ended.sort(desc);
+    } else if (_sortMode == 'recent') {
+      final desc = (Trip a, Trip b) => b.updatedAt.compareTo(a.updatedAt);
+      ongoing.sort(desc);
+      upcoming.sort(desc);
+      planning.sort(desc);
+      ended.sort((a, b) => b.endEpochDay.compareTo(a.endEpochDay));
+    } else {
+      ongoing.sort(sortAsc);
+      upcoming.sort(sortAsc);
+      planning.sort(sortAsc);
+      ended.sort((a, b) => b.endEpochDay.compareTo(a.endEpochDay));
+    }
     archived.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    // 搜索过滤（行程名 + 目的地 contains，大小写不敏感）
+    String _hay(Trip t) =>
+        (t.name + ' ' + t.destination).toLowerCase().trim();
+    final q = _query.toLowerCase().trim();
+    List<Trip> filtered(List<Trip> l) => q.isEmpty
+        ? l
+        : l.where((t) => _hay(t).contains(q)).toList();
 
     final children = <Widget>[];
     var stagger = 0;
@@ -180,10 +294,10 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
       }
     }
 
-    group('进行中', ongoing);
-    group('即将出发', upcoming);
-    group('规划中', planning);
-    group('已结束', ended);
+    group('进行中', filtered(ongoing));
+    group('即将出发', filtered(upcoming));
+    group('规划中', filtered(planning));
+    group('已结束', filtered(ended));
     if (archived.isNotEmpty) {
       children.add(SectionHeader(title: '已归档', trailingLabel: null,
           subtitle: '${archived.length} 个行程'));
@@ -301,7 +415,7 @@ class _GuideEntryCard extends ConsumerWidget {
 
 /// 首页加载骨架
 class _HomeSkeleton extends StatelessWidget {
-  const _HomeSkeleton();
+  const _HomeSkeleton({super.key});
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -356,21 +470,28 @@ class _TripCard extends ConsumerWidget {
     );
     final progress =
         tripProgress(status, trip.startEpochDay, trip.endEpochDay, today);
-    // 不再做 Hero 转场：详情页已移除对应 Hero；保留 GlobalKey 子树只会
-    // 增加路由过渡期框架断言风险（_elements.contains / duplicate hero）。
-    return Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: AppRadius.card,
-          onTap: () => _open(context),
-          onLongPress: () => _showOps(context, ref),
-          child: Container(
+    // V2.8.2 S3：进行中强化（D环+光晕描边）/ 已结束降饱和
+    final isOngoing = status == TripLifeStatus.ongoing;
+    final isEnded = status == TripLifeStatus.ended;
+    final cardCore = Container(
             height: 176,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               gradient: CoverGradients.gradientFor(trip.cover),
               borderRadius: AppRadius.card,
+              // V2.8.2 S3：进行中整卡光晕描边（primary α0.85 1.5px + 外光晕）
+              border: isOngoing
+                  ? Border.all(
+                      color: scheme.primary.withValues(alpha: 0.85),
+                      width: 1.5)
+                  : null,
               boxShadow: [
+                if (isOngoing)
+                  BoxShadow(
+                    color: scheme.primary.withValues(alpha: 0.35),
+                    blurRadius: 22,
+                    offset: const Offset(0, 8),
+                  ),
                 BoxShadow(
                   color: scheme.shadow.withValues(alpha: 0.18),
                   blurRadius: 20,
@@ -381,14 +502,18 @@ class _TripCard extends ConsumerWidget {
             child: Stack(
               children: [
                 Positioned(
-                  right: -4,
+                  right: 12,
                   top: 0,
                   bottom: 0,
                   child: Center(
                     child: ParallaxBox(
                       scrollController: scrollController,
-                      child: Text(trip.emoji,
-                          style: const TextStyle(fontSize: 86, height: 1)),
+                      // V2.8.2 S3：封面图标水印（trip.emoji 数据字段不动，
+                      // 渲染层换 52px 白 45% 水印）
+                      child: CoverWatermark(
+                        icon: AppIcons.compass,
+                        emoji: trip.emoji,
+                      ),
                     ),
                   ),
                 ),
@@ -451,9 +576,84 @@ class _TripCard extends ConsumerWidget {
                 ),
               ],
             ),
-          ),
+        );
+
+    // V2.8.2 S3：已结束组降饱和（saturation 0.5）；进行中 D 环叠层
+    final cardVisual = isEnded
+        ? ColorFiltered(
+            colorFilter: const ColorFilter.matrix(<double>[
+              0.5, 0.5, 0.5, 0, 0, //
+              0.5, 0.5, 0.5, 0, 0, //
+              0.5, 0.5, 0.5, 0, 0, //
+              0, 0, 0, 1, 0,
+            ]),
+            child: cardCore)
+        : cardCore;
+
+    // V2.8.2 S6：行程卡接 PressableScale（按压 0.97 缩放；点按仍由内层
+    // InkWell 承接，长按操作抽屉不动）
+    return PressableScale(
+      onTap: () => _open(context),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: AppRadius.card,
+          onTap: () => _open(context),
+          onLongPress: () => _showOps(context, ref),
+          child: Stack(
+          children: [
+            if (isOngoing)
+              Positioned(
+                right: 12,
+                top: 12,
+                child: GlassSurface(
+                  level: GlassLevel.floatingCard,
+                  borderRadius: BorderRadius.circular(999),
+                  child: SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: Stack(alignment: Alignment.center, children: [
+                      // V2.8.3.1：玻璃 tint 是浅/深自适应的，文字与进度环不能
+                      // 写死 Colors.white（浅色模式浅玻璃上白字不可读），
+                      // 改 scheme.onSurface 自适应前景。
+                      Builder(builder: (context) {
+                        final on = Theme.of(context).colorScheme.onSurface;
+                        return Stack(alignment: Alignment.center, children: [
+                          ProgressRing(
+                            value: (progress ?? 0).clamp(0.0, 1.0),
+                            size: 38,
+                            strokeWidth: 3.5,
+                            color: on,
+                            trackColor: on.withValues(alpha: 0.25),
+                          ),
+                          Text(
+                            'D${_currentDayOf(status, trip, today)}',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: on,
+                                fontFeatures: AppTextStyles.tabularFigures),
+                          ),
+                        ]);
+                      }),
+                    ]),
+                  ),
+                ),
+              ),
+            cardVisual,
+          ],
         ),
+      ),
+      ),
     );
+  }
+
+  /// D 环文案：当前天（第几天，1 起，夹在 1..总天数）。
+  int _currentDayOf(TripLifeStatus status, Trip trip, int today) {
+    if (today < trip.startEpochDay) return 1;
+    final total = tripTotalDays(trip.startEpochDay, trip.endEpochDay);
+    final d = today - trip.startEpochDay + 1;
+    return d.clamp(1, total);
   }
 }
 
@@ -470,9 +670,11 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.22),
+        // V2.8.3.1：封面签条统一走 GlassTokens（有意叠于媒体之上，不模糊）
+        color: Colors.white.withValues(alpha: GlassTokens.coverPillFillAlpha),
         borderRadius: AppRadius.capsule,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+        border: Border.all(
+            color: Colors.white.withValues(alpha: GlassTokens.coverPillBorderAlpha)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -506,7 +708,8 @@ class _GlassChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
+        // V2.8.3.1：封面签条统一走 GlassTokens
+        color: Colors.white.withValues(alpha: GlassTokens.coverPillFillAlpha),
         borderRadius: AppRadius.capsule,
       ),
       child: Text(label,
@@ -769,18 +972,18 @@ class _TripOpsSheet extends ConsumerWidget {
             label: '删除行程',
             subtitle: '安排、相册将一并删除，账单自动解绑',
             danger: true,
-            onTap: () {
+            onTap: () async {
               Navigator.of(context).pop();
-              showDangerConfirmSheet(
-                pageContext,
+              // V2.8.2 S6：并入统一 L2 危险确认（showDangerConfirm）
+              final ok = await showDangerConfirm(
+                context: pageContext,
                 title: '删除「${trip.name}」？',
-                message: '此操作不可恢复，关联账单会保留但解除绑定。',
-                onConfirm: () async {
-                  HapticFeedback.mediumImpact();
-                  await repo.deleteTrip(trip.id); // ASSUMED(t2): 同时置空 expenses.tripId/tripItemId
-                  if (pageContext.mounted) _toast(pageContext, '行程已删除');
-                },
+                body: '删除 1 个行程：安排、相册一并删除，关联账单保留但解绑，不可恢复。',
               );
+              if (!ok) return;
+              HapticFeedback.mediumImpact();
+              await repo.deleteTrip(trip.id); // ASSUMED(t2): 同时置空 expenses.tripId/tripItemId
+              if (pageContext.mounted) _toast(pageContext, '行程已删除');
             },
           ),
         ],

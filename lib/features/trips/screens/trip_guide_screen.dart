@@ -36,8 +36,10 @@ import '../../../features/ledger/ledger_models.dart' show TripCardView;
 import '../../../features/ledger/ledger_providers.dart' show allTripsProvider;
 import '../../../platform/open_external.dart';
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/sheet.dart';
+import '../../../theme/app_icons.dart';
 import '../../../theme/tokens.dart';
 import '../guide_city_picker.dart';
 import '../guide_widgets.dart';
@@ -282,22 +284,15 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
   }
 
   Future<void> _clearAiContent(String cityKey) async {
-    final ok = await showDialog<bool>(
+    // V2.8.2 S6：AlertDialog → 统一 L2 确认抽屉（中性确认）
+    final ok = await showConfirmSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(copy('guide.clearAiConfirm')),
-        content: Text(copy('guide.clearAiConfirmBody')),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(copy('guide.cancel'))),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(copy('guide.clearAi'))),
-        ],
-      ),
+      title: copy('guide.clearAiConfirm'),
+      body: copy('guide.clearAiConfirmBody'),
+      confirmLabel: copy('guide.clearAi'),
+      cancelLabel: copy('guide.cancel'),
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     await ref.read(guideServiceProvider).clearCityOverride(cityKey);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -826,12 +821,27 @@ class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
     final link = ref.watch(guideLinkProvider(tid)).valueOrNull;
     final days = link?.daysFor(guideRef.format()) ?? const <int>[];
     if (days.isNotEmpty) {
-      return Text(
-        '已安排 · 第 ${days.join('、')} 天',
-        style: TextStyle(
-          fontSize: AppFontSizes.caption,
-          fontWeight: FontWeight.w600,
+      // V2.8.2 S4：状态徽记 —— primary 实底白字胶囊 + 日历 icon
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
           color: scheme.primary,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(AppIcons.calendar, size: 12, color: scheme.onPrimary),
+            const SizedBox(width: 4),
+            Text(
+              '已安排 · 第 ${days.join('、')} 天',
+              style: TextStyle(
+                fontSize: AppFontSizes.caption,
+                fontWeight: FontWeight.w700,
+                color: scheme.onPrimary,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -839,33 +849,62 @@ class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
         context, scheme, tid, guideRef, link?.isWishlisted(guideRef.format()) ?? false);
   }
 
+  /// V2.8.2 S4：双动作主次化 —— 「直接排」Filled 小号 36 高（calendar icon）
+  /// +「先想去」Outlined（bookmark icon），间距 8。
+  /// 已安排/已在想去态的隐藏逻辑不动（guideRef 参数逐字段不改）。
   Widget _actions(BuildContext context, ColorScheme scheme, String? tid,
       GuideRef guideRef, bool wished) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _entryButton(context, label: '直接排', onTap: () => _onPlace(guideRef)),
-        const SizedBox(width: Spacing.xs),
+        FilledButton.icon(
+          onPressed: _busy ? null : () => _onPlace(guideRef),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+            minimumSize: const Size(0, 36),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: TextStyle(
+                fontSize: AppFontSizes.caption, fontWeight: FontWeight.w700),
+          ),
+          icon: const Icon(AppIcons.calendar, size: 14),
+          label: const Text('直接排'),
+        ),
+        const SizedBox(width: Spacing.sm),
         if (wished)
-          Text('已在想去',
-              style: TextStyle(
-                  fontSize: AppFontSizes.caption, color: scheme.outline))
+          // V2.8.2 S4：「已在想去」outline 胶囊 + bookmark icon
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: scheme.outlineVariant),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(AppIcons.bookmark,
+                    size: 12, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Text('已在想去',
+                    style: TextStyle(
+                        fontSize: AppFontSizes.caption,
+                        color: scheme.onSurfaceVariant)),
+              ],
+            ),
+          )
         else
-          _entryButton(context, label: '先想去', onTap: () => _onWish(guideRef)),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : () => _onWish(guideRef),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+              minimumSize: const Size(0, 36),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: TextStyle(
+                  fontSize: AppFontSizes.caption, fontWeight: FontWeight.w600),
+            ),
+            icon: const Icon(AppIcons.bookmark, size: 14),
+            label: const Text('先想去'),
+          ),
       ],
-    );
-  }
-
-  Widget _entryButton(BuildContext context,
-      {required String label, required VoidCallback onTap}) {
-    return TextButton(
-      onPressed: _busy ? null : onTap,
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
-        minimumSize: const Size(0, 32),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: Text(label),
     );
   }
 
@@ -925,22 +964,14 @@ class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
         .read(tripsRepoProvider)
         .findByGuideRefPrefix(tid, guideRef.prefix());
     if (sameDay.any((it) => it.dateEpochDay == day) && mounted) {
-      final ok = await showDialog<bool>(
+      // V2.8.2 S6：AlertDialog → 统一 L2 确认抽屉（中性确认）
+      final ok = await showConfirmSheet(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('该条目已安排在此日'),
-          content: const Text('同一天已有这条攻略的安排，仍要再添加一条吗？'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('取消')),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('仍要添加')),
-          ],
-        ),
+        title: '该条目已安排在此日',
+        body: '同一天已有这条攻略的安排，仍要再添加一条吗？',
+        confirmLabel: '仍要添加',
       );
-      if (ok != true || !mounted) return;
+      if (!ok || !mounted) return;
     }
     setState(() => _busy = true);
     try {
@@ -990,7 +1021,9 @@ class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
   }
 }
 
-/// 「直接排」选天 + 可选时段弹层（§8.3：天序列表含日期与星期，默认无时段）。
+/// 「直接排」选天 + 可选时段弹层（§8.3）。
+/// V2.8.2 S4：天序列表 → 天卡网格（D1–Dn：天数+日期+星期+当天安排数 badge，
+/// 3 列）；二级时段弹层视觉统一为 chips 行。
 class _GuidePlaceSheet extends ConsumerStatefulWidget {
   const _GuidePlaceSheet({required this.tripId});
 
@@ -1003,6 +1036,9 @@ class _GuidePlaceSheet extends ConsumerStatefulWidget {
 class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
   Trip? _trip;
 
+  /// 各天安排数（key = epochDay）。
+  Map<int, int> _counts = const {};
+
   @override
   void initState() {
     super.initState();
@@ -1010,9 +1046,17 @@ class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
   }
 
   Future<void> _load() async {
-    final trip = await ref.read(tripsRepoProvider).getById(widget.tripId);
+    final repo = ref.read(tripsRepoProvider);
+    final trip = await repo.getById(widget.tripId);
+    final items = await repo.watchItems(widget.tripId).first;
     if (!mounted) return;
-    setState(() => _trip = trip);
+    setState(() {
+      _trip = trip;
+      _counts = {
+        for (final it in items)
+          it.dateEpochDay: (_counts[it.dateEpochDay] ?? 0) + 1,
+      };
+    });
   }
 
   Future<void> _pickDay(int day) async {
@@ -1021,39 +1065,55 @@ class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
     Navigator.pop(context, (day, slot));
   }
 
-  /// 可选时段：0 = 不指定。
+  /// 可选时段：0 = 不指定。V2.8.2 S4：ListTile 列表 → chips 行。
   Future<int> _slotPicker() {
+    const presets = [540, 720, 900, 1080];
     return showModalBottomSheet<int>(
       context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  Spacing.lg, Spacing.md, Spacing.lg, Spacing.xs),
-              child: Text('选择时段（可留空）',
-                  style: Theme.of(ctx).textTheme.titleMedium),
+        child: SheetSurface(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+                Spacing.lg, Spacing.md, Spacing.lg, Spacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('选择时段（可留空）',
+                    style: Theme.of(ctx).textTheme.titleMedium),
+                const SizedBox(height: Spacing.md),
+                Wrap(
+                  spacing: Spacing.sm,
+                  runSpacing: Spacing.sm,
+                  children: [
+                    _SlotChip(
+                        label: '不指定',
+                        onTap: () => Navigator.pop(ctx, 0)),
+                    for (final m in presets)
+                      _SlotChip(
+                        label: _fmtSlot(m),
+                        onTap: () => Navigator.pop(ctx, m),
+                      ),
+                    _SlotChip(
+                      label: '自定义…',
+                      icon: Icons.edit_outlined,
+                      onTap: () async {
+                        final t = await showTimePicker(
+                            context: ctx,
+                            initialTime:
+                                const TimeOfDay(hour: 9, minute: 0));
+                        if (t != null && ctx.mounted) {
+                          Navigator.pop(ctx, t.hour * 60 + t.minute);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
             ),
-            ListTile(
-              title: const Text('不指定时段'),
-              onTap: () => Navigator.pop(ctx, 0),
-            ),
-            for (final m in const [540, 720, 900, 1080])
-              ListTile(title: Text(_fmtSlot(m)), onTap: () => Navigator.pop(ctx, m)),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined, size: 20),
-              title: const Text('自定义…'),
-              onTap: () async {
-                final t = await showTimePicker(
-                    context: ctx, initialTime: const TimeOfDay(hour: 9, minute: 0));
-                if (t != null && ctx.mounted) {
-                  Navigator.pop(ctx, t.hour * 60 + t.minute);
-                }
-              },
-            ),
-          ],
+          ),
         ),
       ),
     ).then((v) => v ?? 0);
@@ -1086,21 +1146,146 @@ class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
             child: Text('排到哪一天？',
                 style: Theme.of(context).textTheme.titleMedium),
           ),
+          // V2.8.2 S4：天卡网格（3 列，D1–Dn）
           Flexible(
-            child: ListView.builder(
+            child: GridView.builder(
               shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.lg, Spacing.xs, Spacing.lg, Spacing.xl),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: Spacing.sm,
+                mainAxisSpacing: Spacing.sm,
+                childAspectRatio: 1.0,
+              ),
               itemCount: n,
               itemBuilder: (context, i) {
                 final day = trip.startEpochDay + i;
-                return ListTile(
-                  title: Text('第 ${i + 1} 天'),
-                  subtitle: Text(fmtFullDateOfEpoch(day)),
+                return _DayCard(
+                  index: i + 1,
+                  epochDay: day,
+                  planCount: _counts[day] ?? 0,
                   onTap: () => _pickDay(day),
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 天卡：D 序 + 日期 + 星期 + 当天安排数 badge（3 列网格）。
+class _DayCard extends StatelessWidget {
+  const _DayCard({
+    required this.index,
+    required this.epochDay,
+    required this.planCount,
+    required this.onTap,
+  });
+
+  final int index;
+  final int epochDay;
+  final int planCount;
+  final VoidCallback onTap;
+
+  static const _weekdays = ['一', '二', '三', '四', '五', '六', '日'];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final date = epochDayToDate(epochDay);
+    final weekday = _weekdays[date.weekday - 1];
+    return Material(
+      color: scheme.surfaceContainerLow.withValues(alpha: 0.7),
+      borderRadius: AppRadius.input,
+      child: InkWell(
+        borderRadius: AppRadius.input,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(Spacing.sm),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.input,
+            border: Border.all(
+                color: scheme.outlineVariant.withValues(alpha: 0.55)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('D$index',
+                  style: TextStyle(
+                      fontSize: AppFontSizes.title,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.primary)),
+              const SizedBox(height: 2),
+              Text('${date.month}/${date.day} · 周$weekday',
+                  style: TextStyle(
+                      fontSize: AppFontSizes.caption - 1,
+                      color: scheme.onSurfaceVariant)),
+              const SizedBox(height: Spacing.xs),
+              if (planCount > 0)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text('$planCount 个安排',
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption - 2,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.primary)),
+                )
+              else
+                Text('暂无安排',
+                    style: TextStyle(
+                        fontSize: AppFontSizes.caption - 2,
+                        color: scheme.outline)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 时段 chip（S4 二级弹层视觉统一）。
+class _SlotChip extends StatelessWidget {
+  const _SlotChip({required this.label, required this.onTap, this.icon});
+
+  final String label;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 15, color: scheme.primary),
+                const SizedBox(width: 4),
+              ],
+              Text(label,
+                  style: TextStyle(
+                      fontSize: AppFontSizes.caption,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface)),
+            ],
+          ),
+        ),
       ),
     );
   }

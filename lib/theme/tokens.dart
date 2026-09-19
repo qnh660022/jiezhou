@@ -870,24 +870,64 @@ ThemeData buildAppThemeFor(
 /// V2.8.1 玻璃令牌：全 App 毛玻璃唯一参数源（S2）。
 /// 结构总装见 `lib/shared/widgets/glass_surface.dart`；业务页面不得直接读取
 /// sigma/alpha 自行拼装 BackdropFilter（唯一玻璃实现收口）。
+/// V2.8.3.1：玻璃 Token 重校准（基于 iOS 26 Liquid Glass 最佳实践）。
+///
+/// 核心变化：
+/// 1. σ / tint 按「材质档位」分档（thin / regular / thick），不再是全局单值；
+/// 2. [saturation] 由 1.35（增饱和）翻转为 0.92（去饱和）——模糊后残留的
+///    高饱和色斑是「脏感」主因，方向应为中和而非提艳；
+/// 3. 双描边体系：外圈深色 hairline 负责在浅背景上勾出轮廓，
+///    内圈白描边负责受光感；配合顶边内高光。
+/// 4. 新增封面签条统一参数（有意叠于媒体之上，不做模糊）。
 class GlassTokens {
-  /// 背景模糊强度（标准档）
-  static const double sigma = 28;
+  /// 背景模糊强度 —— thin 档（吸顶栏：保留滚动内容透出感）
+  static const double sigmaThin = 24;
 
-  /// 玻璃 tint 不透明度（浅/深色分档：深色更低以透出光感）
-  static const double tintAlphaLight = 0.52;
-  static const double tintAlphaDark = 0.42;
+  /// 背景模糊强度 —— regular 档（胶囊底栏 / 浮动卡）
+  static const double sigmaRegular = 28;
 
-  /// 顶边内高光强度（受光边）
-  static const double highlightAlphaLight = 0.65;
+  /// 背景模糊强度 —— thick 档（Sheet / 弹层：压住背景保读性）
+  static const double sigmaThick = 32;
+
+  /// 兼容旧引用（= regular 档）
+  static const double sigma = sigmaRegular;
+
+  /// 玻璃 tint 不透明度（浅色）—— thin / regular / thick
+  static const double tintAlphaThinLight = 0.44;
+  static const double tintAlphaRegularLight = 0.58;
+  static const double tintAlphaThickLight = 0.68;
+
+  /// 玻璃 tint 不透明度（深色）—— 深色整体更低以透出光感
+  static const double tintAlphaThinDark = 0.38;
+  static const double tintAlphaRegularDark = 0.48;
+  static const double tintAlphaThickDark = 0.54;
+
+  /// 兼容旧引用（= regular 档）
+  static const double tintAlphaLight = tintAlphaRegularLight;
+  static const double tintAlphaDark = tintAlphaRegularDark;
+
+  /// 对角柔光强度（受光渐变）
+  static const double highlightAlphaLight = 0.55;
   static const double highlightAlphaDark = 0.22;
 
-  /// 全周描边亮线
-  static const double edgeAlphaLight = 0.28;
-  static const double edgeAlphaDark = 0.07;
+  /// 顶边内高光强度（受光边，叠加在前景描边之上）
+  static const double topSheenAlphaLight = 0.50;
+  static const double topSheenAlphaDark = 0.20;
 
-  /// 背景饱和度补偿倍率（blur + saturate 组合）
-  static const double saturation = 1.35;
+  /// 兼容旧引用：旧「全周白描边」拆分为内圈白描边
+  static const double innerEdgeLight = 0.55;
+  static const double innerEdgeDark = 0.10;
+
+  /// 兼容旧引用：外圈深色 hairline（outlineVariant 基色）
+  static const double outerEdgeAlphaLight = 0.35;
+  static const double outerEdgeAlphaDark = 0.35;
+
+  /// 背景饱和度补偿倍率。V2.8.3.1 由 1.35 翻转为去饱和 0.92。
+  static const double saturation = 0.92;
+
+  /// 封面媒体上的「伪玻璃」签条统一参数（叠于照片/渐变封面之上，有意不模糊）。
+  static const double coverPillFillAlpha = 0.24;
+  static const double coverPillBorderAlpha = 0.45;
 }
 
 /// 玻璃档位：决定阴影强度与 tint 叠加（S2）。

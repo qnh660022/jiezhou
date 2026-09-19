@@ -260,13 +260,18 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           ),
         ),
         Expanded(
-          child: loading
+          // V2.8.2 S6：骨架→内容 300ms 淡接 morph
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: loading
               ? ListView(
+                  key: const ValueKey('expenses-skeleton'),
                   physics: const NeverScrollableScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
                   children: const [SkeletonListTile(), SkeletonListTile(), SkeletonListTile(), SkeletonListTile()],
                 )
               : Stack(
+                  key: const ValueKey('expenses-content'),
                   children: [
                     _buildBody(filtered, canWrite: canWrite),
                     Positioned(
@@ -315,6 +320,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     ),
                   ],
                 ),
+          ),
         ),
       ],
     );
@@ -925,8 +931,16 @@ class _ExpenseTile extends ConsumerWidget {
               ),
             ),
             // 退款显示为正（拿回的钱），逻辑层统一按负数参与统计/结算
-            MoneyText(isRefund ? -expense.amountCents : expense.amountCents,
-                fontSize: AppFontSizes.bodyLarge, semanticColor: true),
+            // V2.8.2 S6：账单行→BillDetailSheet 金额 Hero 连续过渡（飞行 320ms
+            // 由抽屉 route 转场承担；同 tag 出现于 sheet 头部金额）
+            Hero(
+              tag: 'bill-amount-${expense.id}',
+              child: Material(
+                type: MaterialType.transparency,
+                child: MoneyText(isRefund ? -expense.amountCents : expense.amountCents,
+                    fontSize: AppFontSizes.bodyLarge, semanticColor: true),
+              ),
+            ),
           ],
         ),
       ),

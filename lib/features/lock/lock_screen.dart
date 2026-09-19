@@ -11,11 +11,15 @@ library;
 
 import 'dart:async';
 
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../platform/app_lock.dart';
 import '../../theme/tokens.dart';
+import '../../../shared/widgets/brand_waves.dart';
 
 class LockScreen extends StatefulWidget {
   const LockScreen({super.key});
@@ -24,7 +28,18 @@ class LockScreen extends StatefulWidget {
   State<LockScreen> createState() => _LockScreenState();
 }
 
-class _LockScreenState extends State<LockScreen> {
+class _LockScreenState extends State<LockScreen>
+    with TickerProviderStateMixin {
+  // V2.8.2 S2：错误抖动（整盘 translateX ±6 衰减 320ms）+ 波纹展开
+  late final AnimationController _shake = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+  late final AnimationController _waves = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..forward();
+
   String _input = '';
   String _error = '';
   bool _busy = false;
@@ -112,6 +127,10 @@ class _LockScreenState extends State<LockScreen> {
           ? '错误次数过多，请稍后再试'
           : 'PIN 不对，还可以再试 $failsLeft 次';
     });
+    // V2.8.2 S2 收尾：错误时整盘 ±6 衰减抖动 320ms（disableAnimations 直显）
+    final reduceMotionNow =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (!reduceMotionNow) _shake.forward(from: 0);
     await _refreshCooldown();
   }
 
@@ -119,6 +138,7 @@ class _LockScreenState extends State<LockScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final reduceMotionShake = reduceMotion;
     return Scaffold(
       backgroundColor: scheme.surface,
       body: SafeArea(
@@ -130,7 +150,18 @@ class _LockScreenState extends State<LockScreen> {
             Text('输入 6 位数字 PIN 继续',
                 style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: Spacing.xxl),
-            _Dots(count: _input.length, error: _error.isNotEmpty),
+            // V2.8.2 S2：错误时整盘 ±6 衰减抖动 320ms（disableAnimations 直显）
+            AnimatedBuilder(
+              animation: _shake,
+              builder: (context, child) {
+                if (reduceMotionShake || _shake.value == 0) return child!;
+                final t = _shake.value;
+                final dx = sin(t * pi * 4) * 6 * (1 - t);
+                return Transform.translate(
+                    offset: Offset(dx, 0), child: child);
+              },
+              child: _Dots(count: _input.length, error: _error.isNotEmpty),
+            ),
             const SizedBox(height: Spacing.md),
             SizedBox(
               height: 24,
@@ -156,6 +187,16 @@ class _LockScreenState extends State<LockScreen> {
               onBackspace: _backspace,
             ),
             const Spacer(),
+            // V2.8.2 S2：波纹母题（两道弧线 opacity 16%，与开屏共享组件）
+            AnimatedBuilder(
+              animation: _waves,
+              builder: (context, _) => SizedBox(
+                width: 260,
+                child: BrandWaves(
+                    progress:
+                        Curves.easeOutCubic.transform(_waves.value)),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: Spacing.xxl),
               child: Text(
@@ -187,19 +228,23 @@ class _Dots extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         for (var i = 0; i < kPinLength; i++)
+          // V2.8.2 S2：胶囊分段条（26×5，填充段 160ms easeOutBack 生长）
           AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            margin: const EdgeInsets.symmetric(horizontal: 7),
-            width: 14,
-            height: 14,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutBack,
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            width: 26,
+            height: 5,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(999),
               color: i < count
                   ? (error ? scheme.error : scheme.primary)
-                  : Colors.transparent,
+                  : scheme.surfaceContainerHighest,
               border: Border.all(
-                color: i < count ? scheme.primary : scheme.outlineVariant,
-                width: 1.4,
+                color: i < count
+                    ? (error ? scheme.error : scheme.primary)
+                    : scheme.outlineVariant.withValues(alpha: 0.6),
+                width: 1,
               ),
             ),
           ),
@@ -263,7 +308,7 @@ class _Keypad extends StatelessWidget {
   }
 }
 
-class _KeyButton extends StatelessWidget {
+class _KeyButton extends StatefulWidget {
   const _KeyButton({
     required this.label,
     required this.enabled,
@@ -277,38 +322,71 @@ class _KeyButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_KeyButton> createState() => _KeyButtonState();
+}
+
+class _KeyButtonState extends State<_KeyButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isBack = label == '<';
+    final enabled = widget.enabled;
+    final reduceMotion = widget.reduceMotion;
+    final isBack = widget.label == '<';
+    // V2.8.3.1：实色 mini 键帽 + 按压 scale 0.94 + selectionClick（原玻璃键帽见下注）
     return Opacity(
       opacity: enabled ? 1 : 0.4,
-      child: Material(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(AppRadius.buttonValue),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.buttonValue),
-          onTap: enabled
-              ? () {
-                  if (!reduceMotion) {
-                    Feedback.forTap(context);
-                  }
-                  onTap();
-                }
-              : null,
-          child: Center(
-            child: isBack
-                ? Icon(Icons.backspace_outlined, size: 21, color: scheme.onSurface)
-                : Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface,
-                    ),
-                  ),
+      child: AnimatedScale(
+        scale: _pressed && enabled ? 0.94 : 1.0,
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOut,
+        child: Material(
+          // V2.8.3.1：去伪玻璃 —— PIN 键盘背景是不透明 surface，玻璃键帽
+          // 「无背景可糊」，12 个 BackdropFilter 纯 GPU 开销且观感碎片化；
+          // 改实色键帽 + 细描边（与全 App 实色条目语言一致）。
+          color: scheme.surfaceContainerHigh,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.buttonValue),
+            side: BorderSide(
+                color: scheme.outlineVariant.withValues(alpha: 0.35)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadius.buttonValue),
+              onTapDown:
+                  enabled ? (_) => setState(() => _pressed = true) : null,
+              onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+              onTapCancel:
+                  enabled ? () => setState(() => _pressed = false) : null,
+              onTap: enabled
+                  ? () {
+                      if (!reduceMotion) {
+                        HapticFeedback.selectionClick();
+                      }
+                      widget.onTap();
+                    }
+                  : null,
+              child: SizedBox(
+                width: double.infinity,
+                height: double.infinity,
+                child: Center(
+                  child: isBack
+                      ? Icon(Icons.backspace_outlined,
+                          size: 21, color: scheme.onSurface)
+                      : Text(
+                          widget.label,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                ),
+              ),
+            ),
           ),
         ),
-      ),
     );
   }
 }

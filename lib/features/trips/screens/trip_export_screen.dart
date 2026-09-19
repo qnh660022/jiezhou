@@ -14,6 +14,7 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../../../theme/app_icons.dart';
 
 /// 导出行程 PDF 页
 class TripExportScreen extends ConsumerStatefulWidget {
@@ -47,7 +48,7 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
     if (tripId == null) {
       return Scaffold(
         appBar: GlassAppBar(title: '导出 PDF'),
-        body: const EmptyState(emoji: '📄', title: '未找到行程'),
+        body: const EmptyState(icon: Icons.description_rounded, title: '未找到行程'),
       );
     }
     return Scaffold(
@@ -57,7 +58,7 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
         builder: (context, tripSnap) {
           final trip = tripSnap.data;
           if (trip == null) {
-            return const EmptyState(emoji: '📄', title: '行程不存在');
+            return const EmptyState(icon: Icons.description_rounded, title: '行程不存在');
           }
           return StreamBuilder<List<TripItem>>(
             stream: _itemsStream ??= ref
