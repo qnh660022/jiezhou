@@ -1,0 +1,93 @@
+芥舟 V2.8.3.4 构建日志（八项问题修复版）
+=========================================
+构建时间 : 2026-09-19 14:29~14:37 (本地)
+版本     : 2.8.3+2834 (versionName 2.8.3 / versionCode 2834)
+产物     : build\app\outputs\flutter-apk\app-release.apk (33.4 MB / 35,030,060 字节)
+归档     : release\jiezhou-2.8.3+2834-arm64.apk (sha1 c0ef7bf37085be275a2e9654aeb7883a39d78d05)
+目标架构 : android-arm64
+
+构建背景
+-------------------------------------
+用户一次性报出 8 项问题（玻璃特效/拖拽/入口消失/底部贴合/天数/入口清理/抽屉上拉/启动锁黑屏），
+本包为这 8 项的修复构建，含全部未提交改动。逐项处置见 docs/V2.8.3.4验收报告.md。
+
+工具链（scripts/env.local.ps1）
+-------------------------------------
+JAVA_HOME            : D:\AI\env\jdk\jdk-17.0.2
+ANDROID_HOME         : D:\AI\env\android-sdk
+FLUTTER_ROOT         : D:\AI\env\flutter
+GRADLE_USER_HOME     : D:\AI\env\gradle-home
+PUB_HOSTED_URL       : https://pub.flutter-io.cn
+FLUTTER_STORAGE_BASE : https://storage.flutter-io.cn
+Flutter              : 3.47.1 stable / Dart 3.13.1
+AGP build-tools      : 36.0.0
+
+执行方式 : 沿用 V2.8.3.3 已验证的 Git Bash 手工序列（scripts/build_apk.ps1 仍无法由本机
+           PowerShell 会话驱动）。**JAVA_HOME 必须用 Windows 形式**（D:/AI/env/jdk/jdk-17.0.2），
+           用 POSIX 形式会让 Gradle 报 "JAVA_HOME is set to an invalid directory"。
+
+云端密钥注入（§3.2.2 契约）
+-------------------------------------
+脚本输出确认: "Supabase endpoint injection: ENABLED (from env.local.ps1)"
+  --dart-define=SUPABASE_URL=https://yxclvavejcxhkobnldyx.supabase.co
+  --dart-define=SUPABASE_ANON_KEY=sb_publishable_***（env.local.ps1，已 gitignore 不入库）
+注入断言（解包 APK 后对 lib/*/libapp.so 检索，不打印密钥本体）:
+  SUPABASE_URL      已注入 ✓
+  SUPABASE_ANON_KEY 已注入 ✓
+
+构建门禁（逐项通过）
+-------------------------------------
+1) flutter pub get                                         OK
+2) flutter analyze   （要求 0 error）                      OK：0 error / 348 存量 warning·info
+3) flutter test      （要求全绿）                          OK：968 全绿（0 失败）
+   新增用例：test/features/v2834_fixes_test.dart（18 例：角色判定 6 / 玻璃 3 /
+             详情页交互 4 / 文案入口 2 / 启动锁 3）
+   修订用例：test/shared/glass_surface_test.dart（玻璃契约改为「默认实色」：
+             新增 1b/1c 两条，1/2/6 三条改走 blur=true 路径）
+             test/features/v2833_trip_access_test.dart、v282_s5_trip_tabs_test.dart
+             （KitTab 调用式改为多行，断言同步）
+4) flutter build apk --release --target-platform android-arm64   OK
+
+版本号校正（本轮一并处理）
+-------------------------------------
+pubspec.yaml               : 2.8.3+2831 → 2.8.3+2834
+lib/shared/app_meta.dart   : kAppVersionLabel 'v2.7.1' → 'v2.8.3.4'
+  （此前「检查更新 / 关于」向用户展示的版本比安装包落后三个版本，属对外可见的不一致；
+   V2.8.3.3 已登记为 X1，本轮按用户「版号 2.8.3.4」的指令校正。官网 / README 未动。）
+注：versionCode 2834 与上一包 2831 不同，覆盖安装行为正常。
+
+构建输出
+-------------------------------------
+Running Gradle task 'assembleRelease'...  185.0s
+Font asset "JieZhouIcons.ttf"          tree-shaken: 8792 -> 6428 bytes (-26.9%)
+Font asset "MaterialIcons-Regular.otf" tree-shaken: 1645184 -> 33860 bytes (-97.9%)
+Font asset "CupertinoIcons.ttf"        tree-shaken: 257628 -> 848 bytes (-99.7%)
+√ Built build\app\outputs\flutter-apk\app-release.apk (33.4MB)
+
+签名验证（apksigner verify --print-certs）
+-------------------------------------
+Signer #1 certificate DN : CN=Travel Assistant, OU=Dev, O=Travel, L=Shanghai, ST=Shanghai, C=CN
+Signer #1 SHA-256 digest : 4469f25aa6a9402f12aaf0cfa4cd4f9cc9c77cf8be37408b24833e4e0a85ea28
+                           （与 V2.8.2 / V2.8.3.3 交付指纹逐位一致 → 同一密钥库）
+Signer #1 SHA-1 digest   : 45b2663bde5170960de256bc49c0a8834f9d1362
+密钥库                   : android/app/release-key.jks（android/key.properties 引用，不入库）
+验证结论                 : ✅ 正式签名有效
+
+内容校验
+-------------------------------------
+release/jiezhou-2.8.3+2831-arm64.apk  sha256 6aa2e3aad15c71ef…  （V2.8.3.3 包）
+release/jiezhou-2.8.3+2834-arm64.apk  sha256 2d318033227ea233…  （本包）
+两包字节数恰好相同（35,030,060），但内容摘要不同 —— 不是同一个包，勿混用。
+
+Git 提交
+-------------------------------------
+提交内容 : 8 项修复的源码改动 + 新增 18 例测试 + 修订 3 个测试文件 + 交付文档
+推送状态 : 未推送（按指令仅本地提交）
+
+已知遗留（未处理，如实登记）
+-------------------------------------
+1) test/sync/v272_sync_registration_test.dart:11 有一处 unused_import 警告
+   （package:travel_assistant/data/sync/sync_engine.dart），非本轮引入，未动。
+2) 提示条收口仍有 20 处直连 SnackBar 未合并（V2.8.3.3 裁定：其中带 5 秒撤销窗口的
+   删除提示套用固定 2.6s 统一形态会破坏撤销交互，需先给 showAppSnackBar 加 duration）。
+3) desktop_* 与 companions 两个区域的 EmptyState/提示条债务按 V2.8.3.3 裁定维持登记态。

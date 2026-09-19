@@ -951,14 +951,26 @@ class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
   Future<void> _onPlace(GuideRef guideRef) async {
     final tid = await _ensureTripId();
     if (tid == null || !mounted) return;
-    final picked = await showModalBottomSheet<(int, int)>(
+    // V2.8.3.4：弹层同时回传「第几天」，提示文案不再直接打 dateEpochDay
+    //（dateEpochDay 是 1970 起的绝对天数，2026 年 ≈ 20690 —— 原提示会显示
+    // 「已排入第 20690 天」，用户以为排到了两万多天后）。
+    final picked = await showModalBottomSheet<(int, int, int)>(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
       builder: (_) => _GuidePlaceSheet(tripId: tid),
     );
     if (picked == null || !mounted) return;
-    final (day, slot) = picked;
+    final (rawDay, rawDayNo, slot) = picked;
+    // 兜底夹取：天序号必须落在行程区间内，任何异常值都不会写进库里。
+    final trip = await ref.read(tripsRepoProvider).getById(tid);
+    if (!mounted) return;
+    final day = trip == null
+        ? rawDay
+        : rawDay.clamp(trip.startEpochDay, trip.endEpochDay);
+    final dayNo = trip == null || trip.endEpochDay < trip.startEpochDay
+        ? rawDayNo
+        : (day - trip.startEpochDay + 1);
     // §8.3 去重：同 guideRef 同日已存在 → 确认弹层（跨天不去重）
     final sameDay = await ref
         .read(tripsRepoProvider)
@@ -988,7 +1000,7 @@ class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('已排入第 $day 天')));
+        ..showSnackBar(SnackBar(content: Text('已排入第 $dayNo 天')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1062,7 +1074,10 @@ class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
   Future<void> _pickDay(int day) async {
     final slot = await _slotPicker();
     if (!mounted) return;
-    Navigator.pop(context, (day, slot));
+    // V2.8.3.4：一并回传天序号（1-based），宿主提示文案与落库值从此分离。
+    final trip = _trip;
+    final dayNo = trip == null ? day : day - trip.startEpochDay + 1;
+    Navigator.pop(context, (day, dayNo, slot));
   }
 
   /// 可选时段：0 = 不指定。V2.8.2 S4：ListTile 列表 → chips 行。

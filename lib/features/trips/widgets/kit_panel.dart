@@ -24,6 +24,7 @@ class KitPanel extends ConsumerWidget {
     required this.tripId,
     required this.destination,
     required this.canEdit,
+    this.bottomInset,
   });
 
   final String tripId;
@@ -33,6 +34,11 @@ class KitPanel extends ConsumerWidget {
 
   /// viewer 只读：无「加入清单」。
   final bool canEdit;
+
+  /// 列表末尾留白（V2.8.3.4）。null = `Spacing.huge`（桌面工作台等无悬浮底栏的
+  /// 宿主）；移动详情页传 `AppBottomLayout.dockedContentTail` 以避开胶囊底栏
+  /// 与底部停靠双段。
+  final double? bottomInset;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,7 +59,14 @@ class KitPanel extends ConsumerWidget {
           ref.invalidate(kitSeedProvider(cityKey)),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.huge),
+        // V2.8.3.4：末尾留白由宿主决定 —— 移动详情页要避开胶囊底栏 + 底部停靠
+        // 双段（传 dockedContentTail），桌面工作台没有悬浮底栏，维持原值。
+        padding: EdgeInsets.fromLTRB(
+          Spacing.xl,
+          Spacing.md,
+          Spacing.xl,
+          bottomInset ?? Spacing.huge,
+        ),
         children: [
           _cityHeader(context, seed),
           if (seed.prep.isNotEmpty)

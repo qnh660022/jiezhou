@@ -47,6 +47,16 @@ abstract final class AppBottomLayout {
   /// 内容底部预留：清掉下方悬浮控件（合计栏 + FAB）的总占用，结算后词典项不被遮挡。
   static const double contentTail = totalBarOffset + actionButtonOffset;
 
+  /// 底部停靠双段（行程详情的「时间线 / 攻略」）的占位高度（V2.8.3.4）。
+  ///
+  /// = 胶囊高度 44 + 上下内边距 + 与全局胶囊底栏之间的间隙。带该停靠段的页面
+  /// （行程详情的时间线与攻略两个视图）末尾留白一律用
+  /// [dockedContentTail]，保证滚动到底时最后一条不被悬浮控件压住。
+  static const double segmentDockHeight = 62;
+
+  /// 带底部停靠双段的页面：内容末尾留白总量。
+  static const double dockedContentTail = contentTail + segmentDockHeight;
+
   static double withSafeArea(BuildContext context, double value) =>
       value + MediaQuery.paddingOf(context).bottom;
 }

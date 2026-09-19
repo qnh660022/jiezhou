@@ -67,7 +67,19 @@ class LedgerAccess {
 
 /// 解析「我在某账本的角色」。
 ///
-/// 顺序：① 空间成员镜像（权威）→ ② 本地 groups 行（=我创建，owner）→ ③ null。
+/// 顺序：① 我是空间创建者 → owner → ② 空间成员镜像（权威）→
+/// ③ 本地 groups 行（=我创建，owner）→ ④ null。
+///
+/// 【V2.8.3.4 硬化】原实现有三处会把「创建者」静默判成只读，导致账本首页
+/// 的「记一笔」FAB、头部「工具箱」「局域网同步」三个写入口同时消失：
+/// * `getSingleOrNull()`：本地占位行（`sm_local_*`）与服务端真行并存时**抛异常**
+///   → 角色解析整体失败；
+/// * `default: return viewer`：任何非 owner/editor 取值（空串、历史遗留的
+///   `member`/`admin`）一律降级为**只读**，与本文件开头「未知 → 按可写放开」
+///   的教条自相矛盾；
+/// * 创建者行未单独兜底。云端 `set_space_member_role` 明确拒绝降级创建者
+///   （`cannot_demote_owner`），`_join_space_as` 也保留 owner —— 故本地据
+///   `spaces.created_by` 直接判 owner 与云端不变量一致。
 Future<String?> resolveMyGroupRole(
   AppDatabase db,
   String groupId,
@@ -80,29 +92,47 @@ Future<String?> resolveMyGroupRole(
     spaceQuery.where((s) => s.status.equals('active'));
     final spaces = await spaceQuery.get();
     for (final s in spaces) {
+      // ① 创建者恒为 owner（云端不可降级，见文件头说明）。
+      if (s.createdBy == myUserId) return LedgerRole.owner;
+      // ② 成员行：取**全部**有效行后归一，避免重复行让解析整体崩掉。
       // 链式 where（AND 语义）：避免依赖 drift 的 `&` 扩展，保持本文件
       // 只依赖 database.dart 的行类型。
       final q = db.select(db.spaceMembers)..where((m) => m.spaceId.equals(s.id));
       q.where((m) => m.userId.equals(myUserId));
       q.where((m) => m.deletedMs.isNull());
-      final row = await q.getSingleOrNull();
-      if (row != null) {
-        // 与云端 _group_role 映射逐字一致：owner→owner、editor→editor、其余→viewer。
-        switch (row.role) {
-          case SpaceRole.owner:
-            return LedgerRole.owner;
-          case SpaceRole.editor:
-            return LedgerRole.editor;
-          default:
-            return LedgerRole.viewer;
-        }
-      }
+      final rows = await q.get();
+      final role = normalizeSpaceRole(rows.map((m) => m.role));
+      if (role == null) continue; // 未知取值 → 继续回退，绝不默认只读
+      return role;
     }
   }
   final own = await (db.select(db.groups)..where((g) => g.id.equals(groupId)))
       .getSingleOrNull();
   if (own != null) return LedgerRole.owner;
   return null;
+}
+
+/// 角色取值归一（V2.8.3.4）：只认 owner / editor / viewer 三值，
+/// 其余（空串、`member`、`admin` 等历史/异常取值）返回 `null` = **未知**，
+/// 由调用方继续回退到「本地行 ⇒ owner」或最终的可写放开。
+///
+/// 多行并存时取权限最高者（owner > editor > viewer）：同一空间里出现
+/// 本地占位行 + 服务端真行时，用户越不该被「较低的那一行」判成只读。
+String? normalizeSpaceRole(Iterable<String?> rawRoles) {
+  String? best;
+  for (final raw in rawRoles) {
+    switch (raw) {
+      case SpaceRole.owner:
+        return LedgerRole.owner; // 已是最高权限，无需继续
+      case SpaceRole.editor:
+        best = LedgerRole.editor;
+      case SpaceRole.viewer:
+        best ??= LedgerRole.viewer;
+      default:
+        break; // 未知取值不参与竞争
+    }
+  }
+  return best;
 }
 
 /// 我在某账本的角色（family 化，便于测试覆盖注入 viewer 态）。

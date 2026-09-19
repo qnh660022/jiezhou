@@ -141,7 +141,13 @@ class _LockScreenState extends State<LockScreen>
     final reduceMotionShake = reduceMotion;
     return Scaffold(
       backgroundColor: scheme.surface,
-      body: SafeArea(
+      // V2.8.3.4：`/lock` 是顶层路由。若允许系统返回键把它 pop 掉，根 Navigator
+      // 会立即变成**空栈**——整屏全黑、无法恢复（只能杀进程重开）。锁屏期间
+      // 一律吞掉返回手势；离开本页的唯一途径是输对 PIN（`_submit` 里
+      // `markUnlocked()` + `go('/trips')`）。
+      body: PopScope(
+        canPop: false,
+        child: SafeArea(
         child: Column(
           children: [
             const Spacer(),
@@ -209,6 +215,7 @@ class _LockScreenState extends State<LockScreen>
             ),
             const SizedBox(height: Spacing.xl),
           ],
+        ),
         ),
       ),
     );

@@ -60,7 +60,13 @@ class TripAccess {
 
 /// 解析「我在某行程的角色」。
 ///
-/// 顺序：① 空间成员镜像（权威）→ ② 本地 trips 行（=我创建，owner）→ ③ null。
+/// 顺序：① 我是空间创建者 → owner → ② 空间成员镜像（权威）→
+/// ③ 本地 trips 行（=我创建，owner）→ ④ null。
+///
+/// 【V2.8.3.4 硬化】与 `ledger_access.dart` **逐条同构**（三处修复同步落地）：
+/// 重复成员行不再让 `getSingleOrNull()` 抛异常；非 owner/editor 的异常取值
+/// 不再静默降级为 viewer；空间创建者恒判 owner（云端 `cannot_demote_owner`）。
+/// 两域必须同时改，否则同一空间会出现「行程能改、账本不能改」。
 Future<String?> resolveMyTripRole(
   AppDatabase db,
   String tripId,
@@ -73,28 +79,45 @@ Future<String?> resolveMyTripRole(
     spaceQuery.where((s) => s.status.equals('active'));
     final spaces = await spaceQuery.get();
     for (final s in spaces) {
-      // 链式 where（AND 语义）：与 ledger_access 同写法，避免依赖 drift
-      // 的 `&` 扩展，保持本文件只依赖 database.dart 的行类型。
+      // ① 创建者恒为 owner（云端 set_space_member_role 拒绝降级创建者）。
+      if (s.createdBy == myUserId) return TripRole.owner;
+      // ② 成员行：与 ledger_access 同写法，避免依赖 drift 的 `&` 扩展，
+      // 保持本文件只依赖 database.dart 的行类型。
       final q = db.select(db.spaceMembers)..where((m) => m.spaceId.equals(s.id));
       q.where((m) => m.userId.equals(myUserId));
       q.where((m) => m.deletedMs.isNull());
-      final row = await q.getSingleOrNull();
-      if (row != null) {
-        switch (row.role) {
-          case SpaceRole.owner:
-            return TripRole.owner;
-          case SpaceRole.editor:
-            return TripRole.editor;
-          default:
-            return TripRole.viewer;
-        }
-      }
+      final rows = await q.get();
+      final role = normalizeSpaceRole(rows.map((m) => m.role));
+      if (role == null) continue; // 未知取值 → 继续回退，绝不默认只读
+      return role;
     }
   }
   final own = await (db.select(db.trips)..where((t) => t.id.equals(tripId)))
       .getSingleOrNull();
   if (own != null) return TripRole.owner;
   return null;
+}
+
+/// 角色取值归一（V2.8.3.4）—— 与 `ledger_access.normalizeSpaceRole` **逐条同构**
+/// （两个文件的角色语义必须一致，改一处必须同步另一处）。
+///
+/// 只认 owner / editor / viewer；其余取值返回 `null` = 未知（继续回退，
+/// 最终按可写放开）；多行并存取权限最高者。
+String? normalizeSpaceRole(Iterable<String?> rawRoles) {
+  String? best;
+  for (final raw in rawRoles) {
+    switch (raw) {
+      case SpaceRole.owner:
+        return TripRole.owner;
+      case SpaceRole.editor:
+        best = TripRole.editor;
+      case SpaceRole.viewer:
+        best ??= TripRole.viewer;
+      default:
+        break;
+    }
+  }
+  return best;
 }
 
 /// 我在某行程的角色（family 化，便于测试覆盖注入 viewer 态）。

@@ -147,10 +147,18 @@ class _OutlineTabState extends ConsumerState<OutlineTab> {
 
 /// 「锦囊」页签（S9）：按行程目的地 matchCityKey 命中城渲染四栏。
 class KitTab extends ConsumerWidget {
-  const KitTab({super.key, required this.tripId, this.canEdit = true});
+  const KitTab({
+    super.key,
+    required this.tripId,
+    this.canEdit = true,
+    this.bottomInset,
+  });
 
   final String tripId;
   final bool canEdit;
+
+  /// 列表末尾留白（V2.8.3.4）：移动详情页传底栏避让值，桌面留 null。
+  final double? bottomInset;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -164,6 +172,7 @@ class KitTab extends ConsumerWidget {
           tripId: trip.id,
           destination: trip.destination,
           canEdit: canEdit,
+          bottomInset: bottomInset,
         );
       },
     );

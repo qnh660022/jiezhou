@@ -171,22 +171,9 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
           ),
-        // V2.8.1 S10：账本工具箱 tile（零路由方案：跳账本页 + 指引提示）
-        Visibility(
-            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '账本工具箱', '变更记录 / 局域网同步 / CSV 导入导出 / 分类管理'),
-            child: _StaggerIn(
-              index: 3,
-              child: _ProfileTile(
-            icon: Icons.apps_rounded,
-            title: '账本工具箱',
-            subtitle: '变更记录 / 局域网同步 / CSV 导入导出 / 分类管理',
-            onTap: () {
-              showAppSnackBar(context, '进入账本后点右上角 ⚙ 打开工具箱');
-              context.push('/ledger');
-            },
-              ),
-            ),
-          ),
+        // V2.8.3.4：移除「账本工具箱」入口（用户要求）。工具集本身没删 ——
+        // 变更记录 / 局域网同步 / CSV 导入导出 / 分类管理仍可从账本首页右上角
+        // 的「工具箱」抽屉进入，入口只保留在账本域内。
         Visibility(
             visible: _profileHit(ref.watch(_profileSearchQueryProvider), '记账团管理'),
             child: _StaggerIn(

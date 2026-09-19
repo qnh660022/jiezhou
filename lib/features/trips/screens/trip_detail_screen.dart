@@ -245,14 +245,24 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
         },
       ),
           // ---- 视图 1：攻略（原锦囊 S9 城市贴士并入） ----
-          KitTab(tripId: id, canEdit: _canWrite),
+          // V2.8.3.4：末尾留白与时间线同口径，避开胶囊底栏 + 底部停靠双段。
+          KitTab(
+            tripId: id,
+            canEdit: _canWrite,
+            bottomInset: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.dockedContentTail,
+            ),
+          ),
             ],
           ),
           // 底部停靠双段：时间线 / 攻略（原大纲/装配/锦囊页签收编：大纲入
           // 「更多」抽屉、装配改半屏抽屉、锦囊并入攻略）
+          // V2.8.3.4：横向 inset 与全局胶囊底栏对齐（Spacing.lg），并紧贴其上方
+          // （= actionButtonOffset，胶囊底栏总高 78+safe），两段视觉上连成一体。
           Positioned(
-            left: Spacing.xl,
-            right: Spacing.xl,
+            left: Spacing.lg,
+            right: Spacing.lg,
             bottom: AppBottomLayout.withSafeArea(
               context,
               AppBottomLayout.actionButtonOffset,
@@ -932,12 +942,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               _buildDaySections(context, ref, latestUnsettledByItem, dayKeys, visibleDays, showAll)),
         ),
         // 尾部留白：内容可从悬浮胶囊导航下方穿过，末尾垫高保证最后一条可达
-        // （V2.8.3.2：+62 让位底部停靠双段）
+        // （V2.8.3.4：统一走 dockedContentTail —— 让位底部停靠双段 + FAB）
         SliverToBoxAdapter(
           child: SizedBox(
             height: AppBottomLayout.withSafeArea(
               context,
-              AppBottomLayout.contentTail + 62,
+              AppBottomLayout.dockedContentTail,
             ),
           ),
         ),
@@ -946,10 +956,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       if (!widget.multiSelect)
       Positioned(
           right: Spacing.xl,
-          // V2.8.3.2：FAB 上移，让位底部停靠双段（时间线/攻略）
+          // V2.8.3.4：FAB 停在底部停靠双段（时间线/攻略）之上
           bottom: AppBottomLayout.withSafeArea(
             context,
-            AppBottomLayout.actionButtonOffset + 62,
+            AppBottomLayout.actionButtonOffset +
+                AppBottomLayout.segmentDockHeight + Spacing.md,
           ),
           child: FloatingActionButton.extended(
             heroTag: 'fab-add-item-detail',
@@ -1065,7 +1076,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         }
         continue;
       }
-      // 当天重排（V2.7.2 S4）：拖拽手柄即卡片本体（按住拖动），onReorder 终态写库
+      // 当天重排（V2.8.3.4：长按才允许拖动）。
+      // 原为无延迟的 Reorderable 拖拽监听 —— 手指一碰卡片即进入拖拽，滚动流
+      // 里极易误拖（想去池同理）；改为 Delayed 版：按住约 500ms 后移动才开始
+      // 拖拽，长按指纹仍归卡片的 onLongPress（长按不动 → 弹出操作抽屉）。
       widgets.add(Padding(
         padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, 0),
         child: ReorderableListView.builder(
@@ -1087,7 +1101,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           },
           itemBuilder: (context, i) {
             final it = list[i];
-            return ReorderableDragStartListener(
+            return ReorderableDelayedDragStartListener(
               key: ValueKey(it.id),
               index: i,
               child: Padding(
@@ -2767,12 +2781,13 @@ void _openMoreSheet(BuildContext context, String tripId) {
     context: context,
     initialChildSize: 0.38,
     minChildSize: 0.28,
-    builder: (ctx, _) => Padding(
-      padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    // V2.8.3.4：内容必须挂在 DraggableScrollableSheet 提供的 scrollController
+    // 上，否则抽屉没有可拖拽的滚动体 —— 表现为「展开后无法再次上拉」。
+    builder: (ctx, sheetScroll) => ListView(
+      controller: sheetScroll,
+      padding: const EdgeInsets.fromLTRB(
+          Spacing.xl, Spacing.md, Spacing.xl, Spacing.xl),
+      children: [
           Text('更多操作',
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: AppFontSizes.bodyLarge)),
           const SizedBox(height: Spacing.md),
@@ -2818,8 +2833,7 @@ void _openMoreSheet(BuildContext context, String tripId) {
               context.push('/trips/share', extra: tripId);
             },
           ),
-        ],
-      ),
+      ],
     ),
   );
 }

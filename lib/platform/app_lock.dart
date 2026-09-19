@@ -113,6 +113,14 @@ class AppLockService {
   }
 
   /// 关闭锁：**必须先验证当前 PIN**（§S7.2）。验证失败返回 false 且不改状态。
+  ///
+  /// V2.8.3.4：关锁后把会话标记为**已解锁**（原实现置 false）。原因：
+  /// `AppLockGate.load()` 的判据是 `enabled && !sessionUnlocked`，把
+  /// `sessionUnlocked` 置回 false 会留下一个「enabled 还没写完、sessionUnlocked
+  /// 已复位」的窗口 —— 此时任何一次 `load()`（开屏重播 / 自愈重启）都会算出
+  /// `locked = true`，把已经关掉锁的用户弹回锁屏：他刚把锁关掉，输什么 PIN
+  /// 都不对（salt/hash 已删），只能卡死在锁屏或看到空栈黑屏。
+  /// 关锁即解锁是唯一自洽的语义。
   Future<bool> disable(String pin, {int? nowMs}) async {
     if (!enabled) return true;
     if (!await verify(pin, nowMs: nowMs)) return false;
@@ -121,7 +129,12 @@ class AppLockService {
     await _prefs.setInt(AppLockKeys.failCount, 0);
     await _prefs.setInt(AppLockKeys.lockUntil, 0);
     await _prefs.setBool(AppLockKeys.enabled, false);
-    sessionUnlocked = false;
+    sessionUnlocked = true;
+    // 同步进程内的门控缓存：关锁后 `locked` 必须立刻为 false，
+    // 否则下一次 `AppLockGate.load()` 之前任何一次路由重定向都可能把用户
+    // 推回锁屏（salt/hash 已删，输什么都进不去）。放在这里而不是只放在
+    // 调用方，是为了「任何调用路径都不可能忘」。
+    AppLockGate.locked = false;
     return true;
   }
 

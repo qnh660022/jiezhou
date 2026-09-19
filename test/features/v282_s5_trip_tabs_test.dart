@@ -111,7 +111,9 @@ void main() {
       expect(screenSrc.contains('TabBarView('), isFalse);
       // 双视图：时间线（IndexedStack）+ 攻略（KitTab 并入）+ 停靠双段
       expect(screenSrc.contains('IndexedStack('), isTrue);
-      expect(screenSrc.contains('KitTab(tripId: id, canEdit:'), isTrue);
+      // V2.8.3.4：攻略视图由 KitTab 承载（末尾留白与时间线同口径）
+      expect(screenSrc.contains('KitTab('), isTrue);
+      expect(screenSrc.contains('canEdit: _canWrite,'), isTrue);
       expect(screenSrc.contains('_DetailDock('), isTrue);
       // 大纲入「更多」、装配半屏抽屉
       expect(screenSrc.contains('_openOutlineSheet'), isTrue);

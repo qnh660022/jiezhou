@@ -35,8 +35,11 @@ class FloatingCapsuleNavBar extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.xs, Spacing.lg, Spacing.sm),
         // V2.8.1 S2：σ24+α0.88 手写玻璃收编为 GlassSurface(navBar)，
         // 手写阴影删除（由 GlassSurface 双层影替代）；触觉与弹性缩放不动。
+        // V2.8.3.4：玻璃特效全 App 撤销后，底栏是**唯一**保留模糊的表面
+        // （页面内容从胶囊下方穿过，模糊是它可读性的前提），故显式开 blur。
         child: GlassSurface(
           level: GlassLevel.navBar,
+          blur: true,
           child: Container(
             height: 66,
             padding: const EdgeInsets.symmetric(horizontal: Spacing.xs),

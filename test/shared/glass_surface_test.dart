@@ -34,7 +34,10 @@ BoxDecoration? _glassDecorationOf(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('1. 四档 level：材质分档 tint / 阴影按修正表缩放（V2.8.3.1）', (tester) async {
+  testWidgets('1. 四档 level：材质分档 tint / 阴影按修正表缩放（blur: true 路径）',
+      (tester) async {
+    // V2.8.3.4：玻璃只在显式 blur: true 时渲染（全 App 仅悬浮胶囊底栏），
+    // 本用例校验的正是这条仅剩的玻璃路径仍按档位分材质。
     // V2.8.3.1 材质分档：navBar→thin、sheet/overlay→thick、floatingCard→regular
     final expectTint = {
       GlassLevel.navBar: GlassTokens.tintAlphaThinLight * 1.0,
@@ -49,7 +52,8 @@ void main() {
       GlassLevel.overlay: 0.8,
     };
     for (final level in GlassLevel.values) {
-      await tester.pumpWidget(_host(GlassSurface(level: level, child: const SizedBox())));
+      await tester.pumpWidget(
+          _host(GlassSurface(level: level, blur: true, child: const SizedBox())));
       await tester.pump();
       final deco = _glassDecorationOf(tester);
       expect(deco, isNotNull, reason: '$level 应有玻璃装饰');
@@ -68,11 +72,40 @@ void main() {
     }
   });
 
-  testWidgets('2. disableAnimations 不再触发降级（V2.8.3.2）：玻璃正常渲染', (tester) async {
+  testWidgets('1b. 默认（不传 blur）走实色表面：BackdropFilter 归零（V2.8.3.4）',
+      (tester) async {
+    for (final level in GlassLevel.values) {
+      await tester.pumpWidget(
+          _host(GlassSurface(level: level, child: const Text('实色'))));
+      await tester.pump();
+      expect(find.byType(BackdropFilter), findsNothing,
+          reason: '$level 默认不得渲染毛玻璃（玻璃特效全 App 撤销）');
+      expect(find.text('实色'), findsOneWidget);
+      // 实色分支也要保留圆角裁切与柔影抬升
+      final clip = tester.widget<ClipRRect>(find.byType(ClipRRect).first);
+      expect(clip.borderRadius, isNotNull);
+    }
+  });
+
+  testWidgets('1c. 实色表面完全不透明（卡片/顶栏不得透出底层内容）', (tester) async {
+    await tester.pumpWidget(_host(GlassSurface(
+      level: GlassLevel.floatingCard,
+      child: const Text('卡'),
+    )));
+    await tester.pump();
+    final container = tester.widget<Container>(find
+        .descendant(
+            of: find.byType(ClipRRect).first, matching: find.byType(Container))
+        .first);
+    final deco = container.decoration as BoxDecoration;
+    expect(deco.color!.alpha, 255, reason: '实色档必须 alpha=255');
+  });
+
+  testWidgets('2. disableAnimations 不影响玻璃（blur: true 仍实时模糊）', (tester) async {
     // 「移除动画」≠「降低透明度」——旧逻辑会在这类设备上把玻璃变不透明灰板。
     await tester.pumpWidget(_host(MediaQuery(
       data: const MediaQueryData(disableAnimations: true),
-      child: GlassSurface(child: const Text('动画关闭')),
+      child: GlassSurface(blur: true, child: const Text('动画关闭')),
     )));
     await tester.pump();
     expect(find.byType(BackdropFilter), findsOneWidget);
@@ -140,9 +173,9 @@ void main() {
     expect((padding.padding as EdgeInsets).bottom, 120, reason: '键盘 insets 全额避让');
   });
 
-  testWidgets('6. 深色模式 tint/highlight 取深色档', (tester) async {
+  testWidgets('6. 深色模式 tint/highlight 取深色档（blur: true 路径）', (tester) async {
     await tester.pumpWidget(_host(
-        GlassSurface(level: GlassLevel.sheet, child: const SizedBox()),
+        GlassSurface(level: GlassLevel.sheet, blur: true, child: const SizedBox()),
         brightness: Brightness.dark));
     await tester.pump();
     final deco = _glassDecorationOf(tester)!;

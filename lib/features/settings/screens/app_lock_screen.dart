@@ -59,6 +59,10 @@ class _AppLockScreenState extends State<AppLockScreen> {
       if (pin == null || !mounted) return;
       final ok = await _lock!.disable(pin);
       if (!mounted) return;
+      // V2.8.3.4：关锁成功的当刻同步门控状态（locked=false / 会话已解锁），
+      // 否则任何一次 `AppLockGate.load()` 都可能把刚关掉锁的用户弹回锁屏
+      // ——此时 salt/hash 已删除，输什么 PIN 都进不去。
+      if (ok) AppLockGate.markUnlocked();
       _toast(ok ? '启动锁已关闭' : 'PIN 不正确，未能关闭');
     }
     await _load();
@@ -96,84 +100,21 @@ class _AppLockScreenState extends State<AppLockScreen> {
     required String hint,
     required bool confirm,
     required bool requireCurrent,
-  }) async {
-    final currentCtl = TextEditingController();
-    final ctl = TextEditingController();
-    final ctl2 = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final result = await showDraggableSheet<String>(
+  }) {
+    return showDraggableSheet<String>(
       context: context,
       initialChildSize: 0.5,
       minChildSize: 0.35,
-      builder: (dialogContext, scrollController) => ListView(
-        controller: scrollController,
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(
-          Spacing.lg,
-          Spacing.sm,
-          Spacing.lg,
-          Spacing.lg,
-        ),
-        children: [
-          Text(title, style: Theme.of(dialogContext).textTheme.titleLarge),
-          const SizedBox(height: Spacing.md),
-          Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (requireCurrent)
-                  _PinField(
-                    controller: currentCtl,
-                    label: '当前 PIN',
-                  ),
-                _PinField(controller: ctl, label: hint),
-                if (confirm) _PinField(controller: ctl2, label: '再输一次确认'),
-              ],
-            ),
-          ),
-          const SizedBox(height: Spacing.lg),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('取消'),
-                ),
-              ),
-              const SizedBox(width: Spacing.sm),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () async {
-                    if (!(formKey.currentState?.validate() ?? false)) return;
-                    if (confirm && ctl.text != ctl2.text) return;
-                    final current = currentCtl.text;
-                    if (requireCurrent) {
-                      final ok = await _lock!.verify(current);
-                      if (!ok) {
-                        if (dialogContext.mounted) {
-                          ScaffoldMessenger.of(dialogContext).showSnackBar(
-                              const SnackBar(content: Text('当前 PIN 不正确')));
-                        }
-                        return;
-                      }
-                    }
-                    if (dialogContext.mounted) {
-                      Navigator.of(dialogContext).pop(ctl.text);
-                    }
-                  },
-                  child: const Text('确定'),
-                ),
-              ),
-            ],
-          ),
-        ],
+      builder: (dialogContext, scrollController) => _PinSheet(
+        title: title,
+        hint: hint,
+        confirm: confirm,
+        requireCurrent: requireCurrent,
+        verifyCurrent: (pin) async => await _lock?.verify(pin) ?? false,
+        scrollController: scrollController,
+        onDone: (v) => Navigator.of(dialogContext).pop(v),
       ),
     );
-    currentCtl.dispose();
-    ctl.dispose();
-    ctl2.dispose();
-    return result;
   }
 
   @override
@@ -227,6 +168,135 @@ class _AppLockScreenState extends State<AppLockScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+/// PIN 输入抽屉（V2.8.3.4 重写：控制器归本组件所有，随路由一起销毁）。
+///
+/// 原实现把 3 个 `TextEditingController` 建在 `_showPinDialog` 的局部作用域，
+/// `await showDraggableSheet(...)` 返回后**立刻** dispose —— 而此刻抽屉的退场
+/// 动画还没跑完，输入框会在动画帧里再次 build，抛出
+/// 「A TextEditingController was used after being disposed」。
+/// 该异常落在弹层退场帧里，release 下表现为一块黑屏/黑抽屉。改由 State 持有
+/// 并在 `dispose()` 回收后，生命周期与路由严格一致。
+class _PinSheet extends StatefulWidget {
+  const _PinSheet({
+    required this.title,
+    required this.hint,
+    required this.confirm,
+    required this.requireCurrent,
+    required this.verifyCurrent,
+    required this.scrollController,
+    required this.onDone,
+  });
+
+  final String title;
+  final String hint;
+
+  /// 需要「再输一次确认」。
+  final bool confirm;
+
+  /// 需要先校验当前 PIN。
+  final bool requireCurrent;
+
+  final Future<bool> Function(String pin) verifyCurrent;
+  final ScrollController scrollController;
+
+  /// 回传结果（null = 取消）。
+  final ValueChanged<String?> onDone;
+
+  @override
+  State<_PinSheet> createState() => _PinSheetState();
+}
+
+class _PinSheetState extends State<_PinSheet> {
+  final _currentCtl = TextEditingController();
+  final _ctl = TextEditingController();
+  final _ctl2 = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  String _error = '';
+
+  @override
+  void dispose() {
+    _currentCtl.dispose();
+    _ctl.dispose();
+    _ctl2.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (widget.confirm && _ctl.text != _ctl2.text) {
+      setState(() => _error = '两次输入不一致');
+      return;
+    }
+    if (widget.requireCurrent && !await widget.verifyCurrent(_currentCtl.text)) {
+      if (!mounted) return;
+      setState(() => _error = '当前 PIN 不正确');
+      return;
+    }
+    if (!mounted) return;
+    widget.onDone(_ctl.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      controller: widget.scrollController,
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(
+        Spacing.lg,
+        Spacing.sm,
+        Spacing.lg,
+        Spacing.lg,
+      ),
+      children: [
+        Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: Spacing.md),
+        Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.requireCurrent)
+                _PinField(controller: _currentCtl, label: '当前 PIN'),
+              _PinField(controller: _ctl, label: widget.hint),
+              if (widget.confirm)
+                _PinField(controller: _ctl2, label: '再输一次确认'),
+            ],
+          ),
+        ),
+        if (_error.isNotEmpty) ...[
+          const SizedBox(height: Spacing.sm),
+          Text(
+            _error,
+            style: TextStyle(
+              fontSize: AppFontSizes.caption,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
+        const SizedBox(height: Spacing.lg),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => widget.onDone(null),
+                child: const Text('取消'),
+              ),
+            ),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: FilledButton(
+                onPressed: _submit,
+                child: const Text('确定'),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

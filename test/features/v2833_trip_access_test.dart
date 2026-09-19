@@ -129,8 +129,10 @@ void main() {
               .readAsStringSync();
       expect(src.contains('tripAccessProvider'), isTrue,
           reason: '详情页必须订阅行程角色');
-      expect(src.contains('KitTab(tripId: id, canEdit: _canWrite)'), isTrue,
-          reason: '锦囊面板须接 viewer 只读');
+      expect(src.contains('KitTab('), isTrue,
+          reason: '攻略视图仍由 KitTab 承载');
+      expect(src.contains('canEdit: _canWrite,'), isTrue,
+          reason: '锦囊面板须接 viewer 只读（V2.8.3.4 起随 bottomInset 多行书写）');
       expect(src.contains('AssemblePanel(tripId: tripId, canEdit: canEdit)'),
           isTrue, reason: '装配台半屏抽屉须接 viewer 只读');
       expect(src.contains('OutlineTab(tripId: tripId, canEdit: canEdit)'),
