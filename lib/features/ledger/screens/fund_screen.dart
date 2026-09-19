@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/money.dart';
 import '../../../domain/models.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
@@ -14,6 +15,7 @@ import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/conflict_badge.dart';
 import 'fund_sheets.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 💰 公款池详情（S8）：一池一管理人；入金 prepay / 出金 normal，
 /// 余额为派生展示量（只统计未入账账单），「谁该退多少」由结算引擎产出。
@@ -221,37 +223,28 @@ class FundScreen extends ConsumerWidget {
     try {
       await updateFundInfo(ref, fund.id, managerMemberId: target.id);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('管理人已移交给 ${target.name}；历史账单不变')));
+        showAppSnackBar(context, '管理人已移交给 ${target.name}；历史账单不变');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('转移失败：${e.toString()}')));
+        showAppSnackBar(context, '转移失败：${e.toString()}', tone: SnackTone.destructive);
       }
     }
   }
 
   Future<void> _closeFund(BuildContext context, WidgetRef ref, FundView fund) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await showConfirmSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('关闭公费池？'),
-        content: const Text('建议先去结算页跑一轮结算（退款由结算引擎产出），再关闭。'
-            '关闭后不能再记入金或出金，池变为只读。'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(false), child: const Text('再想想')),
-          FilledButton(
-              onPressed: () => Navigator.of(context).pop(true), child: const Text('确认关闭')),
-        ],
-      ),
+      title: '关闭公费池？',
+      body: '建议先去结算页跑一轮结算（退款由结算引擎产出），再关闭。'
+          '关闭后不能再记入金或出金，池变为只读。',
+      confirmLabel: '确认关闭',
+      cancelLabel: '再想想',
     );
-    if (confirm != true) return;
+    if (!confirm) return;
     await closeFund(ref, fund.id);
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('公费池已关闭（只读）')));
+      showAppSnackBar(context, '公费池已关闭（只读）');
     }
   }
 }
@@ -414,13 +407,11 @@ class _CreateFundFormState extends ConsumerState<_CreateFundForm> {
                 targetCents: parseMoney(_targetController.text),
               );
               if (context.mounted) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(const SnackBar(content: Text('公费池已创建 ✅')));
+                showAppSnackBar(context, '公费池已创建 ✅');
               }
             } catch (e) {
               if (context.mounted) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text('创建失败：${e.toString()}')));
+                showAppSnackBar(context, '创建失败：${e.toString()}', tone: SnackTone.destructive);
               }
             }
           },

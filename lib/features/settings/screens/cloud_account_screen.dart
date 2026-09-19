@@ -11,6 +11,7 @@ import '../../../theme/theme_provider.dart' show sharedPreferencesProvider;
 import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../theme/tokens.dart';
 
@@ -125,22 +126,14 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
     final bootstrapped = ref.read(sharedPreferencesProvider).getBool('sync_bootstrapped_$uid') ?? false;
     if (bootstrapped) return;
     if (!mounted) return;
-    final upload = await showDialog<bool>(
+    final upload = await showConfirmSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(copy('cloud.uploadAskTitle')),
-        content: Text(copy('cloud.uploadAskBody')),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(copy('cloud.uploadNo'))),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(copy('cloud.uploadYes'))),
-        ],
-      ),
+      title: copy('cloud.uploadAskTitle'),
+      body: copy('cloud.uploadAskBody'),
+      confirmLabel: copy('cloud.uploadYes'),
+      cancelLabel: copy('cloud.uploadNo'),
     );
-    if (upload == true) {
+    if (upload) {
       await engine.bootstrapUploadAll();
     } else {
       await engine.syncNow(push: false);
@@ -148,18 +141,13 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
   }
 
   Future<void> _signOut() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showConfirmSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(copy('cloud.signOut')),
-        content: Text(copy('cloud.signOutConfirm')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(copy('cloud.signOut'))),
-        ],
-      ),
+      title: copy('cloud.signOut'),
+      body: copy('cloud.signOutConfirm'),
+      confirmLabel: copy('cloud.signOut'),
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     final svc = ref.read(cloudAccountServiceProvider);
     await svc?.signOut();
     await onSignedOut(ref);
@@ -169,30 +157,20 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
   Future<void> _purgeCloud() async {
     final svc = ref.read(cloudAccountServiceProvider);
     if (svc == null) return;
-    var ok = await showDialog<bool>(
+    var ok = await showConfirmSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(copy('cloud.purge')),
-        content: Text(copy('cloud.purgeConfirm1')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定')),
-        ],
-      ),
+      title: copy('cloud.purge'),
+      body: copy('cloud.purgeConfirm1'),
+      confirmLabel: '确定',
     );
-    if (ok != true) return;
-    ok = await showDialog<bool>(
+    if (!ok) return;
+    ok = await showConfirmSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(copy('cloud.purge')),
-        content: Text(copy('cloud.purgeConfirm2')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确定清除')),
-        ],
-      ),
+      title: copy('cloud.purge'),
+      body: copy('cloud.purgeConfirm2'),
+      confirmLabel: '确定清除',
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await svc.purgeMyData();
       final engine = ref.read(syncEngineProvider);

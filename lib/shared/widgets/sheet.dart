@@ -1,7 +1,6 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import '../../theme/tokens.dart';
+import 'glass_surface.dart';
 
 /// 统一底部抽屉入口：全 App 模态一律走这里（带拖拽把手，禁用系统对话框脸）。
 ///
@@ -34,7 +33,9 @@ Future<T?> showDraggableSheet<T>({
     isDismissible: isDismissible,
     backgroundColor: Colors.transparent,
     elevation: 0,
-    barrierColor: Colors.black.withValues(alpha: 0.4),
+    // V2.8.1 S2：barrier 0.4 → 0.32（预览图的 barrier 模糊为浏览器演示效果，
+    // Flutter 端全屏 BackdropFilter 成本过高，不做 —— 偏差登记）。
+    barrierColor: Colors.black.withValues(alpha: 0.32),
     builder: (sheetContext) {
       return DraggableScrollableSheet(
         expand: false,
@@ -72,34 +73,32 @@ class SheetContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.cardValue)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow.withValues(alpha: 0.98),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(AppRadius.cardValue)),
-          ),
-          child: Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewPaddingOf(context).bottom > MediaQuery.viewInsetsOf(context).bottom
-                  ? MediaQuery.viewPaddingOf(context).bottom
-                  : MediaQuery.viewInsetsOf(context).bottom,
+    // V2.8.1 S2：α0.98 手写底面 → GlassSurface(sheet)。
+    // 解决 2026-09-13「字与底面重叠」的正确姿势：σ28 强模糊 + 饱和补偿，非堆不透明度。
+    return GlassSurface(
+      level: GlassLevel.sheet,
+      borderRadius:
+          const BorderRadius.vertical(top: Radius.circular(AppRadius.cardValue)),
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewPaddingOf(context).bottom > MediaQuery.viewInsetsOf(context).bottom
+              ? MediaQuery.viewPaddingOf(context).bottom
+              : MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showHandle)
+              Padding(
+                padding: const EdgeInsets.only(top: Spacing.sm, bottom: Spacing.xs),
+                child: SheetHandle(color: scheme.onSurfaceVariant),
+              ),
+            // V2.8.1 S6：玻璃底面是带色 DecoratedBox，ListTile/InkWell 的水波纹
+            // 需要最近的 Material 祖先 —— 内层补一层透明 Material。
+            Expanded(
+              child: Material(type: MaterialType.transparency, child: child),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showHandle)
-                  Padding(
-                    padding: const EdgeInsets.only(top: Spacing.sm, bottom: Spacing.xs),
-                    child: SheetHandle(color: scheme.onSurfaceVariant),
-                  ),
-                Expanded(child: child),
-              ],
-            ),
-          ),
+          ],
         ),
       ),
     );
@@ -119,14 +118,12 @@ class SheetSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return ClipRRect(
+    // V2.8.1 S2：修复其完全无模糊问题 —— 直接 GlassSurface 包装。
+    return GlassSurface(
+      level: GlassLevel.sheet,
       borderRadius:
           const BorderRadius.vertical(top: Radius.circular(AppRadius.cardValue)),
-      child: ColoredBox(
-        color: scheme.surfaceContainerLow.withValues(alpha: 0.98),
-        child: child,
-      ),
+      child: child,
     );
   }
 }

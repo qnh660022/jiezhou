@@ -12,6 +12,7 @@ import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/conflict_badge.dart';
 import 'inbox_sheets.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 📥 记账收件箱（S10）：先记后理。
 ///
@@ -139,13 +140,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       await convertInboxItem(ref, itemId: item.id, draft: draft);
       if (mounted) {
         setState(() => _selected.remove(item.id));
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('已归类进账本 ✅')));
+        showAppSnackBar(context, '已归类进账本 ✅');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('归类失败：${e.toString()}')));
+        showAppSnackBar(context, '归类失败：${e.toString()}', tone: SnackTone.destructive);
       }
     }
   }
@@ -171,13 +170,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
       );
       if (mounted) {
         setState(() => _selected.clear());
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('已归类 $done 笔 ✅')));
+        showAppSnackBar(context, '已归类 $done 笔 ✅');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('批量归类失败：${e.toString()}')));
+        showAppSnackBar(context, '批量归类失败：${e.toString()}', tone: SnackTone.destructive);
       }
     }
   }

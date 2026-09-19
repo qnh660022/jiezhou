@@ -22,3 +22,4 @@ export 'ledger_providers/inbox.dart';
 export 'ledger_providers/io_csv.dart';
 export 'ledger_providers/settle.dart';
 export 'ledger_providers/stats.dart';
+export 'ledger_providers/sub_budgets.dart'; // V2.8.1 分类子预算

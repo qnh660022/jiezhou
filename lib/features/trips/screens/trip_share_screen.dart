@@ -1,14 +1,12 @@
 // 🔗 分享行程海报：RepaintBoundary 预览 + 保存 + 分享
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
-import '../../../export/share_helper.dart';
+// S5：海报渲染基建共用（行程海报与结算卡同源）。
+import '../../../export/poster_exporter.dart';
 
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
@@ -244,34 +242,23 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
     );
   }
 
-  Future<ui.Image?> _captureImage() async {
-    final boundary = _posterKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary == null) return null;
-    return boundary.toImage(pixelRatio: 3.0);
-  }
-
   Future<void> _saveToAlbum() async {
     HapticFeedback.mediumImpact();
-    final image = await _captureImage();
-    if (image == null) { _toast('截图失败'); return; }
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    if (byteData == null) { _toast('截图失败'); return; }
-    final bytes = byteData.buffer.asUint8List();
-    final msg = await saveImageBytes(
-        bytes, 'poster_${DateTime.now().millisecondsSinceEpoch}.png');
+    // S5：海报渲染基建已抽到 export/poster_exporter.dart（与结算卡共用）。
+    final msg = await savePosterPng(
+        _posterKey, 'poster_${DateTime.now().millisecondsSinceEpoch}.png');
     _toast('${copy(CopyTokens.exportDone)} $msg');
   }
 
   Future<void> _share() async {
     HapticFeedback.mediumImpact();
-    final image = await _captureImage();
-    if (image == null) { _toast('截图失败'); return; }
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    if (byteData == null) { _toast('截图失败'); return; }
-    final bytes = byteData.buffer.asUint8List();
     final trip = await ref.read(tripsRepoProvider).getById(_tripId!);
-    await shareFile(bytes, 'poster_share.png', 'image/png',
+    final ok = await sharePosterPng(_posterKey, 'poster_share.png',
         text: '来看看我的行程「${trip?.name ?? ''}」');
+    if (!ok) {
+      _toast('截图失败');
+      return;
+    }
     _toast(copy(CopyTokens.shareDone));
   }
 }

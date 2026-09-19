@@ -12,6 +12,7 @@ import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/category_icon_box.dart';
 import '../widgets/stagger_in.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 🏷️ 分类管理：内置 7 类锁定展示 + 自定义增删（被引用拦截）。
 class CategoriesScreen extends ConsumerWidget {
@@ -166,13 +167,11 @@ class CategoriesScreen extends ConsumerWidget {
                 try {
                   await createCategory(ref, name, selectedIcon);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(SnackBar(content: Text('「' + name + '」加好了 🏷️')));
+                    showAppSnackBar(context, '「' + name + '」加好了 🏷️');
                   }
                 } catch (_) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(const SnackBar(content: Text('创建失败：名字可能重复了')));
+                    showAppSnackBar(context, '创建失败：名字可能重复了', tone: SnackTone.destructive);
                   }
                 }
               },
@@ -345,14 +344,12 @@ class _CustomSection extends ConsumerWidget {
                       try {
                         await removeCategory(ref, category.key);
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('已删除「' + category.name + '」')));
+                          showAppSnackBar(context, '已删除「' + category.name + '」', tone: SnackTone.destructive);
                         }
                       } on StateError {
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('该分类已被 ' + n.toString() + ' 笔账单引用，不能删除'),
-                          ));
+                          showAppSnackBar(context, '该分类已被 ' + n.toString() + ' 笔账单引用，不能删除',
+                              tone: SnackTone.destructive);
                         }
                       }
                     },

@@ -18,6 +18,7 @@ import '../ledger_providers.dart';
 import '../widgets/member_avatar.dart';
 import '../widgets/stagger_in.dart';
 import 'settle_card_sheet.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// ⚖️ AA 结算：净额榜 → 转账方案逐笔确认 → 完成本轮；历史可撤销。
 ///
@@ -97,9 +98,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                                   if (!context.mounted) return;
                                   // 余额已平衡 / 无未结账单时，createSettlement 返回 null 不入库
                                   if (!created) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('当前没有需要结算的账单 🎉')),
-                                    );
+                                    showAppSnackBar(context, '当前没有需要结算的账单 🎉');
                                   }
                                 },
                               ),
@@ -284,8 +283,7 @@ class _ActiveRound extends ConsumerWidget {
                   HapticFeedback.lightImpact();
                   await finishSettlement(ref, settlement.id);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('第 ' + settlement.roundNo.toString() + ' 轮结清，干杯 🎉')));
+                    showAppSnackBar(context, '第 ' + settlement.roundNo.toString() + ' 轮结清，干杯 🎉');
                   }
                 }
               : null,

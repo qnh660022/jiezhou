@@ -5,9 +5,10 @@
 ///
 /// 备份根结构：
 /// ```json
-/// {"app":"travel-assistant-v2","version":1,
+/// {"app":"travel-assistant-v2","version":2,
 ///  "group":{...},"members":[...],"expenses":[...],
-///  "settlements":[...],"trips":[{"items":[...]}],"customCategories":[...]}
+///  "settlements":[...],"trips":[{"items":[...]}],"customCategories":[...],
+///  "subBudgets":[...]}
 /// ```
 ///
 /// 【四级重映射】成员 → 账单 → 行程 → 安排：
@@ -27,7 +28,11 @@ import '../core/uid.dart';
 const String kBackupApp = 'travel-assistant-v2';
 
 /// 当前备份格式版本
-const int kBackupVersion = 1;
+///
+/// V2.8.1：1 → 2（新增 `subBudgets` 键）。读取端兼容旧包：version 1 仍可解析
+/// （旧包无该键时按空清单跳过）；旧版 App 读新包会因 version > 1 拒绝——
+/// 属有意的单向门槛（新键内容对旧版不可还原）。
+const int kBackupVersion = 2;
 
 /// id 换发器签名（测试注入确定性实现）
 typedef IdGen = String Function(String prefix);
@@ -47,6 +52,7 @@ Map<String, dynamic> buildGroupBackup({
   required List<Map<String, dynamic>> settlements,
   required List<Map<String, dynamic>> trips,
   required List<Map<String, dynamic>> customCategories,
+  List<Map<String, dynamic>> subBudgets = const <Map<String, dynamic>>[],
 }) =>
     <String, dynamic>{
       'app': kBackupApp,
@@ -66,6 +72,8 @@ Map<String, dynamic> buildGroupBackup({
           },
       ],
       'customCategories': [for (final c in customCategories) _copy(c)],
+      // V2.8.1：分类子预算随团备份（旧包无此键，见 parseGroupBackupMap）
+      'subBudgets': [for (final b in subBudgets) _copy(b)],
     };
 
 /// 备份 → JSON 文本
@@ -81,6 +89,7 @@ class GroupBackup {
     required this.settlements,
     required this.trips,
     required this.customCategories,
+    this.subBudgets = const <Map<String, dynamic>>[],
   });
 
   final int version;
@@ -92,6 +101,9 @@ class GroupBackup {
   /// 每个行程自带 `items` 键
   final List<Map<String, dynamic>> trips;
   final List<Map<String, dynamic>> customCategories;
+
+  /// 分类子预算（V2.8.1；旧包无该键时为空清单）
+  final List<Map<String, dynamic>> subBudgets;
 }
 
 List<Map<String, dynamic>> _asMapList(Object? v) => [
@@ -133,6 +145,8 @@ GroupBackup parseGroupBackupMap(Map<String, dynamic> root) {
     settlements: _asMapList(root['settlements']),
     trips: _asMapList(root['trips']),
     customCategories: _asMapList(root['customCategories']),
+    // V2.8.1：旧包（version 1）无 subBudgets 键 → 空清单，导入时自然跳过。
+    subBudgets: _asMapList(root['subBudgets']),
   );
 }
 
@@ -194,6 +208,7 @@ class ImportResult {
     required this.trips,
     required this.customCategories,
     required this.stats,
+    this.subBudgets = const <Map<String, dynamic>>[],
   });
 
   final Map<String, dynamic> group;
@@ -202,6 +217,9 @@ class ImportResult {
   final List<Map<String, dynamic>> settlements;
   final List<Map<String, dynamic>> trips;
   final List<Map<String, dynamic>> customCategories;
+
+  /// 分类子预算（V2.8.1；旧包为空清单）
+  final List<Map<String, dynamic>> subBudgets;
   final ImportStats stats;
 }
 
@@ -378,6 +396,18 @@ ImportResult applyImport(
     });
   }
 
+  // ⑧ 分类子预算（V2.8.1）：换发新 id + 归到新团；category_key 为弱关联
+  // （不建外键），随原值透传——引用的自定义分类若已随包换发，会指向旧 key，
+  // 与账单 categoryKey 的既有口径一致（同名复用/内置 key 不受影响）。
+  final newSubBudgets = <Map<String, dynamic>>[];
+  for (final b in backup.subBudgets) {
+    newSubBudgets.add(<String, dynamic>{
+      ..._copy(b),
+      'id': g('subbud'),
+      'groupId': newGroupId,
+    });
+  }
+
   return ImportResult(
     group: newGroup,
     members: newMembers,
@@ -385,6 +415,7 @@ ImportResult applyImport(
     settlements: newSettlements,
     trips: newTrips,
     customCategories: newCategories,
+    subBudgets: newSubBudgets,
     stats: ImportStats(
       members: newMembers.length,
       expenses: newExpenses.length,

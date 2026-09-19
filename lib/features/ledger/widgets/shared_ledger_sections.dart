@@ -33,9 +33,11 @@ import '../../../domain/models.dart' hide Settlement;
 import '../../../domain/settle_engine.dart';
 import '../../../domain/share_splitter.dart';
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 // ============ 数据源抽象 ============
 
@@ -620,9 +622,7 @@ mixin SharedDirectWrite<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    showAppSnackBar(context, msg);
   }
 
   Future<void> toastResult(bool ok, {String? okMsg}) async {
@@ -799,10 +799,7 @@ class _SharedBillsSectionState extends ConsumerState<SharedBillsSection>
   Future<void> _add() async {
     final custom = widget.onAddBill;
     if (custom != null) return custom();
-    final form = await showDialog<_BillForm?>(
-      context: context,
-      builder: (_) => const _BillFormDialog(),
-    );
+    final form = await _showBillFormSheet(context);
     if (form == null) return;
     final all = await widget.data.members();
     if (all.isEmpty) {
@@ -924,15 +921,13 @@ class _SharedBillsSectionState extends ConsumerState<SharedBillsSection>
   Future<void> _edit(ExpenseRecord e) async {
     final custom = widget.onEditBill;
     if (custom != null) return custom(e);
-    final form = await showDialog<_BillForm?>(
-      context: context,
-      builder: (_) => _BillFormDialog(
-        initial: _BillForm(
-          e.title,
-          e.amountCents,
-          e.dateEpochDay,
-          e.categoryKey,
-        ),
+    final form = await _showBillFormSheet(
+      context,
+      initial: _BillForm(
+        e.title,
+        e.amountCents,
+        e.dateEpochDay,
+        e.categoryKey,
       ),
     );
     if (form == null) return;
@@ -991,24 +986,13 @@ class _SharedBillsSectionState extends ConsumerState<SharedBillsSection>
   Future<void> _delete(ExpenseRecord e) async {
     final custom = widget.onDeleteBill;
     if (custom != null) return custom(e);
-    final okConfirm = await showDialog<bool>(
+    final okConfirm = await showDangerConfirm(
       context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('删除账单'),
-        content: Text('删除「${e.title}」？云端共享成员都会看到该账单被删除。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(d, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(d, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除账单',
+      body: '删除「${e.title}」？共 1 笔，云端共享成员都会看到该账单被删除。',
+      confirmLabel: '删除',
     );
-    if (okConfirm != true) return;
+    if (!okConfirm) return;
     // created_ms 沿用镜像原值（改值即改数据路径）
     final createdAt = await widget.data.createdAtOf(e.id);
     final row = expenseRow(
@@ -1204,22 +1188,43 @@ class _SharedMembersSectionState extends ConsumerState<SharedMembersSection>
 
   Future<String?> _askName() async {
     final nameCtl = TextEditingController();
-    final name = await showDialog<String>(
+    final name = await showDraggableSheet<String>(
       context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('添加成员'),
-        content: TextField(
-          controller: nameCtl,
-          decoration: const InputDecoration(labelText: '成员名'),
+      initialChildSize: 0.45,
+      minChildSize: 0.3,
+      builder: (d, scrollController) => ListView(
+        controller: scrollController,
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(
+          Spacing.lg,
+          Spacing.sm,
+          Spacing.lg,
+          Spacing.lg,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(d),
-            child: const Text('取消'),
+        children: [
+          Text('添加成员', style: Theme.of(d).textTheme.titleLarge),
+          const SizedBox(height: Spacing.lg),
+          TextField(
+            controller: nameCtl,
+            decoration: const InputDecoration(labelText: '成员名'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(d, nameCtl.text.trim()),
-            child: const Text('添加'),
+          const SizedBox(height: Spacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(d),
+                  child: const Text('取消'),
+                ),
+              ),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(d, nameCtl.text.trim()),
+                  child: const Text('添加'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1230,24 +1235,14 @@ class _SharedMembersSectionState extends ConsumerState<SharedMembersSection>
   Future<void> _remove(LedgerMember m) async {
     final custom = widget.onRemoveMember;
     if (custom != null) return custom(context, m);
-    final okConfirm = await showDialog<bool>(
+    final okConfirm = await showConfirmSheet(
       context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('移出成员'),
-        content: Text('将「${m.name}」移出本团？其历史账单分摊保留。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(d, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(d, true),
-            child: const Text('移出'),
-          ),
-        ],
-      ),
+      title: '移出成员',
+      body: '将「${m.name}」移出本团？其 1 份历史分摊记录保留。',
+      confirmLabel: '移出',
+      danger: true,
     );
-    if (okConfirm != true) return;
+    if (!okConfirm) return;
     bool ok;
     if (widget.data.source == LedgerSectionSource.mirror) {
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -1608,37 +1603,19 @@ class _SharedSettleSectionState extends ConsumerState<SharedSettleSection>
     final plan = minTransferPlan(balances);
     final nameOf = {for (final m in all) m.id: m.name};
     if (!mounted) return; // await 之后必须复查：页面可能已被 pop
-    final okConfirm = await showDialog<bool>(
+    final planLines = [
+      for (final t in plan)
+        '${nameOf[t.from] ?? t.from} → ${nameOf[t.to] ?? t.to}：'
+            '${formatMoney(t.cents)}',
+    ];
+    final okConfirm = await showConfirmSheet(
       context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('确认结算'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('结算后以下转账建议将入账：'),
-            const SizedBox(height: Spacing.sm),
-            if (plan.isEmpty) const Text('当前无需转账（已两清）'),
-            for (final t in plan)
-              Text(
-                '${nameOf[t.from] ?? t.from} → ${nameOf[t.to] ?? t.to}：'
-                '${formatMoney(t.cents)}',
-              ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(d, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(d, true),
-            child: const Text('确认结算'),
-          ),
-        ],
-      ),
+      title: '确认结算',
+      body: '结算后以下转账建议将入账：\n'
+          '${plan.isEmpty ? '当前无需转账（已两清）' : planLines.join('\n')}',
+      confirmLabel: '确认结算',
     );
-    if (okConfirm != true) return;
+    if (!okConfirm) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
     final settlements = await widget.data.watchSettlements().first;
@@ -1744,16 +1721,28 @@ class _BillForm {
   final String categoryKey;
 }
 
-class _BillFormDialog extends StatefulWidget {
-  const _BillFormDialog({this.initial});
-
-  final _BillForm? initial;
-
-  @override
-  State<_BillFormDialog> createState() => _BillFormDialogState();
+/// V2.8.1 S3：账单表单弹窗迁 L4 表单抽屉（原 _BillFormDialog，零业务变化）。
+Future<_BillForm?> _showBillFormSheet(BuildContext context, {_BillForm? initial}) {
+  return showDraggableSheet<_BillForm>(
+    context: context,
+    builder: (sheetContext, scrollController) => _BillFormSheet(
+      initial: initial,
+      scrollController: scrollController,
+    ),
+  );
 }
 
-class _BillFormDialogState extends State<_BillFormDialog> {
+class _BillFormSheet extends StatefulWidget {
+  const _BillFormSheet({this.initial, required this.scrollController});
+
+  final _BillForm? initial;
+  final ScrollController scrollController;
+
+  @override
+  State<_BillFormSheet> createState() => _BillFormSheetState();
+}
+
+class _BillFormSheetState extends State<_BillFormSheet> {
   late final TextEditingController _title = TextEditingController(
     text: widget.initial?.title ?? '',
   );
@@ -1788,73 +1777,85 @@ class _BillFormDialogState extends State<_BillFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.initial == null ? '记一笔' : '编辑账单'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _title,
-            decoration: const InputDecoration(labelText: '名目'),
-          ),
-          TextField(
-            controller: _amount,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: '金额（元）'),
-          ),
-          const SizedBox(height: Spacing.md),
-          Wrap(
-            spacing: Spacing.sm,
-            children: [
-              for (final c in _categories)
-                ChoiceChip(
-                  label: Text(c),
-                  selected: _category == c,
-                  onSelected: (_) => setState(() => _category = c),
-                ),
-            ],
-          ),
-          const SizedBox(height: Spacing.sm),
-          Row(
-            children: [
-              Text('日期：${_date.month}/${_date.day}'),
-              const Spacer(),
-              TextButton(
-                onPressed: () async {
-                  final d = await showDatePicker(
-                    context: context,
-                    initialDate: _date,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime(2040),
-                  );
-                  if (d != null && mounted) setState(() => _date = d);
-                },
-                child: const Text('选择'),
-              ),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+    return ListView(
+      controller: widget.scrollController,
+      shrinkWrap: true,
+      padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.sm, Spacing.lg, Spacing.lg),
+      children: [
+        Text(
+          widget.initial == null ? '记一笔' : '编辑账单',
+          style: Theme.of(context).textTheme.titleLarge,
         ),
-        FilledButton(
-          onPressed: () {
-            final cents = parseMoney(_amount.text);
-            if (_title.text.trim().isEmpty || cents == null) return;
-            Navigator.pop(
-              context,
-              _BillForm(
-                _title.text.trim(),
-                cents,
-                dateToEpochDay(_date),
-                _category,
+        const SizedBox(height: Spacing.md),
+        TextField(
+          controller: _title,
+          decoration: const InputDecoration(labelText: '名目'),
+        ),
+        TextField(
+          controller: _amount,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: '金额（元）'),
+        ),
+        const SizedBox(height: Spacing.md),
+        Wrap(
+          spacing: Spacing.sm,
+          children: [
+            for (final c in _categories)
+              ChoiceChip(
+                label: Text(c),
+                selected: _category == c,
+                onSelected: (_) => setState(() => _category = c),
               ),
-            );
-          },
-          child: const Text('保存'),
+          ],
+        ),
+        const SizedBox(height: Spacing.sm),
+        Row(
+          children: [
+            Text('日期：${_date.month}/${_date.day}'),
+            const Spacer(),
+            TextButton(
+              onPressed: () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: _date,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2040),
+                );
+                if (d != null && mounted) setState(() => _date = d);
+              },
+              child: const Text('选择'),
+            ),
+          ],
+        ),
+        const SizedBox(height: Spacing.lg),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+            ),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: FilledButton(
+                onPressed: () {
+                  final cents = parseMoney(_amount.text);
+                  if (_title.text.trim().isEmpty || cents == null) return;
+                  Navigator.pop(
+                    context,
+                    _BillForm(
+                      _title.text.trim(),
+                      cents,
+                      dateToEpochDay(_date),
+                      _category,
+                    ),
+                  );
+                },
+                child: const Text('保存'),
+              ),
+            ),
+          ],
         ),
       ],
     );

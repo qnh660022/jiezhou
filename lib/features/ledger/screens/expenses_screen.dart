@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:ui' show ImageFilter;
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -9,12 +8,19 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/date_utils.dart';
 import '../../../domain/models.dart';
+import '../../../data/providers.dart';
 import '../../../export/share_helper.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/sheet.dart';
+import '../../../shared/widgets/swipeable_bill_tile.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
+import '../ledger_access.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/bill_detail_sheet.dart';
@@ -40,10 +46,46 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   bool _showSearch = false;
   final _searchController = TextEditingController();
 
+  /// V2.8.1 S6：时间筛选（📅 pill → showDateRangePicker；参与 URL 参数）。
+  int? _fromEpochDay;
+  int? _toEpochDay;
+
+  /// V2.8.1 S6：批量多选态（空集 = 未进入批量）。
+  final Set<String> _selected = {};
+
+  bool _paramsApplied = false;
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// V2.8.1 S6：`/expenses` query 参数解析（category/member/payMethods/from/to）。
+  /// 供 S8 统计下钻跳转；无参时保持既有默认行为。
+  void _applyQueryParams() {
+    if (_paramsApplied) return;
+    _paramsApplied = true;
+    Map<String, String> q;
+    try {
+      q = GoRouterState.of(context).uri.queryParameters;
+    } catch (_) {
+      return; // 非 go_router 子树（如桌面工作台）无 query
+    }
+    final category = q['category'];
+    if (category != null && category.isNotEmpty) _categoryFilter = category;
+    final member = q['member'];
+    if (member != null && member.isNotEmpty) _memberFilter = member;
+    final pays = q['payMethods'];
+    if (pays != null && pays.isNotEmpty) {
+      _payFilter.addAll(pays.split(','));
+    }
+    final from = int.tryParse(q['from'] ?? '');
+    final to = int.tryParse(q['to'] ?? '');
+    if (from != null && to != null && to >= from) {
+      _fromEpochDay = from;
+      _toEpochDay = to;
+    }
   }
 
   List<ExpenseRecord> _applyFilters(List<ExpenseRecord> all, List<LedgerMemberView> members) {
@@ -51,6 +93,10 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     return all.where((e) {
       if (_categoryFilter.isNotEmpty && e.categoryKey != _categoryFilter) return false;
       if (_payFilter.isNotEmpty && !_payFilter.contains(e.payMethod ?? '')) return false;
+      if (_fromEpochDay != null && _toEpochDay != null &&
+          (e.dateEpochDay < _fromEpochDay! || e.dateEpochDay > _toEpochDay!)) {
+        return false;
+      }
       if (_memberFilter.isNotEmpty &&
           !e.payers.any((p) => p.memberId == _memberFilter) &&
           !e.shares.any((s) => s.memberId == _memberFilter)) {
@@ -70,8 +116,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
 
   Future<void> _exportCsv(List<ExpenseRecord> expenses) async {
     if (expenses.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('还没有可导出的账单')));
+      showAppSnackBar(context, '还没有可导出的账单');
       return;
     }
     try {
@@ -107,15 +152,19 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       await shareFile(utf8.encode(csv), filename, 'text/csv; charset=utf-8');
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('导出失败了，再试一次？')));
+        showAppSnackBar(context, '导出失败了，再试一次？', tone: SnackTone.destructive);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    _applyQueryParams();
     final scheme = Theme.of(context).colorScheme;
+    final gid = ref.watch(activeGroupIdProvider).value;
+    final canWrite = gid == null
+        ? true
+        : (ref.watch(ledgerAccessProvider(gid)).value?.canWrite ?? true);
     final expensesAsync = ref.watch(expensesProvider);
     final membersAsync = ref.watch(membersProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
@@ -210,15 +259,6 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   ),
           ),
         ),
-        // S11：支付方式筛选（多选，含「未标记」）
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Spacing.xl, 0, Spacing.xl, Spacing.sm),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            child: Row(children: _buildPayFilterPills()),
-          ),
-        ),
         Expanded(
           child: loading
               ? ListView(
@@ -228,20 +268,31 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 )
               : Stack(
                   children: [
-                    _buildBody(filtered),
+                    _buildBody(filtered, canWrite: canWrite),
                     Positioned(
                       left: Spacing.xl,
                       right: Spacing.xl,
                       // 合计栏下移贴近底部（避开悬浮胶囊栏即可），减少对滚动账单的遮挡。
+                      // V2.8.1 S6：批量态用玻璃批量条替代合计栏。
                       bottom: AppBottomLayout.withSafeArea(
                         context,
                         AppBottomLayout.actionButtonOffset,
                       ),
-                      child: _TotalBar(
-                        totalCents: totalCents,
-                        count: filtered.length,
-                        prepayTotalCents: prepayTotal,
-                      ),
+                      child: canWrite && _selected.isNotEmpty
+                          ? _BatchBar(
+                              count: _selected.length,
+                              totalCents: filtered
+                                  .where((e) => _selected.contains(e.id))
+                                  .fold(0, (a, e) => a + e.amountCents),
+                              onDelete: _deleteSelected,
+                              onChangeCategory: _changeCategoryOfSelected,
+                              onCancel: () => setState(_selected.clear),
+                            )
+                          : _TotalBar(
+                              totalCents: totalCents,
+                              count: filtered.length,
+                              prepayTotalCents: prepayTotal,
+                            ),
                     ),
                     Positioned(
                       right: Spacing.xl,
@@ -357,7 +408,104 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             ),
             const SizedBox(width: Spacing.sm),
           ],
+          // V2.8.1 S6：📅 时间筛选（showDateRangePicker；激活后 pill 显示区间）
+          _FilterPill(
+            label: _fromEpochDay != null && _toEpochDay != null
+                ? '${epochDayToDate(_fromEpochDay!).month}/${epochDayToDate(_fromEpochDay!).day}'
+                    '-${epochDayToDate(_toEpochDay!).month}/${epochDayToDate(_toEpochDay!).day}'
+                : '\u{1F4C5} 时间',
+            selected: _fromEpochDay != null && _toEpochDay != null,
+            onTap: _pickDateRange,
+          ),
+          const SizedBox(width: Spacing.sm),
+          // V2.8.1 S6：⚙ 更多筛选抽屉；有激活筛选时显示数字徽章
+          _FilterPill(
+            label: _payFilter.isNotEmpty ? '\u2699 ${_payFilter.length}' : '\u2699 更多',
+            selected: _payFilter.isNotEmpty,
+            onTap: _openMoreFilterSheet,
+          ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _pickDateRange() async {
+    HapticFeedback.selectionClick();
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2015, 1, 1),
+      lastDate: DateTime(2045, 12, 31),
+      initialDateRange: _fromEpochDay != null && _toEpochDay != null
+          ? DateTimeRange(
+              start: epochDayToDate(_fromEpochDay!),
+              end: epochDayToDate(_toEpochDay!))
+          : DateTimeRange(start: DateTime(now.year, now.month, 1), end: now),
+    );
+    if (picked == null) return;
+    setState(() {
+      _fromEpochDay = dateToEpochDay(picked.start);
+      _toEpochDay = dateToEpochDay(picked.end);
+    });
+  }
+
+  /// V2.8.1 S6：⚙ 更多筛选抽屉（支付方式多选 + 清空）。
+  Future<void> _openMoreFilterSheet() async {
+    HapticFeedback.selectionClick();
+    await showDraggableSheet<void>(
+      context: context,
+      initialChildSize: 0.5,
+      minChildSize: 0.35,
+      builder: (sheetContext, scrollController) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
+          children: [
+            Text('更多筛选', style: Theme.of(sheetContext).textTheme.titleLarge),
+            const SizedBox(height: Spacing.sm),
+            Text('支付方式（可多选）', style: Theme.of(sheetContext).textTheme.bodySmall),
+            const SizedBox(height: Spacing.sm),
+            Wrap(
+              spacing: Spacing.sm,
+              runSpacing: Spacing.sm,
+              children: [
+                for (final e in kPayMethodLabels.entries)
+                  _FilterPill(
+                    label: e.value,
+                    selected: _payFilter.contains(e.key),
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setSheetState(() => _payFilter.contains(e.key)
+                          ? _payFilter.remove(e.key)
+                          : _payFilter.add(e.key));
+                      setState(() {});
+                    },
+                  ),
+                _FilterPill(
+                  label: '未标记',
+                  selected: _payFilter.contains(''),
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setSheetState(() => _payFilter.contains('')
+                        ? _payFilter.remove('')
+                        : _payFilter.add(''));
+                    setState(() {});
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: Spacing.lg),
+            OutlinedButton.icon(
+              onPressed: () {
+                _payFilter.clear();
+                setState(() {});
+                setSheetState(() {});
+              },
+              icon: const Icon(Icons.clear_all_rounded, size: 18),
+              label: const Text('清空支付方式筛选'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -366,45 +514,99 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   // 列表主体：按日分组 + 吸顶日期头
   // ---------------------------------------------------------------------------
 
-  Widget _buildBody(List<ExpenseRecord> expenses) {
+  /// V2.8.1 S6：列表主体 —— 双级吸顶（月度头玻璃 navBar 档 + 日头）+ 批量多选。
+  Widget _buildBody(List<ExpenseRecord> expenses, {required bool canWrite}) {
     if (expenses.isEmpty) {
-      final anyAtAll = (ref.read(expensesProvider).value ?? const <ExpenseRecord>[]).isEmpty;
+      // V2.8.1 S6：修正空态双分支的判定反转（原实现 isEmpty 误作 anyAtAll，
+      // 空库会误显「没找到匹配的账单」）。规格 §9.2-7：空态双分支沿用。
+      final hasAnyBills =
+          (ref.read(expensesProvider).value ?? const <ExpenseRecord>[]).isNotEmpty;
       return EmptyState(
-        emoji: anyAtAll ? '🔍' : '🧾',
-        title: anyAtAll ? '没找到匹配的账单' : '一笔都还没记',
-        message: anyAtAll ? '换个筛选条件试试' : '点「记一笔」，花销从此有迹可循',
-        actionLabel: anyAtAll ? null : '记一笔',
-        onAction: anyAtAll ? null : () => context.push('/expenses/edit'),
+        emoji: hasAnyBills ? '🔍' : '🧾',
+        title: hasAnyBills ? '没找到匹配的账单' : '一笔都还没记',
+        message: hasAnyBills ? '换个筛选条件试试' : '点「记一笔」，花销从此有迹可循',
+        actionLabel: hasAnyBills ? null : '记一笔',
+        onAction: hasAnyBills ? null : () => context.push('/expenses/edit'),
       );
     }
 
     final categories = ref.read(categoriesProvider).value ?? const <CategoryView>[];
     final members = ref.read(membersProvider).value ?? const <LedgerMemberView>[];
-    final groups = expenses.groupListsBy((e) => e.dateEpochDay);
-    final days = groups.keys.toList();
+    // 月 → 日 两级分组（日序号降序 = 时间倒序）
+    final byMonth = <int, List<ExpenseRecord>>{};
+    for (final e in expenses) {
+      (byMonth[epochDayToDate(e.dateEpochDay).year * 100 + epochDayToDate(e.dateEpochDay).month] ??= [])
+          .add(e);
+    }
+    final months = byMonth.keys.toList()..sort((a, b) => b.compareTo(a));
+    final batchMode = _selected.isNotEmpty && canWrite;
 
     return CustomScrollView(
       slivers: [
-        for (final day in days) ...[
+        for (final monthKey in months) ...[
+          // 月度头：玻璃 navBar 档吸顶（2026年10月 · 共 ¥9,214）
           SliverPersistentHeader(
             pinned: true,
-            delegate: _StickyHeaderDelegate(
-              child: _DateHeader(epochDay: day, subtotal: _daySubtotal(groups[day]!)),
+            delegate: _MonthHeaderDelegate(
+              monthKey: monthKey,
+              subtotal: _monthSubtotal(byMonth[monthKey]!),
             ),
           ),
-          SliverList.builder(
-            itemCount: groups[day]!.length,
-            itemBuilder: (context, i) => StaggerIn(
-              index: i,
-              child: _ExpenseTile(
-                expense: groups[day]![i],
-                // S2 G1：悬空 memberId（仅存量物理删除数据）兜底为「已移除成员」。
-                memberName: (id) =>
-                    members.where((m) => m.id == id).firstOrNull?.name ?? '已移除成员',
-                categoryIcon: categories.where((c) => c.key == groups[day]![i].categoryKey).firstOrNull?.icon ?? '🏷️',
+          for (final day in byMonth[monthKey]!
+              .map((e) => e.dateEpochDay)
+              .toSet()
+              .toList()
+            ..sort((a, b) => b.compareTo(a))) ...[
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _StickyHeaderDelegate(
+                child: _DateHeader(
+                    epochDay: day,
+                    subtotal: _daySubtotal(
+                        byMonth[monthKey]!.where((e) => e.dateEpochDay == day).toList())),
               ),
             ),
-          ),
+            SliverList.builder(
+              itemCount:
+                  byMonth[monthKey]!.where((e) => e.dateEpochDay == day).length,
+              itemBuilder: (context, i) {
+                final expense =
+                    byMonth[monthKey]!.where((e) => e.dateEpochDay == day).toList()[i];
+                final selected = _selected.contains(expense.id);
+                final tile = _ExpenseTile(
+                  expense: expense,
+                  memberName: (id) =>
+                      members.where((m) => m.id == id).firstOrNull?.name ?? '已移除成员',
+                  categoryIcon:
+                      categories.where((c) => c.key == expense.categoryKey).firstOrNull?.icon ?? '🏷️',
+                  selected: batchMode || selected,
+                  checkVisible: batchMode,
+                  onToggleSelect: canWrite && batchMode
+                      ? () => setState(() => _selected.contains(expense.id)
+                          ? _selected.remove(expense.id)
+                          : _selected.add(expense.id))
+                      : null,
+                );
+                // viewer/只读不进入批量与滑动动作（隐藏不置灰）
+                if (!canWrite) return StaggerIn(index: i, child: tile);
+                return StaggerIn(
+                  index: i,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onLongPress: () => _enterBatchMode(expense.id),
+                    child: SwipeableBillTile(
+                      onEdit: () {
+                        HapticFeedback.selectionClick();
+                        context.push('/expenses/edit?id=${expense.id}');
+                      },
+                      onDelete: () => _deleteOne(expense),
+                      child: tile,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ],
         SliverToBoxAdapter(
           child: SizedBox(
@@ -416,6 +618,85 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         ),
       ],
     );
+  }
+
+  void _enterBatchMode(String id) {
+    HapticFeedback.selectionClick();
+    setState(() => _selected.add(id));
+  }
+
+  /// 单笔删除：L2 危险确认（含数量）→ repo 删 + 墓碑。
+  Future<void> _deleteOne(ExpenseRecord e) async {
+    final ok = await showDangerConfirm(
+      context: context,
+      title: '删除这笔账单？',
+      body: '删除「${e.title}」？共 1 笔，云端共享成员都会看到该账单被删除。',
+      confirmLabel: '删除',
+    );
+    if (!ok || !mounted) return;
+    await ref.read(ledgerRepoProvider).deleteExpense(e.id);
+    ref.invalidate(expensesProvider);
+    if (mounted) {
+      showAppSnackBar(context, '已删除「${e.title}」', tone: SnackTone.destructive);
+    }
+  }
+
+  /// 批量删除：L2 强确认（含数量）→ 单事务 + 逐行墓碑。
+  Future<void> _deleteSelected() async {
+    final ids = _selected.toList();
+    final ok = await showDangerConfirm(
+      context: context,
+      title: '删除所选 ${ids.length} 笔账单？',
+      body: '将删除 ${ids.length} 笔账单，此操作不可恢复，云端同步成员均可见删除记录。',
+      confirmLabel: '全部删除',
+    );
+    if (!ok || !mounted) return;
+    await ref.read(ledgerRepoProvider).deleteExpensesBatch(ids);
+    ref.invalidate(expensesProvider);
+    if (mounted) setState(_selected.clear);
+    if (mounted) {
+      showAppSnackBar(context, '已删除 ${ids.length} 笔账单', tone: SnackTone.destructive);
+    }
+  }
+
+  /// 批量改分类：分类选择抽屉 → 单事务逐行更新 + notifyWrite。
+  Future<void> _changeCategoryOfSelected() async {
+    final ids = _selected.toList();
+    final categories = ref.read(categoriesProvider).value ?? const <CategoryView>[];
+    String? picked;
+    await showDraggableSheet<String>(
+      context: context,
+      initialChildSize: 0.5,
+      minChildSize: 0.35,
+      builder: (sheetContext, scrollController) => ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
+        children: [
+          Text('改分类（${ids.length} 笔）',
+              style: Theme.of(sheetContext).textTheme.titleLarge),
+          const SizedBox(height: Spacing.sm),
+          for (final c in categories)
+            ListTile(
+              leading: CategoryIconBox(categoryKey: c.key, icon: c.icon, size: 36),
+              title: Text(c.name),
+              onTap: () => Navigator.of(sheetContext).pop(c.key),
+            ),
+        ],
+      ),
+    ).then((v) => picked = v);
+    if (picked == null || !mounted) return;
+    await ref.read(ledgerRepoProvider).updateExpensesCategoryBatch(ids, picked!);
+    ref.invalidate(expensesProvider);
+    if (mounted) setState(_selected.clear);
+    if (mounted) showAppSnackBar(context, '已把 ${ids.length} 笔账单改了分类');
+  }
+
+  int _monthSubtotal(List<ExpenseRecord> list) {
+    var sum = 0;
+    for (final e in list) {
+      if (e.type != ExpenseType.prepay) sum += e.amountCents;
+    }
+    return sum;
   }
 
   int _daySubtotal(List<ExpenseRecord> list) {
@@ -541,11 +822,19 @@ class _ExpenseTile extends ConsumerWidget {
     required this.expense,
     required this.memberName,
     required this.categoryIcon,
+    this.selected = false,
+    this.checkVisible = false,
+    this.onToggleSelect,
   });
 
   final ExpenseRecord expense;
   final String Function(String memberId) memberName;
   final String categoryIcon;
+
+  /// V2.8.1 S6：批量多选态（勾选圈 + 顶部批量条）。
+  final bool selected;
+  final bool checkVisible;
+  final VoidCallback? onToggleSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -555,23 +844,32 @@ class _ExpenseTile extends ConsumerWidget {
     final payerName = expense.payers.isEmpty ? '-' : memberName(expense.payers.first.memberId);
 
     return InkWell(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        showDraggableSheet<void>(
-          context: context,
-          initialChildSize: 0.62,
-          builder: (sheetContext, scrollController) => BillDetailSheet(
-            scrollController: scrollController,
-            expense: expense,
-            memberName: memberName,
-            icon: categoryIcon,
-          ),
-        );
-      },
+      onTap: onToggleSelect ??
+          () {
+            HapticFeedback.selectionClick();
+            showDraggableSheet<void>(
+              context: context,
+              initialChildSize: 0.62,
+              builder: (sheetContext, scrollController) => BillDetailSheet(
+                scrollController: scrollController,
+                expense: expense,
+                memberName: memberName,
+                icon: categoryIcon,
+              ),
+            );
+          },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: Spacing.xl, vertical: Spacing.sm + 3),
         child: Row(
           children: [
+            if (checkVisible) ...[
+              Icon(
+                selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                size: 22,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: Spacing.sm),
+            ],
             CategoryIconBox(categoryKey: expense.categoryKey, icon: categoryIcon),
             const SizedBox(width: Spacing.md),
             Expanded(
@@ -653,26 +951,13 @@ class _TotalBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return ClipRRect(
+    // V2.8.1 S2：手写毛玻璃收编为 GlassSurface(overlay)。
+    return GlassSurface(
+      level: GlassLevel.overlay,
       borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: Spacing.xl, vertical: Spacing.md),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerLow.withValues(alpha: 0.9),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: scheme.brightness == Brightness.dark ? 0.3 : 0.06),
-                blurRadius: 18,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.xl, vertical: Spacing.md),
+        child: Row(
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -698,7 +983,6 @@ class _TotalBar extends StatelessWidget {
                 ],
               ),
             ],
-          ),
         ),
       ),
     );
@@ -733,3 +1017,121 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
+
+/// V2.8.1 S6：月度吸顶头（玻璃 navBar 档）——`2026年10月 · 共 ¥9,214`。
+class _MonthHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _MonthHeaderDelegate({required this.monthKey, required this.subtotal});
+
+  final int monthKey; // yyyyMM
+  final int subtotal;
+
+  static const double _extent = 42;
+
+  @override
+  double get maxExtent => _extent;
+
+  @override
+  double get minExtent => _extent;
+
+  @override
+  bool shouldRebuild(covariant _MonthHeaderDelegate oldDelegate) =>
+      oldDelegate.monthKey != monthKey || oldDelegate.subtotal != subtotal;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: _extent,
+      child: GlassSurface(
+        level: GlassLevel.navBar,
+        borderRadius: BorderRadius.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Spacing.xl, 0, Spacing.xl, 0),
+          child: Row(
+            children: [
+              Text(
+                '${monthKey ~/ 100}年${monthKey % 100}月',
+              style: TextStyle(
+                fontSize: AppFontSizes.body,
+                fontWeight: FontWeight.w800,
+                color: scheme.onSurface,
+              ),
+            ),
+            const Spacer(),
+              Text('共 ', style: Theme.of(context).textTheme.labelSmall),
+              MoneyText(subtotal,
+                  fontSize: AppFontSizes.body, color: scheme.onSurface),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// V2.8.1 S6：批量操作条（玻璃 overlay 替代合计栏）。
+class _BatchBar extends StatelessWidget {
+  const _BatchBar({
+    required this.count,
+    required this.totalCents,
+    required this.onDelete,
+    required this.onChangeCategory,
+    required this.onCancel,
+  });
+
+  final int count;
+  final int totalCents;
+  final VoidCallback onDelete;
+  final VoidCallback onChangeCategory;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return GlassSurface(
+      level: GlassLevel.overlay,
+      borderRadius: BorderRadius.circular(999),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.sm, Spacing.lg, Spacing.sm),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: onCancel,
+              child: Icon(Icons.close_rounded, size: 20, color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(width: Spacing.md),
+            Expanded(
+              child: Text(
+                '已选 $count 笔 · ¥${(totalCents.abs() ~/ 100)}.${(totalCents.abs() % 100).toString().padLeft(2, '0')}',
+                style: TextStyle(
+                    fontSize: AppFontSizes.caption,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: AppTextStyles.tabularFigures),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onChangeCategory,
+              icon: const Icon(Icons.category_rounded, size: 17),
+              label: const Text('改分类'),
+              style: TextButton.styleFrom(
+                  foregroundColor: scheme.onSurface,
+                  padding: const EdgeInsets.symmetric(horizontal: 8)),
+            ),
+            const SizedBox(width: 2),
+            FilledButton.icon(
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline_rounded, size: 17),
+              label: const Text('删除'),
+              style: FilledButton.styleFrom(
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                minimumSize: const Size(0, 34),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

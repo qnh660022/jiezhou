@@ -10,6 +10,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../theme/tokens.dart';
 import '../observability_providers.dart';
 
@@ -54,26 +55,17 @@ Future<void> showConflictSheet(
   final conflicts = await ref.read(entityConflictsProvider(entityId).future);
   if (!context.mounted) return;
   final count = conflicts.length;
-  await showDialog<void>(
+  await showConfirmSheet(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      icon: Icon(Icons.sync_problem_rounded,
-          color: Theme.of(dialogContext).colorScheme.error),
-      title: const Text('这笔记录被覆盖过'),
-      content: Text(
-        count > 1
-            ? '这笔记录在你之后被其它端修改过 $count 次，当前显示的是对方的版本。\n'
-                '你的本地改动没有被删除，只是没有合入。'
-            : '这笔记录在你之后被其它端修改过，当前显示的是对方的版本。\n'
-                '你的本地改动没有被删除，只是没有合入。',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('知道了'),
-        ),
-      ],
-    ),
+    title: '这笔记录被覆盖过',
+    body: count > 1
+        ? '这笔记录在你之后被其它端修改过 $count 次，当前显示的是对方的版本。\n'
+            '你的本地改动没有被删除，只是没有合入。'
+        : '这笔记录在你之后被其它端修改过，当前显示的是对方的版本。\n'
+            '你的本地改动没有被删除，只是没有合入。',
+    cancelLabel: '',
+    confirmLabel: '知道了',
+    icon: Icons.sync_problem_rounded,
   );
   await acknowledgeEntityConflicts(ref, entityId);
 }
@@ -130,25 +122,13 @@ class ConflictCountChip extends ConsumerWidget {
     final ids =
         ref.read(conflictEntityIdsProvider).value ?? const <String>{};
     if (!context.mounted) return;
-    await showDialog<void>(
+    await showConfirmSheet(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('被覆盖的记录'),
-        content: SizedBox(
-          width: 320,
-          child: Text(
-            '共 ${ids.length} 笔记录的本地改动没有合入云端（对方版本胜出）。\n\n'
-            '点开对应账单上的红色标记可以逐条确认；确认后本提示会消失。',
-            style: const TextStyle(fontSize: AppFontSizes.caption),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('知道了'),
-          ),
-        ],
-      ),
+      title: '被覆盖的记录',
+      body: '共 ${ids.length} 笔记录的本地改动没有合入云端（对方版本胜出）。\n\n'
+          '点开对应账单上的红色标记可以逐条确认；确认后本提示会消失。',
+      cancelLabel: '',
+      confirmLabel: '知道了',
     );
   }
 }

@@ -19,7 +19,7 @@ import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
-import '../../ledger/screens/qr_scan_screen.dart';
+import '../../ledger/widgets/join_by_qr_tile.dart';
 import '../../today/widgets/today_card.dart';
 import '../guide_city_picker.dart' show showGuideCityPicker;
 import '../guide_widgets.dart' show GuideRouteArgs;
@@ -68,13 +68,8 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
         scrollController: _scroll,
         actions: [
           const SyncStatusCapsule(),
-          if (!kIsWeb)
-            IconButton(
-              tooltip: '扫码/口令同步（与电脑端互导）',
-              onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const QrScanScreen())),
-              icon: const Icon(Icons.qr_code_scanner_rounded),
-            ),
+          // V2.8.1 S7：扫码入口统一组件
+          const JoinByQrTile(compact: true),
           IconButton(
             tooltip: '局域网同步（同 Wi-Fi 快照合并）',
             onPressed: () => context.pushNamed('lan-sync'),

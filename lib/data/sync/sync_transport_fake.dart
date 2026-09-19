@@ -101,6 +101,13 @@ class SyncTransportFake implements SyncTransport {
     // wishlist_items_sync 最小列集（规格 §S1 登记 6）：trip_id / name / type /
     // created_ms / updated_ms；guide_ref / backup_of 等为 nullable，不得加入 required。
     'wishlist_items_sync': {'trip_id', 'name', 'type', 'created_ms', 'updated_ms'},
+    // ===== V2.8.1 分类子预算 =====
+    // 最小列集与 docs/db_v281.sql 云端 DDL 对齐：id / group_id / category_key /
+    // amount / created_ms / updated_ms（deleted/server_updated 由云端默认值兜底，
+    // owner_user_id default auth.uid()）。
+    'sub_budgets_sync': {
+      'id', 'group_id', 'category_key', 'amount', 'created_ms', 'updated_ms',
+    },
   };
 
   @override

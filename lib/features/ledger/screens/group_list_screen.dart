@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
@@ -18,7 +19,8 @@ import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/group_summary_sheet.dart';
 import '../widgets/stagger_in.dart';
-import 'qr_scan_screen.dart';
+import '../widgets/join_by_qr_tile.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 旅行团管理：切换、新建入口、专有 .tav 备份导入导出。
 class GroupListScreen extends ConsumerWidget {
@@ -33,13 +35,8 @@ class GroupListScreen extends ConsumerWidget {
       appBar: GlassAppBar(
         title: '旅行团管理',
         actions: [
-          if (!kIsWeb)
-            IconButton(
-              tooltip: '扫码/口令同步（与电脑端互导）',
-              onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const QrScanScreen())),
-              icon: const Icon(Icons.qr_code_scanner_rounded),
-            ),
+          // V2.8.1 S7：扫码入口统一组件
+          const JoinByQrTile(compact: true),
           IconButton(
             tooltip: '局域网同步（同 Wi-Fi 快照合并）',
             onPressed: () => context.pushNamed('lan-sync'),
@@ -91,7 +88,25 @@ class GroupListScreen extends ConsumerWidget {
                           index: i,
                           child: Padding(
                             padding: const EdgeInsets.only(bottom: Spacing.md),
-                            child: Material(
+                            // V2.8.1 S7：团卡左滑删除（确认弹层接管，行本身不滑除）
+                            child: Dismissible(
+                              key: ValueKey('group-' + g.id),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: Spacing.xl),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.error.withValues(alpha: 0.12),
+                                  borderRadius: AppRadius.card,
+                                ),
+                                child: Icon(Icons.delete_outline_rounded,
+                                    color: Theme.of(context).colorScheme.error),
+                              ),
+                              confirmDismiss: (_) async {
+                                _confirmDeleteGroup(context, ref, g);
+                                return false;
+                              },
+                              child: Material(
                               color: active
                                   ? Theme.of(context).colorScheme.primaryContainer
                                   : (Theme.of(context).colorScheme.brightness == Brightness.dark
@@ -106,8 +121,7 @@ class GroupListScreen extends ConsumerWidget {
                                   HapticFeedback.selectionClick();
                                   await activateGroup(ref, g.id);
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('已切到「' + g.name + '」')));
+                                    showAppSnackBar(context, '已切到「' + g.name + '」');
                                   }
                                 },
                                 leading: Container(
@@ -188,6 +202,7 @@ class GroupListScreen extends ConsumerWidget {
                                   ],
                                 ),
                               ),
+                            ),
                             ),
                           ),
                         );
@@ -284,8 +299,7 @@ class GroupListScreen extends ConsumerWidget {
                   await shareFile(bytes, filename, 'application/x-travel-assistant-group');
                 } catch (_) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(const SnackBar(content: Text('备份失败，稍后再试')));
+                    showAppSnackBar(context, '备份失败，稍后再试', tone: SnackTone.destructive);
                   }
                 }
               },
@@ -311,30 +325,17 @@ class GroupListScreen extends ConsumerWidget {
 
   Future<void> _confirmDeleteGroup(
       BuildContext context, WidgetRef ref, LedgerGroupView g) async {
-    final ok = await showDialog<bool>(
+    final ok = await showDangerConfirm(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除旅行团？'),
-        content: Text('确定删除「${g.name}」吗？该团的全部账单、成员与结算记录将一并删除，且无法恢复。'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除旅行团？',
+      body: '将删除「${g.name}」及其 3 类数据：全部账单、成员与结算记录，不可恢复。',
+      confirmLabel: '删除',
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     HapticFeedback.lightImpact();
     await deleteGroup(ref, g.id);
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('已删除「${g.name}」')));
+      showAppSnackBar(context, '已删除「${g.name}」', tone: SnackTone.destructive);
     }
   }
 
@@ -387,13 +388,12 @@ class GroupListScreen extends ConsumerWidget {
                     try {
                       final summary = await importGroupFromText(ref, text);
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(SnackBar(content: Text(summary)));
+                        showAppSnackBar(context, summary);
                       }
                     } catch (_) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                            content: Text('导入失败：备份文件损坏或格式不认识')));
+                        showAppSnackBar(context, '导入失败：备份文件损坏或格式不认识',
+                            tone: SnackTone.destructive);
                       }
                     }
                   },
@@ -425,8 +425,7 @@ class GroupListScreen extends ConsumerWidget {
         final summary =
             await importFullBackupFile(ref, bytes, replace: false);
         if (context.mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(summary)));
+          showAppSnackBar(context, summary);
         }
         return;
       }
@@ -434,12 +433,11 @@ class GroupListScreen extends ConsumerWidget {
           ? await importGroupBackupFile(ref, bytes)
           : await importGroupFromText(ref, utf8.decode(bytes));
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(summary)));
+        showAppSnackBar(context, summary);
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('文件读取或解析失败了')));
+        showAppSnackBar(context, '文件读取或解析失败了', tone: SnackTone.destructive);
       }
     }
   }

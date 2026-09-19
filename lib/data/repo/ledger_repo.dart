@@ -112,6 +112,9 @@ class LedgerRepository {
         await (db.select(db.funds)..where((f) => f.groupId.equals(id))).get();
     final childInbox =
         await (db.select(db.inboxItems)..where((i) => i.groupId.equals(id))).get();
+    // V2.8.1：分类子预算同为团级实体，级联清理 + 逐行墓碑。
+    final childSubBudgets =
+        await (db.select(db.subBudgets)..where((b) => b.groupId.equals(id))).get();
     final linkedTrips =
         await (db.select(db.trips)..where((t) => t.groupId.equals(id))).get();
     final doomed = await getGroup(id);
@@ -124,12 +127,14 @@ class LedgerRepository {
       'settlements': childSettlements.length,
       'funds': childFunds.length,
       'inbox': childInbox.length,
+      'subBudgets': childSubBudgets.length,
     });
     await db.transaction(() async {
       await (db.delete(db.expenses)..where((e)=>e.groupId.equals(id))).go();
       await (db.delete(db.settlements)..where((s)=>s.groupId.equals(id))).go();
       await (db.delete(db.funds)..where((f)=>f.groupId.equals(id))).go();
       await (db.delete(db.inboxItems)..where((i)=>i.groupId.equals(id))).go();
+      await (db.delete(db.subBudgets)..where((b)=>b.groupId.equals(id))).go();
       await (db.delete(db.members)..where((m)=>m.groupId.equals(id))).go();
       await (db.update(db.trips)..where((t)=>t.groupId.equals(id))).write(TripsCompanion(groupId:Value(null)));
       await (db.delete(db.groups)..where((g)=>g.id.equals(id))).go();
@@ -140,6 +145,7 @@ class LedgerRepository {
     _notifyDelete("members", childMembers.map((m) => m.id));
     _notifyDelete("funds", childFunds.map((f) => f.id));
     _notifyDelete("inbox_items", childInbox.map((i) => i.id));
+    _notifyDelete("sub_budgets", childSubBudgets.map((b) => b.id)); // V2.8.1
     _notifyDelete("expenses", childExpenses.map((e) => e.id));
     _notifyDelete("settlements", childSettlements.map((s) => s.id));
     for (final t in linkedTrips) {
@@ -921,6 +927,52 @@ class LedgerRepository {
         fields: {'amountCents': item.amountCents, 'note': item.note});
   }
 
+  // === 分类子预算（V2.8.1 S8） ===
+  //
+  // 团级实体（与公款池同级）：用户自选分类（上限 5，校验放 UI 层，repo 不拦），
+  // 金额 int 分；独立口径——不计入 groups.budget_cents 总预算。
+
+  /// 该团全部子预算（updatedAt 升序，稳定读序便于列表 diff）。
+  Stream<List<SubBudget>> watchSubBudgets(String gid) => (db.select(db.subBudgets)
+        ..where((b) => b.groupId.equals(gid))
+        ..orderBy([
+          (b) => OrderingTerm.asc(b.updatedAt),
+          (b) => OrderingTerm.asc(b.categoryKey),
+        ]))
+      .watch();
+
+  /// 新增一条子预算（不校验分类上限/重复，口径放 UI 层）。
+  Future<SubBudget> addSubBudget(String gid, String categoryKey, int amountCents) async {
+    final id = newId('subbud');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.into(db.subBudgets).insert(SubBudgetsCompanion(
+          id: Value(id),
+          groupId: Value(gid),
+          categoryKey: Value(categoryKey),
+          amount: Value(amountCents),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ));
+    SyncOutboxService.notifyWrite('sub_budgets', id);
+    return (await (db.select(db.subBudgets)..where((b) => b.id.equals(id))).get()).first;
+  }
+
+  /// 改金额：只动 amount + updatedAt，**不改 createdAt**（LWW 时间语义）。
+  Future<void> updateSubBudget(String id, int amountCents) async {
+    await (db.update(db.subBudgets)..where((b) => b.id.equals(id))).write(
+      SubBudgetsCompanion(
+        amount: Value(amountCents),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+      ),
+    );
+    SyncOutboxService.notifyWrite('sub_budgets', id);
+  }
+
+  Future<void> deleteSubBudget(String id) async {
+    await (db.delete(db.subBudgets)..where((b) => b.id.equals(id))).go();
+    SyncOutboxService.notifyWrite('sub_budgets', id, op: 'delete');
+  }
+
   // === 分类 ===
   Stream<List<Category>> watchCategories() => db.select(db.categories).watch();
 
@@ -1113,6 +1165,10 @@ class LedgerRepository {
     final categories = await (db.select(db.categories)
           ..where((c) => c.builtin.equals(false)))
         .get();
+    // V2.8.1：分类子预算随团整包带出（.tav 与局域网快照共用结构）。
+    final subBudgets = await (db.select(db.subBudgets)
+          ..where((b) => b.groupId.equals(gid)))
+        .get();
     final tripsWithItems = <Map<String, dynamic>>[];
     for (final t in trips) {
       final items = await (db.select(db.tripItems)
@@ -1134,6 +1190,7 @@ class LedgerRepository {
       settlements: [for (final s in settlements) _groupSettlementMap(s)],
       trips: tripsWithItems,
       customCategories: [for (final c in categories) c.toJson()],
+      subBudgets: [for (final b in subBudgets) b.toJson()],
     );
   }
 
@@ -1362,6 +1419,29 @@ class LedgerRepository {
           }
         }
       }
+      // ---- 分类子预算（V2.8.1，LWW updatedAt；行内无外键强约束）----
+      for (final b in backup.subBudgets) {
+        final bid = b['id'] as String?;
+        if (bid == null) continue;
+        final bhit = await (db.select(db.subBudgets)..where((x) => x.id.equals(bid))).get();
+        final bUpd = b['updatedAt'] is int ? b['updatedAt'] as int : 0;
+        final bLocal = bhit.isEmpty ? -1 : bhit.first.updatedAt;
+        if (bhit.isNotEmpty && bLocal > bUpd) continue;
+        final comp = SubBudgetsCompanion(
+          id: Value(bid),
+          groupId: Value(gid),
+          categoryKey: Value(b['categoryKey'] as String? ?? ''),
+          amount: Value(b['amount'] is int ? b['amount'] as int : 0),
+          createdAt: Value(b['createdAt'] is int ? b['createdAt'] as int : now),
+          updatedAt: Value(bUpd),
+        );
+        if (bhit.isEmpty) {
+          await db.into(db.subBudgets).insert(comp);
+        } else {
+          await (db.update(db.subBudgets)..where((x) => x.id.equals(bid))).write(comp);
+        }
+        mark('sub_budgets', bid);
+      }
     });
 
     for (final kv in touched.entries) {
@@ -1481,6 +1561,7 @@ class LedgerRepository {
         settlements: _asMapList(g['settlements']),
         trips: _asMapList(g['trips']),
         customCategories: _asMapList(g['customCategories']),
+        subBudgets: _asMapList(g['subBudgets']), // V2.8.1：旧包无键 → 空清单
       );
       await mergeGroupSnapshotJson(jsonEncode(single));
     }
@@ -1619,11 +1700,14 @@ class LedgerRepository {
     final oldFunds = (await db.select(db.funds).get()).map((r) => r.id).toList();
     final oldInbox = (await db.select(db.inboxItems).get()).map((r) => r.id).toList();
     final oldWishlist = (await db.select(db.wishlistItems).get()).map((r) => r.id).toList();
+    // V2.8.1：分类子预算同样整库清理 + 逐行墓碑（团已不存在，孤儿行不可见也不可达）。
+    final oldSubBudgets = (await db.select(db.subBudgets).get()).map((r) => r.id).toList();
     await db.transaction(() async {
       await db.delete(db.expenses).go();
       await db.delete(db.settlements).go();
       await db.delete(db.funds).go();
       await db.delete(db.inboxItems).go();
+      await db.delete(db.subBudgets).go();
       await db.delete(db.tripItems).go();
       await db.delete(db.wishlistItems).go();
       await db.delete(db.checklistItems).go();
@@ -1639,6 +1723,7 @@ class LedgerRepository {
     _notifyDelete('inbox_items', oldInbox);
     _notifyDelete('expenses', oldExpenses);
     _notifyDelete('settlements', oldSettlements);
+    _notifyDelete('sub_budgets', oldSubBudgets);
     _notifyDelete('trips', oldTrips);
     _notifyDelete('trip_items', oldItems);
     _notifyDelete('wishlist_items', oldWishlist);
@@ -1837,6 +1922,8 @@ class LedgerRepository {
     final backupTripIds = <String>[];
     final backupTripItemIds = <String>[];
     final backupCategoryKeys = <String>[];
+    // V2.8.1：.tav 恢复路径的子预算行 id（事务内收集，提交后统一入队）。
+    final backupSubBudgetIds = <String>[];
     final report = await db.transaction<ImportReport>(() async {
       await db.into(db.groups).insert(GroupsCompanion(
         id: Value(r.group['id'] as String),
@@ -1939,6 +2026,20 @@ class LedgerRepository {
           mode: InsertMode.insertOrIgnore,
         );
       }
+      // V2.8.1：分类子预算落库（applyImport 已换发新 id + 归新团）。
+      for (final b in r.subBudgets) {
+        final bid = b['id'] as String?;
+        if (bid == null) continue;
+        backupSubBudgetIds.add(bid);
+        await db.into(db.subBudgets).insert(SubBudgetsCompanion(
+          id: Value(bid),
+          groupId: Value(r.group['id'] as String),
+          categoryKey: Value(b['categoryKey'] as String? ?? ''),
+          amount: Value(b['amount'] is int ? b['amount'] as int : 0),
+          createdAt: Value(b['createdAt'] is int ? b['createdAt'] as int : now),
+          updatedAt: Value(b['updatedAt'] is int ? b['updatedAt'] as int : now),
+        ));
+      }
       return ImportReport(
         groups: 1,
         members: r.members.length,
@@ -1960,6 +2061,7 @@ class LedgerRepository {
     _notifyUpsert("trips", backupTripIds);
     _notifyUpsert("trip_items", backupTripItemIds);
     _notifyUpsert("categories", backupCategoryKeys);
+    _notifyUpsert("sub_budgets", backupSubBudgetIds); // V2.8.1
     return report;
   }
 
@@ -2097,6 +2199,36 @@ class LedgerRepository {
   }
   // 最少转账方案已统一收敛到 domain/settle_strategy.dart 的 buildPlan
   // （S9：两策略共用同一入口，minTransfers 逐位不变）。此前的库内重复实现已删除。
+  /// V2.8.1 S6：批量删除（单事务 + 逐行墓碑 + 审计）。返回实际删除行数。
+  Future<int> deleteExpensesBatch(List<String> ids) async {
+    var n = 0;
+    await db.transaction(() async {
+      for (final id in ids) {
+        final row = await (db.select(db.expenses)..where((x) => x.id.equals(id))).getSingleOrNull();
+        if (row == null) continue;
+        await (db.delete(db.expenses)..where((x) => x.id.equals(id))).go();
+        SyncOutboxService.notifyWrite("expenses", id, op: "delete");
+        await _audit(row.groupId, AuditEntity.expense, id, AuditAction.delete,
+            fields: {'title': row.title, 'amountCents': row.amountCents, 'from': 'batch'});
+        n++;
+      }
+    });
+    return n;
+  }
+
+  /// V2.8.1 S6：批量改分类（单事务 + 逐行 notifyWrite）。返回实际更新行数。
+  Future<int> updateExpensesCategoryBatch(List<String> ids, String categoryKey) async {
+    var n = 0;
+    await db.transaction(() async {
+      for (final id in ids) {
+        await (db.update(db.expenses)..where((x) => x.id.equals(id)))
+            .write(ExpensesCompanion(categoryKey: Value(categoryKey)));
+        SyncOutboxService.notifyWrite("expenses", id);
+        n++;
+      }
+    });
+    return n;
+  }
 }
 
 /// —— 导入解析辅助（库内私有） ——
@@ -2253,3 +2385,4 @@ String? _remapPortionsMap(Object? raw, Map<String,String> memberMap, void Functi
   });
   return out.isEmpty ? null : jsonEncode(out);
 }
+

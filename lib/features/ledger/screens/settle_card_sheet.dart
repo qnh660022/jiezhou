@@ -13,6 +13,7 @@ import '../../../shared/widgets/share_link_sheet.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 打开结算卡弹层（进行中与历史轮次共用）。
 Future<void> showSettleCardSheet(
@@ -66,7 +67,7 @@ class _SettleCardSheetState extends State<_SettleCardSheet> {
         _cardKey, settleCardFileName(widget.data.roundNo, widget.data.generatedAt));
     if (!mounted) return;
     setState(() => _busy = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showAppSnackBar(context, msg);
   }
 
   Future<void> _share() async {
@@ -78,8 +79,7 @@ class _SettleCardSheetState extends State<_SettleCardSheet> {
     );
     if (!mounted) return;
     setState(() => _busy = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok ? '已调起分享' : '生成图片失败，请重试')));
+    showAppSnackBar(context, ok ? '已调起分享' : '生成图片失败，请重试', tone: SnackTone.destructive);
   }
 
   @override

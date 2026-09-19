@@ -80,6 +80,8 @@ void main() {
         SyncEntity.inboxItems,
         // V2.7.2：wishlistItems → wishlist_items
         SyncEntity.wishlistItems,
+        // V2.8.1：subBudgets → sub_budgets（同 H10 防线，见 sync_models localKey）
+        SyncEntity.subBudgets,
       };
       for (final e in SyncEntity.values) {
         if (renamed.contains(e)) continue;

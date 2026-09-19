@@ -19,6 +19,7 @@ import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/member_avatar.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 快速记一笔：**只有**金额（大号 autofocus）与可选备注（禁止加分类/分摊字段）。
 Future<void> showCaptureInboxSheet(
@@ -57,8 +58,7 @@ Future<void> showCaptureInboxSheet(
           onPressed: () async {
             final cents = parseMoney(controller.text);
             if (cents == null || cents <= 0) {
-              ScaffoldMessenger.of(sheetContext)
-                  .showSnackBar(const SnackBar(content: Text('请填写有效金额')));
+              showAppSnackBar(sheetContext, '请填写有效金额');
               return;
             }
             final note = noteController.text.trim();
@@ -73,13 +73,11 @@ Future<void> showCaptureInboxSheet(
                 source: 'quick_action',
               );
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已收进收件箱，记得归类')));
+                showAppSnackBar(context, '已收进收件箱，记得归类');
               }
             } catch (e) {
               if (context.mounted) {
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text('记录失败：${e.toString()}')));
+                showAppSnackBar(context, '记录失败：${e.toString()}', tone: SnackTone.destructive);
               }
             }
           },

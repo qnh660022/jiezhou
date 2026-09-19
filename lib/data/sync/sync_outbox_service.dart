@@ -248,6 +248,8 @@ class SyncOutboxService {
         return (await db.select(db.expenses).get()).map((r) => r.id).toList();
       case 'settlements':
         return (await db.select(db.settlements).get()).map((r) => r.id).toList();
+      case 'sub_budgets': // V2.8.1：分类子预算引导全量上传
+        return (await db.select(db.subBudgets).get()).map((r) => r.id).toList();
       case 'categories':
         return (await db.select(db.categories).get()).map((r) => r.key).toList();
     }

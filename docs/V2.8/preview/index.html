@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>芥舟 · UI 重设计施工预览（v2.7.1 整改方案配图）</title>
+<style>
+  :root{
+    --mint:#2E7D5B; --mint-deep:#1E5C41; --mint-soft:#E3F0E9;
+    --ink:#1B211E; --ink2:#5A655F; --paper:#F4F6F3; --card:#FFFFFF;
+    --line:#E2E7E2; --red:#D9553F; --amber:#E8A13C; --green:#1E9E6A;
+    --glass-hi:rgba(255,255,255,.55); --radius-card:24px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;background:#EDF1EC;color:var(--ink);padding:0 0 120px}
+  header{padding:56px 6vw 28px;max-width:1280px;margin:0 auto}
+  header h1{font-size:30px;font-weight:800;letter-spacing:.5px}
+  header h1 span{color:var(--mint)}
+  header p{margin-top:10px;color:var(--ink2);font-size:14px;line-height:1.8;max-width:860px}
+  .legend{display:flex;gap:14px;margin-top:16px;flex-wrap:wrap;font-size:12px;color:var(--ink2)}
+  .legend b{display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--mint);color:#fff;align-items:center;justify-content:center;margin-right:6px;font-size:11px}
+  section{max-width:1280px;margin:34px auto 0;padding:0 6vw}
+  .sec-head{display:flex;align-items:baseline;gap:14px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:26px}
+  .sec-head h2{font-size:21px;font-weight:800}
+  .sec-head small{color:var(--ink2);font-size:13px}
+  .stage{display:grid;grid-template-columns:auto 1fr;gap:44px;align-items:start}
+  @media (max-width:900px){.stage{grid-template-columns:1fr}}
+  .notes{display:flex;flex-direction:column;gap:14px;padding-top:8px}
+  .note{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 18px;font-size:13.5px;line-height:1.75;box-shadow:0 2px 10px rgba(20,40,30,.04)}
+  .note b.n{display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--mint);color:#fff;align-items:center;justify-content:center;margin-right:8px;font-size:12px;vertical-align:-5px}
+  .note .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;margin-left:6px;vertical-align:1px}
+  .tag.beauty{background:#FBEFE3;color:#A66A14}.tag.eff{background:#E3F0E9;color:var(--mint-deep)}.tag.a11y{background:#E8ECFB;color:#3D56B0}
+  .pill-ver{font-size:11px;font-weight:800;color:#fff;border-radius:99px;padding:3px 11px;letter-spacing:.5px}
+  .v281{background:var(--mint)}.v282{background:#3D56B0}.vhold{background:var(--amber)}
+  .note .ref{color:#98A39C;font-size:11.5px;margin-top:6px;display:block}
+
+  /* ---------- 手机壳 ---------- */
+  .phone{width:375px;height:812px;border-radius:54px;background:#0D0F0E;padding:10px;box-shadow:0 30px 70px rgba(15,30,22,.35),0 4px 14px rgba(15,30,22,.25);position:relative;flex-shrink:0;margin:0 auto}
+  .screen{width:100%;height:100%;border-radius:45px;overflow:hidden;position:relative;background:var(--paper)}
+  .screen .notch{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:120px;height:30px;border-radius:20px;background:#0D0F0E;z-index:60}
+  .appbar{position:absolute;top:0;left:0;right:0;z-index:50;padding:52px 20px 12px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(28px) saturate(1.35);background:rgba(244,246,243,.68);border-bottom:1px solid rgba(255,255,255,.5)}
+  .appbar::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent)}
+  .appbar .t{font-size:16px;font-weight:700}
+  .appbar .back{font-size:19px;color:var(--ink)}
+  .appbar .save{color:var(--mint);font-weight:700;font-size:14.5px}
+  .appbar.dark{background:rgba(16,22,19,.62);border-bottom:1px solid rgba(255,255,255,.08)}
+  .appbar.dark,.appbar.dark .back{color:#F0F4F1}
+  .screen .status{position:absolute;top:14px;left:26px;z-index:55;font-size:12.5px;font-weight:600}
+  .screen .status.r{left:auto;right:26px;font-size:11px;letter-spacing:1px}
+
+  .mark{position:absolute;z-index:70;width:22px;height:22px;border-radius:50%;background:var(--mint);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(46,125,91,.25),0 2px 8px rgba(0,0,0,.25)}
+  .mark.warn{background:var(--red);box-shadow:0 0 0 3px rgba(217,85,63,.25),0 2px 8px rgba(0,0,0,.25)}
+
+  /* ---------- 通用玻璃 ---------- */
+  .glass{backdrop-filter:blur(28px) saturate(1.35);-webkit-backdrop-filter:blur(28px) saturate(1.35);position:relative}
+  .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(160deg,rgba(255,255,255,.5),rgba(255,255,255,.08) 38%,transparent 60%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.65), inset 0 0 0 1px rgba(255,255,255,.28);}
+  .dark .glass{backdrop-filter:blur(28px) saturate(1.3)}
+  .dark .glass::before{background:linear-gradient(160deg,rgba(255,255,255,.14),rgba(255,255,255,.03) 40%,transparent 60%);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 0 0 1px rgba(255,255,255,.07)}
+  .shadow{box-shadow:0 18px 40px -14px rgba(20,45,32,.28),0 3px 10px rgba(20,45,32,.10)}
+
+  /* ---------- 场景A 玻璃对比 ---------- */
+  .glass-compare{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:900px}
+  @media (max-width:700px){.glass-compare{grid-template-columns:1fr}}
+  .gcell{border-radius:22px;padding:18px 20px 22px;color:#fff}
+  .gcell h4{font-size:13px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .gcell h4 em{font-style:normal;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px}
+  .gcell p{font-size:11.5px;opacity:.92;line-height:1.7;margin-bottom:14px}
+  .gdemo{border-radius:16px;padding:16px;font-size:13px;min-height:96px;color:#fff}
+  .gdemo .gt{font-weight:800;font-size:15px}.gdemo .gs{font-size:11px;opacity:.85;margin-top:3px}
+  .bg-art{position:absolute;inset:0;overflow:hidden;border-radius:inherit;z-index:-1}
+  .bg-art i{position:absolute;border-radius:50%;filter:blur(2px)}
+  .gcell{position:relative;overflow:hidden;isolation:isolate}
+  /* 现状：高不透明度，无饱和、无高光 */
+  .now{background:rgba(255,255,255,.96)}
+  .now .gdemo{background:rgba(250,251,250,.98);color:#1B211E;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  .now-d{background:rgba(18,24,21,.97)}
+  .now-d .gdemo{background:rgba(24,30,27,.98);color:#E8EDE9;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+  /* 提案：blur+sat+低tint+高光 */
+  .prop .gdemo{background:rgba(250,252,250,.5);color:#13221A}
+  .prop-d .gdemo{background:rgba(20,30,25,.42);color:#F0F5F1}
+  .em{font-style:normal;font-size:26px}
+  code{font-family:"SF Mono",Consolas,monospace;font-size:11px;background:rgba(20,45,32,.08);padding:1px 6px;border-radius:6px;color:var(--mint-deep)}
+  .gcell.dark-cell code{background:rgba(255,255,255,.14);color:#CFE8DA}
+
+  /* ---------- 场景B 记一笔 ---------- */
+  .edit-body{position:absolute;inset:0;padding-top:104px;display:flex;flex-direction:column;background:var(--paper)}
+  .amount-card{margin:6px 16px 0;padding:18px 20px 14px;border-radius:22px;background:rgba(255,255,255,.55);display:flex;align-items:flex-end;justify-content:space-between}
+  .amount-card .cur{font-size:13px;color:var(--ink2);display:flex;gap:8px;align-items:center;margin-bottom:10px}
+  .amount-card .cur .chipx{font-size:11px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:2px 9px;color:var(--ink)}
+  .amount-card .val{font-size:46px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+  .amount-card .val small{font-size:20px;color:var(--ink2);font-weight:700}
+  .summary{display:flex;gap:8px;margin:12px 16px 0;flex-wrap:wrap}
+  .summary span{font-size:11.5px;background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:99px;padding:4px 11px;color:var(--ink2)}
+  .summary span b{color:var(--ink);font-weight:600}
+  .summary span.more{color:var(--mint);border-color:rgba(46,125,91,.35);font-weight:700}
+  .cats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:13px 16px 0}
+  .cat{border-radius:16px;background:rgba(255,255,255,.6);border:1px solid var(--line);padding:9px 4px 7px;text-align:center}
+  .cat .e{font-size:21px;display:block}
+  .cat .n{font-size:10.5px;color:var(--ink2);margin-top:2px;display:block}
+  .cat.on{background:var(--mint);border-color:var(--mint)}
+  .cat.on .n{color:#fff}.cat.on{box-shadow:0 6px 16px -6px rgba(46,125,91,.55)}
+  .cat .lock{font-size:8px;color:#B4BFB8;vertical-align:2px}
+  .title-row{margin:12px 16px 0;display:flex;gap:8px}
+  .title-row .inp{flex:1;background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font-size:13px;color:#AEB8B1}
+  .title-row .again{background:var(--mint-soft);color:var(--mint-deep);font-size:12px;font-weight:700;border-radius:14px;padding:0 14px;display:flex;align-items:center;border:1px solid rgba(46,125,91,.25)}
+  .keypad{margin-top:auto;background:rgba(255,255,255,.55);border-top:1px solid rgba(255,255,255,.7);padding:10px 12px 34px;border-radius:26px 26px 0 0}
+  .keypad .rows{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+  .key{height:52px;border-radius:15px;background:rgba(255,255,255,.85);box-shadow:0 1px 3px rgba(20,45,32,.10),inset 0 1px 0 #fff;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:600;color:var(--ink)}
+  .key.op{color:var(--mint);font-size:24px}
+  .key.fn{font-size:16px}
+  .key.done{background:var(--mint);color:#fff;font-size:15px;font-weight:800;box-shadow:0 8px 18px -6px rgba(46,125,91,.6),inset 0 1px 0 rgba(255,255,255,.35)}
+  .key.sec{font-size:14px;color:var(--ink2)}
+
+  /* ---------- 场景C 账本首页 ---------- */
+  .home-body{position:absolute;inset:0;padding:104px 16px 0;overflow:hidden}
+  .big-title{font-size:30px;font-weight:800;letter-spacing:-.5px;margin:4px 2px 12px}
+  .hero{border-radius:var(--radius-card);padding:18px;position:relative;overflow:hidden;isolation:isolate}
+  .hero .bg{position:absolute;inset:0;z-index:-2;background:linear-gradient(135deg,rgba(46,125,91,.10),rgba(46,125,91,.02) 55%)}
+  .hero .row1{display:flex;justify-content:space-between;align-items:flex-start}
+  .hero .trip{font-size:18px;font-weight:800}
+  .hero .day{font-size:11.5px;color:var(--ink2);margin-top:3px}
+  .hero .ring{width:78px;height:78px;border-radius:50%;background:conic-gradient(var(--mint) 0 245deg,#E4EAE5 245deg 360deg);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .hero .ring i{width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;font-style:normal}
+  .hero .ring b{font-size:15px;font-variant-numeric:tabular-nums}
+  .hero .ring s{text-decoration:none;font-size:8.5px;color:var(--ink2)}
+  .hero .spend{display:flex;gap:22px;margin-top:14px}
+  .hero .spend div s{display:block;text-decoration:none;font-size:10.5px;color:var(--ink2)}
+  .hero .spend div b{font-size:17px;font-variant-numeric:tabular-nums;font-weight:800}
+  .hero .chips{display:flex;gap:8px;margin-top:14px}
+  .hero .chips span{font-size:11px;border-radius:99px;padding:4px 11px;font-weight:700}
+  .chip-warn{background:#FBF0DE;color:#9A6A1B}
+  .chip-info{background:#EAF3EE;color:var(--mint-deep)}
+  .chip-bad{background:#FBE9E5;color:#B2402E}
+  .quick{display:flex;justify-content:space-between;margin:18px 8px 4px}
+  .qbtn{width:64px;text-align:center}
+  .qbtn .ic{width:52px;height:52px;border-radius:19px;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:22px}
+  .qbtn .lb{font-size:11px;color:var(--ink2);margin-top:6px;display:block}
+  .members{background:var(--card);border-radius:20px;border:1px solid var(--line);margin-top:16px;padding:4px 16px}
+  .mrow{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid #F0F3EF}
+  .mrow:last-child{border-bottom:0}
+  .ava{width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:700}
+  .mrow .nm{font-size:13.5px;font-weight:600}
+  .mrow .sub{font-size:10.5px;color:var(--ink2)}
+  .mrow .amt{margin-left:auto;text-align:right}
+  .mrow .amt b{font-size:14px;font-variant-numeric:tabular-nums}
+  .mrow .amt s{display:block;text-decoration:none;font-size:9.5px;color:var(--ink2)}
+  .urge{font-size:10.5px;color:var(--mint);border:1px solid rgba(46,125,91,.3);border-radius:99px;padding:3px 9px;margin-left:8px;font-weight:700}
+  .fab-glass{position:absolute;right:20px;bottom:96px;width:56px;height:56px;border-radius:50%;background:rgba(46,125,91,.88);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;font-weight:300;z-index:40;box-shadow:0 12px 26px -8px rgba(46,125,91,.6),inset 0 1px 0 rgba(255,255,255,.4)}
+
+  /* ---------- 场景D 明细页 ---------- */
+  .list-body{position:absolute;inset:0;padding-top:150px}
+  .filters{position:absolute;top:96px;left:0;right:0;padding:6px 14px 10px;display:flex;gap:8px;overflow:hidden;background:linear-gradient(var(--paper) 70%,transparent);z-index:30}
+  .filters span{font-size:12px;border-radius:99px;padding:6px 13px;background:#fff;border:1px solid var(--line);color:var(--ink2);white-space:nowrap}
+  .filters span.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .filters span.time{color:var(--mint);border-color:rgba(46,125,91,.35);font-weight:700}
+  .month-pin{position:sticky;top:0;background:rgba(244,246,243,.9);backdrop-filter:blur(20px);padding:8px 18px 6px;font-size:13px;font-weight:800;color:var(--ink2);border-bottom:1px solid var(--line)}
+  .day-pin{background:rgba(244,246,243,.92);padding:7px 18px;display:flex;justify-content:space-between;font-size:12px;border-bottom:1px solid #EDF0EC}
+  .day-pin b{font-weight:700}.day-pin span{color:var(--ink2);font-variant-numeric:tabular-nums}
+  .bill{display:flex;align-items:center;gap:12px;padding:12px 18px;background:#fff;border-bottom:1px solid #F0F3EF;position:relative}
+  .bill.swiped{transform:translateX(-84px)}
+  .bill .behind{position:absolute;right:0;top:0;bottom:0;width:84px;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;gap:4px}
+  .bill .be{width:38px;height:38px;border-radius:13px;background:#F4F6F3;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .bill .bn{font-size:13.5px;font-weight:600}
+  .bill .bs{font-size:10.5px;color:var(--ink2);margin-top:2px}
+  .bill .bv{margin-left:auto;font-size:15px;font-weight:800;color:var(--red);font-variant-numeric:tabular-nums}
+  .bill .badge{font-size:9px;color:var(--mint);border:1px solid rgba(46,125,91,.35);border-radius:5px;padding:1px 5px;margin-left:6px;vertical-align:1.5px}
+  .totalbar{position:absolute;left:14px;right:14px;bottom:24px;height:58px;border-radius:22px;display:flex;align-items:center;padding:0 20px;z-index:40}
+  .totalbar s{text-decoration:none;font-size:11px;color:var(--ink2);display:block}
+  .totalbar b{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+  .totalbar .multi{margin-left:auto;font-size:11.5px;color:var(--mint);font-weight:700;border:1px dashed rgba(46,125,91,.4);border-radius:99px;padding:5px 12px}
+  .selectbar{position:absolute;top:52px;left:0;right:0;z-index:45;background:var(--ink);color:#fff;display:flex;align-items:center;gap:10px;padding:8px 18px;font-size:12.5px}
+  .selectbar .cnt{font-weight:800;font-size:14px}
+  .selectbar .acts{margin-left:auto;display:flex;gap:14px;font-size:12px}
+  .selectbar .acts .del{color:#FFB4A6}
+  .cb{width:17px;height:17px;border-radius:50%;border:1.6px solid rgba(255,255,255,.7);display:inline-block}
+  .bill .cb{border-color:#C4CDC6}
+  .bill .cb.on{background:var(--mint);border-color:var(--mint);position:relative}
+  .bill .cb.on::after{content:"✓";color:#fff;font-size:11px;position:absolute;top:-1px;left:2.5px}
+
+  /* ---------- 场景E 微交互 ---------- */
+  .micro{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:22px;max-width:960px}
+  .mcard{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;min-height:170px;display:flex;flex-direction:column;gap:12px}
+  .mcard h5{font-size:13px;font-weight:800;color:var(--ink2)}
+  .snack{border-radius:18px;background:rgba(29,34,31,.82);backdrop-filter:blur(24px) saturate(1.3);color:#fff;padding:13px 16px;font-size:12.5px;display:flex;align-items:center;gap:10px;box-shadow:0 14px 30px -10px rgba(0,0,0,.4);position:relative;overflow:hidden}
+  .snack::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3.5px;background:var(--red)}
+  .snack .undo{margin-left:auto;color:#8FE3BE;font-weight:700}
+  .empty-demo{display:flex;align-items:center;gap:14px}
+  .empty-plate{width:74px;height:74px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 10px 24px -10px rgba(20,45,32,.25),inset 0 1px 0 #fff;display:flex;align-items:center;justify-content:center;font-size:30px;animation:floaty 3.2s ease-in-out infinite}
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  .empty-demo p{font-size:12px;color:var(--ink2);line-height:1.7}
+  .empty-demo p b{color:var(--ink);font-size:13.5px;display:block;margin-bottom:2px}
+  .press-demo{display:flex;gap:16px;align-items:flex-end}
+  .press-demo .sq{width:58px;height:58px;border-radius:19px;display:flex;align-items:center;justify-content:center;font-size:22px}
+  .press-demo .up{background:linear-gradient(145deg,#3E9470,#256748);box-shadow:0 12px 22px -8px rgba(46,125,91,.55),inset 0 1px 0 rgba(255,255,255,.4)}
+  .press-demo .down{background:linear-gradient(145deg,#34875F,#1E5639);transform:scale(.94);box-shadow:0 4px 10px -4px rgba(46,125,91,.5)}
+  .press-demo small{font-size:10.5px;color:var(--ink2);text-align:center;display:block;margin-top:8px}
+  .ring-demo{display:flex;gap:18px;align-items:center}
+  .bar{height:8px;border-radius:99px;background:#E4EAE5;width:150px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#3E9470,#77C8A5);width:78%}
+  .toastdemo{border-radius:14px;background:var(--mint-soft);color:var(--mint-deep);font-size:12px;font-weight:600;padding:10px 14px;display:inline-flex;gap:8px;align-items:center;border:1px solid rgba(46,125,91,.2)}
+  footer{max-width:1280px;margin:70px auto 0;padding:0 6vw;color:#98A39C;font-size:12px;line-height:2}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>芥舟 <span>·</span> UI 重设计施工预览</h1>
+  <p>配套《UI/UX 整改方案 v2 修订版》。四个大改场景 + 玻璃质感对比 + 微交互样例。标注圆点编号对应右侧说明与文档章节，可直接作为施工视觉依据。毛玻璃效果为浏览器实时渲染（<code>backdrop-filter: blur + saturate</code>），与 Flutter 端 <code>GlassSurface</code> 提案参数一一对应。</p>
+  <div class="legend">
+    <span><b>美</b>← 场景 A/C/E</span><span><b>效</b>← 场景 B/D</span>
+    <span>数值标注如 <code>σ28 / α0.52</code> 即 Flutter 侧应采用的令牌值</span>
+    <span style="color:var(--mint);font-weight:700">→ 第二批（账单抽屉/行程列表/详情页签/攻略/设置/锁屏/弹层/图标体系）：<a href="pages2.html" style="color:var(--mint)">pages2.html（场景 F–N）</a></span>
+  </div>
+</header>
+
+<!-- ============ 场景 A ============ -->
+<section id="a">
+  <div class="sec-head"><h2>场景 A · 玻璃质感：现状 vs 提案</h2><small>整改方案 §一 · GlassTokens + GlassSurface</small><span class="pill-ver v281">V2.8.1 · S2 玻璃基建</span></div>
+  <div class="glass-compare">
+    <div class="gcell now">
+      <div class="bg-art"><i style="width:220px;height:220px;background:#7FC8A5;left:-40px;top:-30px"></i><i style="width:180px;height:180px;background:#F2C879;right:-30px;top:40px"></i><i style="width:150px;height:150px;background:#8FB8E8;left:40%;bottom:-50px"></i></div>
+      <h4><em style="background:#F6D9D2;color:#B2402E">现状</em>浅色 · 抽屉 α0.98</h4>
+      <p>不透明度 0.98，BackdropFilter σ20 形同虚设；无高光、无饱和度——「半透明塑料片」。</p>
+      <div class="gdemo"><span class="gt">删掉这笔账？</span><div class="gs">删除后不可恢复，账单 ¥128.50 将从「冲绳五日」移除</div></div>
+    </div>
+    <div class="gcell prop">
+      <div class="bg-art"><i style="width:220px;height:220px;background:#7FC8A5;left:-40px;top:-30px"></i><i style="width:180px;height:180px;background:#F2C879;right:-30px;top:40px"></i><i style="width:150px;height:150px;background:#8FB8E8;left:40%;bottom:-50px"></i></div>
+      <h4><em style="background:#CDE8DA;color:#1E5C41">提案</em>浅色 · <code>σ28 + saturate 1.35 + α0.52</code></h4>
+      <p>背景透出色彩与光斑；顶部受光内高光（白 α0.65 inset 1px）；文字对比度靠强模糊保证。</p>
+      <div class="gdemo glass shadow"><span class="gt">删掉这笔账？</span><div class="gs">删除后不可恢复，账单 ¥128.50 将从「冲绳五日」移除</div></div>
+    </div>
+    <div class="gcell now-d" style="color:#E8EDE9">
+      <div class="bg-art"><i style="width:220px;height:220px;background:#2F6B52;left:-40px;top:-30px"></i><i style="width:180px;height:180px;background:#8A6B2F;right:-30px;top:40px"></i><i style="width:150px;height:150px;background:#2F4E6B;left:40%;bottom:-50px"></i></div>
+      <h4><em style="background:#F6D9D2;color:#B2402E">现状</em>深色 · α0.98 纯灰板</h4>
+      <p>深色下直接变成不透明深灰，无「透夜色」光感；夜山/夜海主题气质全无。</p>
+      <div class="gdemo"><span class="gt">删掉这笔账？</span><div class="gs">删除后不可恢复，账单 ¥128.50 将从「冲绳五日」移除</div></div>
+    </div>
+    <div class="gcell prop-d" style="color:#F0F5F1;background:rgba(14,20,17,.6)">
+      <div class="bg-art"><i style="width:220px;height:220px;background:#2F6B52;left:-40px;top:-30px"></i><i style="width:180px;height:180px;background:#8A6B2F;right:-30px;top:40px"></i><i style="width:150px;height:150px;background:#2F4E6B;left:40%;bottom:-50px"></i></div>
+      <h4><em style="background:#CDE8DA;color:#1E5C41">提案</em>深色 · <code>α0.42 + 高光减半</code></h4>
+      <p>暗色 tint 更低（0.42）、高光 α0.22、阴影加深——玻璃「透夜色」，夜间主题的呼吸感。</p>
+      <div class="gdemo glass shadow"><span class="gt">删掉这笔账？</span><div class="gs">删除后不可恢复，账单 ¥128.50 将从「冲绳五日」移除</div></div>
+    </div>
+  </div>
+  <div class="notes" style="max-width:900px;margin-top:20px">
+    <div class="note"><b class="n">1</b>同一套 <code>GlassSurface(level:)</code> 覆盖 8 个场景（导航/底栏/抽屉/FAB/Hero 卡/SnackBar/合计栏/键盘），参数令牌化收口于 <code>GlassTokens</code>。<span class="tag beauty">美</span><span class="ref">方案 §1.2–1.3 · sheet.dart:81 α0.98 与 sheet.dart:126 无模糊为两大直接病灶</span></div>
+    <div class="note"><b class="n">2</b>「字与底面重叠」历史 bug 的正确解：<strong>强模糊（σ20→28）+ 饱和度补偿</strong>，而非堆不透明度。<code>disableAnimations</code> 时回退纯色 surface 兜底性能与无障碍。<span class="tag a11y">A</span></div>
+  </div>
+</section>
+
+<!-- ============ 场景 B ============ -->
+<section id="b">
+  <div class="sec-head"><h2>场景 B · 记一笔：键盘优先</h2><small>整改方案 §3.2 · 金额与分类同屏，消灭滚动穿越</small><span class="pill-ver v281">V2.8.1 · S5 记一笔键盘化</span></div>
+  <div class="stage">
+    <div class="phone"><div class="screen">
+      <div class="status">9:41</div><div class="status r">▮▮ ᯤ 87%</div><div class="notch"></div>
+      <div class="appbar glass"><span class="back">‹</span><span class="t">记一笔</span><span class="save">保存</span></div>
+      <div class="edit-body">
+        <div class="amount-card glass shadow">
+          <div>
+            <div class="cur">支出 · <span class="chipx">¥ CNY</span><span class="chipx">11/02 周五</span></div>
+            <div class="val"><small>¥</small>128<small>.50</small></div>
+          </div>
+          <div style="font-size:26px;color:#B4BFB8">⌫</div>
+        </div>
+        <div class="summary">
+          <span>💳 <b>微信</b></span><span>↩️ 未退款</span><span>👥 我 全额</span><span class="more">更多选项 ▾</span>
+        </div>
+        <div class="cats">
+          <div class="cat on"><span class="e">🍜</span><span class="n">餐饮</span></div>
+          <div class="cat"><span class="e">🚕</span><span class="n">交通</span></div>
+          <div class="cat"><span class="e">🏨</span><span class="n">住宿 <i class="lock">🔒</i></span></div>
+          <div class="cat"><span class="e">🎟️</span><span class="n">门票</span></div>
+          <div class="cat"><span class="e">🛍️</span><span class="n">购物</span></div>
+          <div class="cat"><span class="e">🍵</span><span class="n">饮品</span></div>
+          <div class="cat"><span class="e">💊</span><span class="n">医疗</span></div>
+          <div class="cat"><span class="e">⋯</span><span class="n">管理</span></div>
+        </div>
+        <div class="title-row">
+          <div class="inp">标题 · 试试「午餐 一兰拉面」</div>
+          <div class="again">⏭ 再记一笔</div>
+        </div>
+        <div class="keypad glass">
+          <div class="rows">
+            <div class="key">7</div><div class="key">8</div><div class="key">9</div><div class="key fn">⌫</div>
+            <div class="key">4</div><div class="key">5</div><div class="key">6</div><div class="key op">＋</div>
+            <div class="key">1</div><div class="key">2</div><div class="key">3</div><div class="key op">－</div>
+            <div class="key">.</div><div class="key">0</div><div class="key sec">备注</div><div class="key done">完成 ✓</div>
+          </div>
+        </div>
+      </div>
+      <span class="mark" style="top:172px;left:30px">1</span>
+      <span class="mark" style="top:250px;left:30px">2</span>
+      <span class="mark" style="top:330px;right:26px">3</span>
+      <span class="mark" style="top:700px;right:26px">4</span>
+      <span class="mark" style="top:536px;left:24px">5</span>
+      <span class="mark" style="top:540px;right:24px">6</span>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b class="n">1</b>金额大字与摘要 chips：<strong>低频区块折叠</strong>——币种/退款预付/支付方式/关联行程/付款人分摊收进「更多选项」，已选值以 chip 常驻。<span class="tag eff">效</span><span class="ref">替代现状 11 区块全展开（expense_edit_screen L488-528）</span></div>
+      <div class="note"><b class="n">2</b>分类九宫格同屏 4×2 常用格 + 管理入口；选中态 mint 实底 + 光晕投影；内置类保留 🔒 角标。<span class="tag beauty">美</span></div>
+      <div class="note"><b class="n">3</b>玻璃数字键盘（GlassSurface level:sheet）：<code>＋ －</code> 连算「58+32」实时求和——旅行拼单刚需；<code>⌫</code> 退格；「备注」快捷键。<span class="tag eff">效</span><span class="tag beauty">美</span></div>
+      <div class="note"><b class="n">4</b><strong>「完成 ✓」即保存</strong>，拇指零位移完成整个记账流；保存成功后毛玻璃蒙层 + CountUp + heavyImpact。<span class="tag eff">效</span></div>
+      <div class="note"><b class="n">5</b>标题从沉底<strong>上移至键盘上方</strong>，占位符按分类智能提示（选餐饮 → 提示「午餐 一兰拉面」）。<span class="tag eff">效</span><span class="ref">修复 v1 发现的动线断裂：金额→分类间被 4 区块隔开</span></div>
+      <div class="note"><b class="n">6</b><strong>「再记一笔」</strong>：保存后金额清零、保留分类与支付方式——旅行「一餐三笔」场景专属。<span class="tag eff">效</span></div>
+      <div class="note">⚠️ 施工约束：金额一律 int 分；展示走 <code>MoneyFormat</code>；颜色走语义色 + tokens；不得硬编码。<span class="ref">V2.7.2 规格书 §2.2 架构基线</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 场景 C ============ -->
+<section id="c">
+  <div class="sec-head"><h2>场景 C · 账本首页：可操作仪表盘</h2><small>整改方案 §3.1 · 8 类卡片堆叠 → 三级视觉节奏</small><span class="pill-ver v281">V2.8.1 · S7 首页与入口收敛</span></div>
+  <div class="stage">
+    <div class="phone"><div class="screen">
+      <div class="status">9:41</div><div class="status r">▮▮ ᯤ 87%</div><div class="notch"></div>
+      <div class="appbar glass" style="background:transparent;border-bottom:0"><span></span><span></span><span style="font-size:18px">🔔</span></div>
+      <div class="home-body">
+        <div class="big-title">账本</div>
+        <div class="hero glass shadow">
+          <div class="bg"></div>
+          <div class="row1">
+            <div><div class="trip">🏝️ 冲绳五日</div><div class="day">第 3 天 · 6 人 · 林小舟、阿凯 等</div></div>
+            <div class="ring"><i><b>68%</b><s>已用</s></i></div>
+          </div>
+          <div class="spend">
+            <div><s>总预算</s><b>¥10,000</b></div>
+            <div><s>已花</s><b>¥6,820</b></div>
+            <div><s>今日</s><b style="color:var(--mint)">¥412</b></div>
+          </div>
+          <div class="chips"><span class="chip-warn">⏳ 未结 2 笔 ›</span><span class="chip-info">冲突 0</span><span class="chip-warn">⚠ 预算 68%</span></div>
+        </div>
+        <div class="quick">
+          <div class="qbtn"><div class="ic glass shadow">🧾</div><span class="lb">账单</span></div>
+          <div class="qbtn"><div class="ic glass shadow">📊</div><span class="lb">统计</span></div>
+          <div class="qbtn"><div class="ic glass shadow">⚖️</div><span class="lb">结算</span></div>
+          <div class="qbtn"><div class="ic glass shadow">⚡</div><span class="lb">快速记</span></div>
+        </div>
+        <div class="members shadow">
+          <div class="mrow">
+            <div class="ava" style="background:#5B8DEF">舟</div>
+            <div><div class="nm">林小舟</div><div class="sub">垫付 ¥2,340 · 应摊 ¥1,980</div></div>
+            <div class="amt"><b style="color:var(--green)">+¥360</b><s>应收</s></div>
+            <span class="urge">催 TA ›</span>
+          </div>
+          <div class="mrow">
+            <div class="ava" style="background:#E8833C">凯</div>
+            <div><div class="nm">阿凯</div><div class="sub">垫付 ¥890 · 应摊 ¥1,980</div></div>
+            <div class="amt"><b style="color:var(--red)">−¥1,090</b><s>应付</s></div>
+            <span class="urge">催 TA ›</span>
+          </div>
+        </div>
+        <div class="fab-glass glass">＋</div>
+      </div>
+      <span class="mark" style="top:216px;right:26px">1</span>
+      <span class="mark" style="top:388px;left:24px">2</span>
+      <span class="mark" style="top:336px;left:26px">3</span>
+      <span class="mark" style="top:470px;right:30px">4</span>
+      <span class="mark" style="top:660px;right:24px">5</span>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b class="n">1</b><strong>Hero 玻璃卡</strong>合并现状 4 层（团卡/预算卡/超支横幅/冲突 Chip）：预算环 + 今日已花 CountUp + 三枚语义 chip 直达结算/审计/预警。<span class="tag beauty">美</span><span class="tag eff">效</span><span class="ref">GlassSurface(level:floatingCard) · 超支时整卡切 error 色调</span></div>
+      <div class="note"><b class="n">2</b>快捷行从两列瓦片改为 <strong>4 枚玻璃圆钮</strong>；公费池/收件箱/全部账单降级至「更多」——单主 CTA 原则。<span class="tag beauty">美</span></div>
+      <div class="note"><b class="n">3</b>预算环超 80% 变预警橙、100% 变支出红（<code>SemanticColors</code> 暗色变体同步提亮）。<span class="tag a11y">A</span></div>
+      <div class="note"><b class="n">4</b><strong>「催 TA ›」</strong>：成员榜行内一键生成催款文案分享卡——把「看数据」变「做动作」（纯本地拼文案，无 AI 无网络）。<span class="tag eff">效</span></div>
+      <div class="note"><b class="n">5</b>FAB 玻璃圆钮化 + PressableScale 按压缩放 0.96 + 长按仍触发「快速记」sheet（保留既有双入口）。<span class="tag beauty">美</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 场景 D ============ -->
+<section id="d">
+  <div class="sec-head"><h2>场景 D · 明细页：收敛 + 手势 + 批量</h2><small>整改方案 §3.3 · SwipeableBillTile 双级吸顶</small><span class="pill-ver v281">V2.8.1 · S6 明细页</span></div>
+  <div class="stage">
+    <div class="phone"><div class="screen">
+      <div class="status">9:41</div><div class="status r">▮▮ ᯤ 87%</div><div class="notch"></div>
+      <div class="appbar glass" style="background:transparent;border-bottom:0;justify-content:flex-end;gap:16px"><span style="font-size:17px">🔍</span><span style="font-size:16px">↓↑</span><span style="font-size:17px">⋯</span></div>
+      <div class="selectbar"><span class="cb on"></span><span class="cnt">已选 2 笔 · ¥336.00</span><div class="acts"><span>改分类</span><span>导出</span><span class="del">删除</span></div></div>
+      <div class="filters">
+        <span class="on">全部</span><span>🍜 餐饮</span><span>🚕 交通</span><span>🎟️ 门票</span><span class="time">📅 10/01 – 10/05</span><span>⚙ 筛选</span>
+      </div>
+      <div class="list-body">
+        <div class="month-pin">十 · 2026 年 10 月 · 共 ¥9,214</div>
+        <div class="day-pin"><b>10/02 周五</b><span>3 笔 · ¥356.00</span></div>
+        <div class="bill"><div class="be">🍜</div><div><div class="bn">午餐 · 一兰拉面</div><div class="bs">微信 · 冲绳五日</div></div><span class="bv">−128.50</span><span class="cb"></span></div>
+        <div class="bill"><div class="be">🚕</div><div><div class="bn">打车 · 国际通</div><div class="bs">支付宝</div></div><span class="bv">−42.00</span><span class="cb"></span></div>
+        <div class="bill swiped"><div class="behind">🗑 删除</div><div class="be">🎟️</div><div><div class="bn">美丽海水族馆 <span class="badge">攻略</span></div><div class="bs">现金 · 含 2 人票</div></div><span class="bv">−165.50</span><span class="cb"></span></div>
+        <div class="day-pin" style="margin-top:6px"><b>10/01 周四</b><span>4 笔 · ¥1,204.00</span></div>
+        <div class="bill"><div class="be">🏨</div><div><div class="bn">那霸酒店 · 2 晚 <i class="lock" style="font-size:8px">🔒</i></div><div class="bs">信用卡 · 预付</div></div><span class="bv">−860.00</span><span class="cb on"></span></div>
+        <div class="bill"><div class="be">🍜</div><div><div class="bn">晚餐 · 暖暮拉面</div><div class="bs">微信 · 与阿凯平摊</div></div><span class="bv">−96.00</span><span class="cb on"></span></div>
+        <div class="totalbar glass shadow">
+          <div><s>当前筛选合计</s><b>¥9,214.00</b><span style="font-size:10px;color:var(--ink2)"> · 23 笔 · 预付另计</span></div>
+          <span class="multi">批量模式中</span>
+        </div>
+        <div class="fab-glass glass">＋</div>
+      </div>
+      <span class="mark" style="top:148px;left:22px">1</span>
+      <span class="mark" style="top:212px;left:22px">2</span>
+      <span class="mark" style="top:428px;right:30px">3</span>
+      <span class="mark warn" style="top:74px;left:22px">4</span>
+      <span class="mark" style="top:700px;left:26px">5</span>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b class="n">1</b><strong>筛选单行化</strong>：支付方式 pills 从常驻第二行并入「⚙ 筛选」抽屉；时间 pill 直开 <code>showDateRangePicker</code>（复用统计页控件）。列表夺回一屏高度。<span class="tag eff">效</span></div>
+      <div class="note"><b class="n">2</b><strong>双级吸顶</strong>：月度头（十月 · 合计）+ 日期头（10/02 · 3 笔）两级 <code>SliverPersistentHeader(pinned)</code>——长行程快速定位。<span class="tag eff">效</span></div>
+      <div class="note"><b class="n">3</b><code>SwipeableBillTile</code> 统一组件：右滑编辑/左滑删除（强确认保留，与首页手势一致）；「攻略」角标为 V2.7.2 S5 互链预留样式（弱关联，反查失败静默隐藏）。<span class="tag eff">效</span></div>
+      <div class="note"><b class="n">4</b><strong>长按进入多选</strong>：批量条替换顶栏，支持批量删除（强确认含数量）/改分类/导出。<span class="tag eff">效</span></div>
+      <div class="note"><b class="n">5</b>合计栏玻璃化 GlassSurface(level:overlay)；批量态显示「批量模式中」与已选金额。<span class="tag beauty">美</span></div>
+      <div class="note">⚠️ viewer 角色照旧隐藏全部写入口（隐藏不置灰）；删除强确认与 V2.7.2 O2 口径一致——<strong>不做全局 Undo</strong>。<span class="ref">协调标注：Undo 体系已登记 V2.7.3 候选</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 场景 E ============ -->
+<section id="e">
+  <div class="sec-head"><h2>场景 E · 微交互组件样例</h2><small>整改方案 §2.3–2.4 · 统一反馈语言</small><span class="pill-ver v281">V2.8.1 · S3 / S11</span></div>
+  <div class="micro">
+    <div class="mcard">
+      <h5>玻璃 SnackBar + 语义左缘条（#31）</h5>
+      <div class="snack">已删除「午餐 · 一兰拉面」<span class="undo">撤销</span></div>
+      <p style="font-size:11.5px;color:#98A39C;line-height:1.7">删除类左缘支出红；保存类收入绿。圆角 18 + blur 24 + saturate 1.3。注：撤销 action 为 V2.7.3 预留样式，当前版本仅渲染确认文案。</p>
+    </div>
+    <div class="mcard">
+      <h5>空态玻璃圆盘 + 微浮动（#20）</h5>
+      <div class="empty-demo">
+        <div class="empty-plate">🧾</div>
+        <p><b>一笔都还没记</b>旅行一开始，就把每笔花销轻轻放进账本<br><span style="color:var(--mint);font-weight:700">＋ 记一笔</span></p>
+      </div>
+    </div>
+    <div class="mcard">
+      <h5>PressableScale 按压反馈（#3）</h5>
+      <div class="press-demo">
+        <div><div class="sq up glass">⚡</div><small>常态 · 高光受光</small></div>
+        <div><div class="sq down glass">⚡</div><small>按下 · scale .94</small></div>
+      </div>
+    </div>
+    <div class="mcard">
+      <h5>预算语义色阶 + 图表生长（#27/#16）</h5>
+      <div class="ring-demo">
+        <div style="text-align:center"><div style="width:56px;height:56px;border-radius:50%;background:conic-gradient(var(--mint) 0 273deg,#E4EAE5 0);display:flex;align-items:center;justify-content:center"><i style="width:40px;height:40px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:11px;font-weight:800">76%</i></div></div>
+        <div><div class="bar"><i></i></div><small style="font-size:10.5px;color:#98A39C;display:block;margin-top:6px">600ms easeOutCubic 生长 · >80% 变橙 · >100% 变红</small></div>
+      </div>
+    </div>
+    <div class="mcard">
+      <h5>落点/保存 轻提示胶囊（对齐 V2.7.2 S7 toast 撤销）</h5>
+      <div class="toastdemo">✓ 已排入 14:00 · 撤销</div>
+      <p style="font-size:11.5px;color:#98A39C;line-height:1.7">V2.7.2 装配台单步撤销 toast 直接采用此样式；mint-soft 底 + 语义描边，30 秒后失效。</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  芥舟 · UI 重设计施工预览 —— 配套文档《docs/UI-UX整改方案-v2.7.1.md》（v2 修订版）<br>
+  场景 B/C/D 均为账本域（V2.7.2 未涉及，✅ 安全）；玻璃体系并入 tokens.dart 需避开 V2.7.2 S1–S13 施工窗口（B1 批次）。
+</footer>
+
+</body>
+</html>

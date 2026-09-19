@@ -1,6 +1,7 @@
 // V2.7.2 S1：drift schemaVersion 5→6 一次到位。
 // 覆盖：2 张新表（wishlist_items / shared_wishlist_items）可读写、
 // 5 个新列默认值（pace / guide_ref / backup_of）、历史库升级路径数据零丢失。
+// V2.8.1：schemaVersion 迁移到 7（新增 sub_budgets 表），版本钉死断言随之更新。
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -21,7 +22,7 @@ void main() {
   }
 
   test('S1：schemaVersion == 6', () {
-    expect(db.schemaVersion, 6);
+    expect(db.schemaVersion, 7, reason: 'V2.8.1 新增 sub_budgets 表，版本钉死更新为 7');
   });
 
   test('S1：新列默认值（trips.pace=standard / guide_ref / backup_of=NULL）', () async {

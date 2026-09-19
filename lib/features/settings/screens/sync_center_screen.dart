@@ -16,6 +16,7 @@ import '../../../data/sync/sync_models.dart';
 import '../../../platform/network_probe.dart' show NetKind;
 import '../../../shared/app_meta.dart' show shareLinkUrl;
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/sync_status_capsule.dart'
     show syncStatusColor;
@@ -347,16 +348,11 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
               subtitle: Text(copy('sync.pausePurgeWarn'),
                   style: const TextStyle(fontSize: AppFontSizes.caption)),
               onTap: () {
-                showDialog<bool>(
+                showConfirmSheet(
                   context: ctx,
-                  builder: (d) => AlertDialog(
-                    title: Text(copy('sync.pausePurge')),
-                    content: Text(copy('sync.pausePurgeWarn')),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('取消')),
-                      FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('确定')),
-                    ],
-                  ),
+                  title: copy('sync.pausePurge'),
+                  body: copy('sync.pausePurgeWarn'),
+                  confirmLabel: '确定',
                 ).then((ok) => Navigator.pop(ctx, ok == true ? 2 : null));
               },
             ),

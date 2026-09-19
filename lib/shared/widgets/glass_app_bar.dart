@@ -1,7 +1,6 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import '../../theme/tokens.dart';
+import 'glass_surface.dart';
 
 /// 毛玻璃吸顶导航栏：
 /// - BackdropFilter 实时模糊 + 半透明表面色，覆盖状态栏区域；
@@ -36,10 +35,16 @@ class GlassAppBar extends StatefulWidget implements PreferredSizeWidget {
   /// 若不计入 preferredSize.height，标题工具条会被压出 0.6px 的 BOTTOM OVERFLOWED 条纹。
   static const double _bottomBorderWidth = 0.6;
 
+  /// V2.8.1 S2：GlassSurface 全周描边 + 内外 Container decoration 内边距，
+  /// 从固定高度扣除共 4px（0.6 自身边框 + 2 玻璃描边 + 1.4 组合余量），
+  /// 必须计入 preferredSize，否则工具条 BOTTOM OVERFLOWED。
+  static const double _glassBorderInset = 4;
+
   @override
   Size get preferredSize => Size.fromHeight(
         kToolbarHeight +
         _bottomBorderWidth +
+        _glassBorderInset +
         (largeTitle != null ? _largeTitleArea : 0) +
         (bottom?.preferredSize.height ?? 0),
       );
@@ -98,22 +103,34 @@ class _GlassAppBarState extends State<GlassAppBar> {
     final statusBar = MediaQuery.paddingOf(context).top;
     final compactTitle = widget.title ?? widget.largeTitle ?? '';
 
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          decoration: BoxDecoration(
-            color: scheme.surface.withValues(alpha: 0.72),
-            border: Border(
-              bottom: BorderSide(
-                color: scheme.outlineVariant.withValues(alpha: 0.55),
-                width: GlassAppBar._bottomBorderWidth,
-              ),
+    return GlassSurface(
+      level: GlassLevel.navBar,
+      borderRadius: BorderRadius.zero,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: scheme.outlineVariant.withValues(alpha: 0.55),
+              width: GlassAppBar._bottomBorderWidth,
             ),
           ),
-          height: widget.preferredSize.height + statusBar,
-          padding: EdgeInsets.only(top: statusBar),
-          child: Column(
+        ),
+        height: widget.preferredSize.height + statusBar,
+        padding: EdgeInsets.only(top: statusBar),
+        child: Stack(
+          children: [
+            // V2.8.1 S2：滚动加深 —— offset>36 后 tint 每像素 +0.0022 封顶 +0.08，
+            // 用独立 ValueListenableBuilder 只重建蒙版层（不重放工具条子树）。
+            Positioned.fill(
+              child: ValueListenableBuilder<double>(
+                valueListenable: _offset,
+                builder: (context, offset, _) => ColoredBox(
+                  color: scheme.surface.withValues(
+                      alpha: ((offset - 36) * 0.0022).clamp(0.0, 0.08)),
+                ),
+              ),
+            ),
+            Column(
             children: [
               SizedBox(
                 height: kToolbarHeight,
@@ -176,7 +193,8 @@ class _GlassAppBarState extends State<GlassAppBar> {
                 ),
               if (widget.bottom != null) widget.bottom!,
             ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -159,8 +159,10 @@ class SyncMerger {
       // V2.7.1：公款池 / 收件箱属业务表，且**没有协作镜像表**（S1 未建 Shared 变体）。
       // 自己的行落业务表；他人行一律跳过——绝不复现 H7（把他人账本数据写进本地
       // 业务表，随后又被 assemble 上行成云端重复行）。
+      // V2.8.1：分类子预算同口径（团级账本域，非协作镜像，无 Shared 变体）。
       case SyncEntity.funds:
       case SyncEntity.inboxItems:
+      case SyncEntity.subBudgets:
         final owner = cloud['owner_user_id'] as String?;
         if (owner == null || owner == currentUserId) return false;
         return null;
@@ -215,6 +217,8 @@ class SyncMerger {
         return (await (db.select(db.funds)..where((t) => t.id.equals(id))).get()).firstOrNull;
       case SyncEntity.inboxItems:
         return (await (db.select(db.inboxItems)..where((t) => t.id.equals(id))).get()).firstOrNull;
+      case SyncEntity.subBudgets:
+        return (await (db.select(db.subBudgets)..where((t) => t.id.equals(id))).get()).firstOrNull;
       case SyncEntity.expenses:
         if (shared) {
           return (await (db.select(db.sharedExpenses)..where((t) => t.id.equals(id))).get()).firstOrNull;
@@ -291,6 +295,8 @@ class SyncMerger {
         await db.into(db.funds).insertOnConflictUpdate(SyncCodec.fundFromCloud(cloud));
       case SyncEntity.inboxItems:
         await db.into(db.inboxItems).insertOnConflictUpdate(SyncCodec.inboxItemFromCloud(cloud));
+      case SyncEntity.subBudgets:
+        await db.into(db.subBudgets).insertOnConflictUpdate(SyncCodec.subBudgetFromCloud(cloud));
       case SyncEntity.expenses:
         if (shared) {
           await db.into(db.sharedExpenses).insertOnConflictUpdate(SyncCodec.sharedExpenseFromCloud(cloud));
@@ -338,6 +344,8 @@ class SyncMerger {
         await (db.delete(db.funds)..where((t) => t.id.equals(id))).go();
       case SyncEntity.inboxItems:
         await (db.delete(db.inboxItems)..where((t) => t.id.equals(id))).go();
+      case SyncEntity.subBudgets:
+        await (db.delete(db.subBudgets)..where((t) => t.id.equals(id))).go();
       case SyncEntity.expenses:
         await (db.delete(db.expenses)..where((t) => t.id.equals(id))).go();
         await (db.delete(db.sharedExpenses)..where((t) => t.id.equals(id))).go();

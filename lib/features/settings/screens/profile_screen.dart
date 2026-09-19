@@ -12,16 +12,30 @@ import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
 import '../../../platform/open_external.dart';
 import '../../../shared/app_meta.dart';
 import '../../../shared/check_update_dialog.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/sync_status_capsule.dart'
     show syncStatusColor, syncStatusLabelText;
 import '../../../shared/travel_quotes.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../theme/tokens.dart';
+import '../../ledger/ledger_models.dart';
 import '../../ledger/ledger_providers.dart';
 import '../../../shared/copy_tokens.dart';
 
 /// 「我的」Tab 根页：大标题 + 用户卡 + 设置分组入口。
+// ---- V2.8.1 S10：组内搜索状态 ----
+final _profileSearchOpenProvider = StateProvider<bool>((_) => false);
+final _profileSearchQueryProvider = StateProvider<String>((_) => '');
+
+bool _profileHit(String query, String title, [String? subtitle]) {
+  final q = query.trim();
+  if (q.isEmpty) return true;
+  return title.contains(q) || (subtitle ?? '').contains(q);
+}
+
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -56,17 +70,69 @@ class ProfileScreen extends ConsumerWidget {
         ),
         // 用户卡（账号 + 云同步状态 + 云设置入口）
         _StaggerIn(index: 0, child: const _UserCard()),
-        // 偏好设置分组
-        const SectionHeader(title: '偏好设置'),
+        // V2.8.1 S10：状态摘要玻璃卡（上次同步 / 当前团 / 进行中行程——跨域只读）
+        _StaggerIn(index: 0, child: const _StatusSummaryCard()),
+        // V2.8.1 S10：组内搜索（放大镜展开过滤框）
         _StaggerIn(
           index: 1,
-          child: _ProfileTile(
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Expanded(child: SectionHeader(title: '偏好设置')),
+                  IconButton(
+                    tooltip: '搜索设置项',
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      ref.read(_profileSearchOpenProvider.notifier).state =
+                          !ref.read(_profileSearchOpenProvider);
+                      if (!ref.read(_profileSearchOpenProvider)) {
+                        ref.read(_profileSearchQueryProvider.notifier).state = '';
+                      }
+                    },
+                    icon: Icon(
+                        ref.watch(_profileSearchOpenProvider)
+                            ? Icons.search_off_rounded
+                            : Icons.search_rounded,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 180),
+                crossFadeState: ref.watch(_profileSearchOpenProvider)
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+                firstChild: const SizedBox(width: double.infinity),
+                secondChild: Padding(
+                  padding: const EdgeInsets.only(bottom: Spacing.sm),
+                  child: TextField(
+                    onChanged: (v) =>
+                        ref.read(_profileSearchQueryProvider.notifier).state = v,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search_rounded, size: 20),
+                      hintText: '按标题或说明筛选设置项…',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '外观主题'),
+            child: _StaggerIn(
+              index: 1,
+              child: _ProfileTile(
             icon: Icons.palette_outlined,
             title: '外观主题',
             trailing: const _ThemeSeedDots(),
             onTap: () => context.push('/profile/theme'),
+              ),
+            ),
           ),
-        ),
         _StaggerIn(
           index: 2,
           child: Consumer(
@@ -83,122 +149,187 @@ class ProfileScreen extends ConsumerWidget {
                   await ref.read(prefsRepoProvider).setBudgetAlertsEnabled(v);
                   ref.invalidate(budgetAlertsEnabledProvider);
                 },
-                onTap: () {},
+                // V2.8.1 S1：tile 整体可点 toggle（原空 onTap 修复）；
+                // 开关自身的 onSwitchChanged 不经此处，不会双重触发。
+                onTap: () async {
+                  final next = !enabled;
+                  await ref.read(prefsRepoProvider).setBudgetAlertsEnabled(next);
+                  ref.invalidate(budgetAlertsEnabledProvider);
+                },
               );
             },
           ),
         ),
-        _StaggerIn(
-          index: 3,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '地图服务设置'),
+            child: _StaggerIn(
+              index: 3,
+              child: _ProfileTile(
             icon: Icons.map_outlined,
             title: '地图服务设置',
             onTap: () => context.push('/trips/map-settings'),
+              ),
+            ),
           ),
-        ),
-        _StaggerIn(
-          index: 4,
-          child: _ProfileTile(
+        // V2.8.1 S10：账本工具箱 tile（零路由方案：跳账本页 + 指引提示）
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '账本工具箱', '变更记录 / 局域网同步 / CSV 导入导出 / 分类管理'),
+            child: _StaggerIn(
+              index: 3,
+              child: _ProfileTile(
+            icon: Icons.apps_rounded,
+            title: '账本工具箱',
+            subtitle: '变更记录 / 局域网同步 / CSV 导入导出 / 分类管理',
+            onTap: () {
+              showAppSnackBar(context, '进入账本后点右上角 ⚙ 打开工具箱');
+              context.push('/ledger');
+            },
+              ),
+            ),
+          ),
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '记账团管理'),
+            child: _StaggerIn(
+              index: 4,
+              child: _ProfileTile(
             icon: Icons.groups_rounded,
             title: '记账团管理',
             onTap: () => context.push('/ledger/groups'),
+              ),
+            ),
           ),
-        ),
         // 分享与协作中心：邀请旅伴 / 只读分享链接 / 输入邀请码加团 / 局域网同步。
         // 此前这些入口散落且未登录时全隐藏，用户找不到（本轮补齐聚合入口）。
-        _StaggerIn(
-          index: 5,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '分享与协作', '邀请旅伴、只读分享链接、加入别人的账本'),
+            child: _StaggerIn(
+              index: 5,
+              child: _ProfileTile(
             icon: Icons.ios_share_rounded,
             title: '分享与协作',
             subtitle: '邀请旅伴、只读分享链接、加入别人的账本',
             onTap: () => context.push('/profile/share'),
+              ),
+            ),
           ),
-        ),
         if (!kIsWeb)
-          _StaggerIn(
-            index: 5,
-            child: _ProfileTile(
+          Visibility(
+              visible: _profileHit(ref.watch(_profileSearchQueryProvider), 'AI 设置', '配置 AI 助手使用的模型服务'),
+              child: _StaggerIn(
+                index: 5,
+                child: _ProfileTile(
               icon: Icons.smart_toy_outlined,
               title: 'AI 设置',
               subtitle: '配置 AI 助手使用的模型服务',
               onTap: () => context.push('/ai/settings'),
+                ),
+              ),
             ),
-          ),
         // 数据与隐私分组
         const SectionHeader(title: '数据与隐私'),
-        _StaggerIn(
-          index: 6,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '启动锁', '冷启动时用 6 位 PIN 解锁'),
+            child: _StaggerIn(
+              index: 6,
+              child: _ProfileTile(
             icon: Icons.lock_outline_rounded,
             title: '启动锁',
             subtitle: '冷启动时用 6 位 PIN 解锁',
             onTap: () => context.push('/profile/app-lock'),
+              ),
+            ),
           ),
-        ),
-        _StaggerIn(
-          index: 6,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '隐私说明'),
+            child: _StaggerIn(
+              index: 6,
+              child: _ProfileTile(
             icon: Icons.shield_outlined,
             title: '隐私说明',
             onTap: () => context.push('/profile/privacy'),
+              ),
+            ),
           ),
-        ),
-        _StaggerIn(
-          index: 6,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '清除本地缓存', '清理临时文件与在线缓存，不影响数据'),
+            child: _StaggerIn(
+              index: 6,
+              child: _ProfileTile(
             icon: Icons.cleaning_services_outlined,
             title: '清除本地缓存',
             subtitle: '清理临时文件与在线缓存，不影响数据',
             onTap: () => _confirmClearCache(context, ref),
+              ),
+            ),
           ),
-        ),
-        _StaggerIn(
-          index: 7,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '恢复默认设置', '重置外观与开关，保留团/账单/行程'),
+            child: _StaggerIn(
+              index: 7,
+              child: _ProfileTile(
             icon: Icons.restart_alt_rounded,
             title: '恢复默认设置',
             subtitle: '重置外观与开关，保留团/账单/行程',
             onTap: () => _confirmResetDefaults(context, ref),
+              ),
+            ),
           ),
-        ),
         // 其他分组
         const SectionHeader(title: '其他'),
-        _StaggerIn(
-          index: 8,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '关于'),
+            child: _StaggerIn(
+              index: 8,
+              child: _ProfileTile(
             icon: Icons.info_outline,
             title: '关于',
             trailing: Text('$_appVersion',
                 style: Theme.of(context).textTheme.labelSmall),
             onTap: () => context.push('/profile/about'),
+              ),
+            ),
           ),
-        ),
-        _StaggerIn(
-          index: 9,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '官方网站'),
+            child: _StaggerIn(
+              index: 9,
+              child: _ProfileTile(
             icon: Icons.public,
             title: '官方网站',
             subtitle: kOfficialWebsite,
             onTap: () => openExternal(kOfficialWebsite),
+              ),
+            ),
           ),
-        ),
-        _StaggerIn(
-          index: 10,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '检查更新'),
+            child: _StaggerIn(
+              index: 10,
+              child: _ProfileTile(
             icon: Icons.system_update_alt_rounded,
             title: '检查更新',
             onTap: () => showCheckUpdateDialog(context),
+              ),
+            ),
           ),
-        ),
-        _StaggerIn(
-          index: 11,
-          child: _ProfileTile(
+        Visibility(
+            visible: _profileHit(ref.watch(_profileSearchQueryProvider), '意见反馈', 'feedback@jiezhou.app'),
+            child: _StaggerIn(
+              index: 11,
+              child: _ProfileTile(
             icon: Icons.feedback_outlined,
             title: '意见反馈',
-            onTap: () => _toast(context, '反馈入口：请通过应用商店留言或联系开发者'),
+            subtitle: 'feedback@jiezhou.app',
+            onTap: () async {
+              await Clipboard.setData(
+                  const ClipboardData(text: 'feedback@jiezhou.app'));
+              if (context.mounted) {
+                showAppSnackBar(context, '邮箱已复制，期待你的反馈 ✉️');
+              }
+            },
+              ),
+            ),
           ),
-        ),
         const SizedBox(height: Spacing.lg),
         // 底部旅途哲理文案：每次进入/下拉刷新都不一样，仅 UI 展示
         const _TravelQuoteFooter(),
@@ -344,26 +475,10 @@ class ProfileScreen extends ConsumerWidget {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<bool> _confirm(BuildContext context, String title, String message) async {
+  Future<bool> _confirm(BuildContext context, String title, String message) {
     HapticFeedback.lightImpact();
-    return await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(title),
-            content: Text(message),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('确定'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    // V2.8.1 S3：message 由调用方传入、不保证含影响数量，按中性确认迁移（danger:false）。
+    return showConfirmSheet(context: context, title: title, body: message);
   }
 
   Future<void> _confirmClearCache(BuildContext context, WidgetRef ref) async {
@@ -389,6 +504,88 @@ class ProfileScreen extends ConsumerWidget {
 
 /// 用户卡：账号（邮箱/未登录）+ 同步状态 + 云设置入口。
 /// 整卡可点 → 云端账号页（登录/账号管理/云设置）。
+/// V2.8.1 S10：状态摘要玻璃卡 —— 上次同步时间 / 当前团名 / 进行中行程数。
+/// 跨域只读查询走既有 providers，不新增同步实体。
+class _StatusSummaryCard extends ConsumerWidget {
+  const _StatusSummaryCard();
+
+  String _syncLabel(DateTime? at) {
+    if (at == null) return '未同步';
+    final diff = DateTime.now().difference(at);
+    if (diff.inMinutes < 1) return '刚刚';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
+    if (diff.inHours < 24) return '${diff.inHours} 小时前';
+    return '${at.month}/${at.day}';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final lastSyncedAt =
+        ref.watch(syncStatusProvider).value?.lastSyncedAt;
+    final groupName = ref.watch(activeGroupProvider).value?.name;
+    final trips = ref.watch(tripsInGroupProvider).value;
+    final activeTrips =
+        trips?.where((t) => !t.archived).length ?? 0;
+
+    Widget chip(IconData icon, String label, String value) {
+      return Expanded(
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 13, color: scheme.primary),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: AppFontSizes.caption,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface)),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Spacing.xl, 0, Spacing.xl, Spacing.sm),
+      child: GlassSurface(
+        level: GlassLevel.floatingCard,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: Spacing.md),
+          child: Row(
+            children: [
+              chip(Icons.cloud_sync_outlined, '上次同步',
+                  _syncLabel(lastSyncedAt)),
+              const SizedBox(width: Spacing.sm),
+              Container(width: 1, height: 26, color: scheme.outlineVariant.withValues(alpha: 0.5)),
+              const SizedBox(width: Spacing.sm),
+              chip(Icons.groups_rounded, '当前团',
+                  groupName ?? '未选择'),
+              const SizedBox(width: Spacing.sm),
+              Container(width: 1, height: 26, color: scheme.outlineVariant.withValues(alpha: 0.5)),
+              const SizedBox(width: Spacing.sm),
+              chip(Icons.flight_takeoff_rounded, '进行中行程', '$activeTrips 个'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _UserCard extends ConsumerWidget {
   const _UserCard();
 

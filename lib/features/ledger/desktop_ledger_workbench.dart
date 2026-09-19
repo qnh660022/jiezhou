@@ -12,6 +12,8 @@ import '../../../core/money.dart' show parseMoney, formatMoney;
 import '../../../data/db/database.dart' hide Settlement;
 import '../../../data/providers.dart' show ledgerRepoProvider;
 import '../../../domain/models.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../theme/tokens.dart';
@@ -55,9 +57,7 @@ class _DesktopLedgerWorkbenchState extends ConsumerState<DesktopLedgerWorkbench>
 
   void _toast(String m) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(m)));
+    showAppSnackBar(context, m);
   }
 
   void _toggleSort(String key) {
@@ -79,25 +79,13 @@ class _DesktopLedgerWorkbenchState extends ConsumerState<DesktopLedgerWorkbench>
 
   Future<void> _deletePicked() async {
     if (_picked.isEmpty) return;
-    final ok = await showDialog<bool>(
+    final ok = await showDangerConfirm(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('删除所选 ${_picked.length} 笔账单？'),
-        content: const Text('此操作不可恢复。'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(ctx).colorScheme.error,
-                foregroundColor: Theme.of(ctx).colorScheme.onError),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '删除所选 ${_picked.length} 笔账单？',
+      body: '删除 ${_picked.length} 笔账单，此操作不可恢复。',
+      confirmLabel: '删除',
     );
-    if (ok != true) return;
+    if (!ok) return;
     for (final id in _picked) {
       await deleteExpense(ref, id);
     }
@@ -547,9 +535,7 @@ class _ExpenseRowState extends ConsumerState<_ExpenseRow> {
     } else {
       final parsed = parseMoney(_c.text.trim());
       if (parsed == null) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('金额格式不正确')));
+        showAppSnackBar(context, '金额格式不正确', tone: SnackTone.destructive);
         return;
       }
       final stored = e.type == ExpenseType.refund ? -parsed.abs() : parsed;

@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../platform/app_lock.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 
 class AppLockScreen extends StatefulWidget {
@@ -98,50 +99,71 @@ class _AppLockScreenState extends State<AppLockScreen> {
     final ctl = TextEditingController();
     final ctl2 = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    final result = await showDialog<String>(
+    final result = await showDraggableSheet<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (requireCurrent)
-                _PinField(
-                  controller: currentCtl,
-                  label: '当前 PIN',
-                ),
-              _PinField(controller: ctl, label: hint),
-              if (confirm) _PinField(controller: ctl2, label: '再输一次确认'),
-            ],
-          ),
+      initialChildSize: 0.5,
+      minChildSize: 0.35,
+      builder: (dialogContext, scrollController) => ListView(
+        controller: scrollController,
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(
+          Spacing.lg,
+          Spacing.sm,
+          Spacing.lg,
+          Spacing.lg,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('取消'),
+        children: [
+          Text(title, style: Theme.of(dialogContext).textTheme.titleLarge),
+          const SizedBox(height: Spacing.md),
+          Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (requireCurrent)
+                  _PinField(
+                    controller: currentCtl,
+                    label: '当前 PIN',
+                  ),
+                _PinField(controller: ctl, label: hint),
+                if (confirm) _PinField(controller: ctl2, label: '再输一次确认'),
+              ],
+            ),
           ),
-          FilledButton(
-            onPressed: () async {
-              if (!(formKey.currentState?.validate() ?? false)) return;
-              if (confirm && ctl.text != ctl2.text) return;
-              final current = currentCtl.text;
-              if (requireCurrent) {
-                final ok = await _lock!.verify(current);
-                if (!ok) {
-                  if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(content: Text('当前 PIN 不正确')));
-                  }
-                  return;
-                }
-              }
-              if (dialogContext.mounted) {
-                Navigator.of(dialogContext).pop(ctl.text);
-              }
-            },
-            child: const Text('确定'),
+          const SizedBox(height: Spacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('取消'),
+                ),
+              ),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () async {
+                    if (!(formKey.currentState?.validate() ?? false)) return;
+                    if (confirm && ctl.text != ctl2.text) return;
+                    final current = currentCtl.text;
+                    if (requireCurrent) {
+                      final ok = await _lock!.verify(current);
+                      if (!ok) {
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              const SnackBar(content: Text('当前 PIN 不正确')));
+                        }
+                        return;
+                      }
+                    }
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop(ctl.text);
+                    }
+                  },
+                  child: const Text('确定'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

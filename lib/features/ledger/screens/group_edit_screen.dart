@@ -8,6 +8,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 👥 新建 / 编辑旅行团（同屏复用，query id 区分）。
 class GroupEditScreen extends ConsumerStatefulWidget {
@@ -58,7 +59,7 @@ class _GroupEditScreenState extends ConsumerState<GroupEditScreen> {
     if (editId != null && editId.isNotEmpty) {
       await updateGroupInfo(ref, editId, name, _icon);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存修改 ✅')));
+        showAppSnackBar(context, '已保存修改 ✅');
         context.pop();
       }
       return;
@@ -66,10 +67,9 @@ class _GroupEditScreenState extends ConsumerState<GroupEditScreen> {
     final created = await createGroup(ref, name: name, icon: _icon, kind: _kind);
     await activateGroup(ref, created.id);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_kind == 'personal'
+      showAppSnackBar(context, _kind == 'personal'
               ? '「' + name + '」建好啦，记下自己的每一笔 ✍️'
-              : '「' + name + '」建好啦，开始记账吧 🎉')));
+              : '「' + name + '」建好啦，开始记账吧 🎉');
       context.pop();
     }
   }

@@ -1,8 +1,7 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/tokens.dart';
+import 'glass_surface.dart';
 
 /// 底栏 Tab 数据
 class CapsuleTabItem {
@@ -32,42 +31,30 @@ class FloatingCapsuleNavBar extends StatelessWidget {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.xs, Spacing.lg, Spacing.sm),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Container(
-              height: 66,
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerLow.withValues(alpha: 0.88),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: scheme.brightness == Brightness.dark ? 0.35 : 0.08),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  for (var i = 0; i < items.length; i++)
-                    Expanded(
-                      child: _CapsuleTab(
-                        item: items[i],
-                        selected: i == currentIndex,
-                        selectedColor: scheme.primary,
-                        idleColor: scheme.onSurfaceVariant,
-                        onTap: () {
-                          if (i == currentIndex) return;
-                          HapticFeedback.selectionClick();
-                          onTap(i);
-                        },
-                      ),
+        // V2.8.1 S2：σ24+α0.88 手写玻璃收编为 GlassSurface(navBar)，
+        // 手写阴影删除（由 GlassSurface 双层影替代）；触觉与弹性缩放不动。
+        child: GlassSurface(
+          level: GlassLevel.navBar,
+          child: Container(
+            height: 66,
+            padding: const EdgeInsets.symmetric(horizontal: Spacing.xs),
+            child: Row(
+              children: [
+                for (var i = 0; i < items.length; i++)
+                  Expanded(
+                    child: _CapsuleTab(
+                      item: items[i],
+                      selected: i == currentIndex,
+                      selectedColor: scheme.primary,
+                      idleColor: scheme.onSurfaceVariant,
+                      onTap: () {
+                        if (i == currentIndex) return;
+                        HapticFeedback.selectionClick();
+                        onTap(i);
+                      },
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),

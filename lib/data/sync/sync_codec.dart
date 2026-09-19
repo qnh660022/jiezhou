@@ -136,6 +136,16 @@ abstract final class SyncCodec {
         'updated_ms': r.updatedAt,
       };
 
+  // ===== V2.8.1 分类子预算（团级；列名与 docs/db_v281.sql 云表对齐） =====
+
+  static Map<String, dynamic> subBudgetToCloud(db.SubBudget r) => {
+        'group_id': r.groupId,
+        'category_key': r.categoryKey,
+        'amount': r.amount, // int 分，原样上行
+        'created_ms': r.createdAt,
+        'updated_ms': r.updatedAt,
+      };
+
   // ===== V2.7.2 想去池 =====
 
   static Map<String, dynamic> wishlistItemToCloud(db.WishlistItem r) => {
@@ -214,6 +224,7 @@ abstract final class SyncCodec {
     if (row is db.SpaceEvent) return row.updatedMs;
     if (row is db.Fund) return row.updatedAt;
     if (row is db.InboxItem) return row.updatedAt;
+    if (row is db.SubBudget) return row.updatedAt;
     switch (entity) {
       case SyncEntity.trips:
         return (row as db.Trip).updatedAt;
@@ -229,6 +240,8 @@ abstract final class SyncCodec {
         return (row as db.Fund).updatedAt;
       case SyncEntity.inboxItems:
         return (row as db.InboxItem).updatedAt;
+      case SyncEntity.subBudgets:
+        return (row as db.SubBudget).updatedAt;
       case SyncEntity.expenses:
         return (row as db.Expense).createdAt;
       case SyncEntity.settlements:
@@ -378,6 +391,18 @@ abstract final class SyncCodec {
         source: Value((m['source'] as String?) ?? 'manual'),
         status: Value((m['status'] as String?) ?? 'pending'),
         convertedExpenseId: Value(m['converted_expense_id'] as String?),
+        createdAt: (m['created_ms'] as num?)?.toInt() ?? _ms(m),
+        updatedAt: _ms(m),
+      );
+
+  // ===== V2.8.1 分类子预算（下行落库） =====
+
+  static db.SubBudgetsCompanion subBudgetFromCloud(Map<String, dynamic> m) =>
+      db.SubBudgetsCompanion.insert(
+        id: m['id'] as String,
+        groupId: (m['group_id'] as String?) ?? '',
+        categoryKey: Value((m['category_key'] as String?) ?? ''),
+        amount: (m['amount'] as num?)?.toInt() ?? 0,
         createdAt: (m['created_ms'] as num?)?.toInt() ?? _ms(m),
         updatedAt: _ms(m),
       );

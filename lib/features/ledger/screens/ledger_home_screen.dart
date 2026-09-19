@@ -1,4 +1,3 @@
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,16 +8,23 @@ import '../../../core/date_utils.dart';
 import '../../../domain/budget_alert_engine.dart';
 import '../../../domain/models.dart';
 import '../../../data/providers.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/pressable_scale.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/money_text.dart';
+import '../../../shared/widgets/swipeable_bill_tile.dart';
 import '../../../shared/widgets/progress_ring.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_access.dart';
 import '../ledger_models.dart';
+import '../observability_providers.dart' show conflictEntityIdsProvider;
 import '../ledger_providers.dart';
 import '../widgets/bill_detail_sheet.dart';
+import '../widgets/ledger_toolbox_sheet.dart';
 import '../widgets/conflict_badge.dart';
 import '../widgets/category_icon_box.dart';
 import '../widgets/count_up_text.dart';
@@ -136,24 +142,48 @@ class _HeaderOverflowMenu extends ConsumerWidget {
     if (ref.watch(_canWriteActiveGroupProvider) != true) {
       return const SizedBox.shrink();
     }
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_horiz_rounded),
-      tooltip: '更多',
-      onSelected: (value) {
-        if (value == 'audit') context.pushNamed('audit-log');
+    // V2.8.1 S7：头部溢出菜单唯一项改为「工具箱」入口（L3 抽屉收纳低频功能）。
+    return HeaderIconButton(
+      icon: Icons.apps_rounded,
+      tooltip: '工具箱',
+      onTap: () => showLedgerToolbox(context),
+    );
+  }
+}
+
+/// V2.8.1 S7：Hero 卡语义 chip（12% 底 + 语义色）。
+class _HeroChip extends StatelessWidget {
+  const _HeroChip({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
       },
-      itemBuilder: (context) => const [
-        PopupMenuItem<String>(
-          value: 'audit',
-          child: Row(
-            children: [
-              Icon(Icons.history_rounded, size: 18),
-              SizedBox(width: Spacing.sm),
-              Text('变更记录'),
-            ],
-          ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
         ),
-      ],
+        child: Text(label,
+            style: TextStyle(
+                fontSize: AppFontSizes.caption,
+                fontWeight: FontWeight.w700,
+                color: color)),
+      ),
     );
   }
 }
@@ -252,30 +282,30 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.brightness == Brightness.dark
-          ? scheme.surfaceContainerHigh
-          : scheme.surfaceContainerLowest,
-      borderRadius: AppRadius.card,
-      child: InkWell(
+    // V2.8.1 S11：首页瓦片接 PressableScale（按压缩放微交互）
+    return PressableScale(
+      onTap: onTap,
+      child: Material(
+        color: scheme.brightness == Brightness.dark
+            ? scheme.surfaceContainerHigh
+            : scheme.surfaceContainerLowest,
         borderRadius: AppRadius.card,
-        onTap: () {
-          HapticFeedback.selectionClick();
-          onTap();
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: Spacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Badge(
-                isLabelVisible: badgeCount != null,
-                label: Text('$badgeCount'),
-                child: Icon(icon, size: 26, color: scheme.primary),
-              ),
-              const SizedBox(height: Spacing.xs),
-              Text(label, style: TextStyle(fontSize: AppFontSizes.caption)),
-            ],
+        child: InkWell(
+          borderRadius: AppRadius.card,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Spacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Badge(
+                  isLabelVisible: badgeCount != null,
+                  label: Text('$badgeCount'),
+                  child: Icon(icon, size: 26, color: scheme.primary),
+                ),
+                const SizedBox(height: Spacing.xs),
+                Text(label, style: TextStyle(fontSize: AppFontSizes.caption)),
+              ],
+            ),
           ),
         ),
       ),
@@ -348,7 +378,7 @@ class _LedgerBody extends ConsumerWidget {
             children: [
               if (showOverBudgetBanner)
                 StaggerIn(index: 0, child: _OverBudgetBanner(budget: budget)),
-              StaggerIn(index: showOverBudgetBanner ? 1 : 0, child: _GlassGroupCard(group: _currentGroup(ref, groupId), members: members, unsettled: unsettled)),
+              StaggerIn(index: showOverBudgetBanner ? 1 : 0, child: _GlassGroupCard(group: _currentGroup(ref, groupId), members: members, unsettled: unsettled, budgetPercent: budget.enabled ? budget.percent.toInt() : null, overBudget: showOverBudgetBanner, conflictCount: ref.watch(conflictEntityIdsProvider).value?.length ?? 0)),
               // S12.2：未确认冲突总数（本地计数；无冲突时不占位）。
               const ConflictCountChip(),
               StaggerIn(index: showOverBudgetBanner ? 2 : 1, child: _BudgetCard(budget: budget, canEdit: access.canWrite)),
@@ -436,39 +466,64 @@ class _LedgerBody extends ConsumerWidget {
 // ---------------------------------------------------------------------------
 
 class _GlassGroupCard extends StatelessWidget {
-  const _GlassGroupCard({required this.group, required this.members, required this.unsettled});
+  const _GlassGroupCard({
+    required this.group,
+    required this.members,
+    required this.unsettled,
+    this.budgetPercent,
+    this.overBudget = false,
+    this.conflictCount = 0,
+  });
 
   final LedgerGroupView group;
   final List<LedgerMemberView> members;
   final int unsettled;
+
+  /// V2.8.1 S7：语义 chip 数据（预算 68% / 冲突 N / 超支态）。
+  final int? budgetPercent;
+  final bool overBudget;
+  final int conflictCount;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, 0),
-      child: ClipRRect(
-        borderRadius: AppRadius.card,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            padding: const EdgeInsets.all(Spacing.xl),
-            decoration: BoxDecoration(
-              borderRadius: AppRadius.card,
-              // 玻璃质感：表面低容器色叠一层主题主色的柔光
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  scheme.surfaceContainerLow.withValues(alpha: 0.82),
-                  scheme.primary.withValues(alpha: 0.10),
-                ],
-              ),
-              border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.55)),
+      // V2.8.1 S2：手写 σ18 毛玻璃收编为 GlassSurface(floatingCard)。
+      child: GlassSurface(
+        level: GlassLevel.floatingCard,
+        child: Container(
+          padding: const EdgeInsets.all(Spacing.xl),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.card,
+            // 主题主色柔光叠在玻璃 tint 之上（既有观感保留）
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: overBudget
+                  ? [
+                      scheme.error.withValues(alpha: 0.10),
+                      scheme.error.withValues(alpha: 0.04),
+                    ]
+                  : [
+                      scheme.surfaceContainerLow.withValues(alpha: 0.24),
+                      scheme.primary.withValues(alpha: 0.10),
+                    ],
             ),
+          ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // V2.8.1 S7：超支态顶部 4px 警示条
+                if (overBudget)
+                  Container(
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: Spacing.md),
+                    decoration: BoxDecoration(
+                      color: scheme.error,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 Row(
                   children: [
                     Container(
@@ -506,11 +561,40 @@ class _GlassGroupCard extends StatelessWidget {
                   const SizedBox(height: Spacing.lg),
                   MemberAvatarStack(members: members, size: 32),
                 ],
+                // V2.8.1 S7：三枚语义 chip（未结 N 笔→结算 / 冲突 N→审计 / 预算 68%→预算页）
+                if (unsettled > 0 || conflictCount > 0 || budgetPercent != null) ...[
+                  const SizedBox(height: Spacing.md),
+                  Row(
+                    children: [
+                      if (unsettled > 0)
+                        _HeroChip(
+                          label: '未结 $unsettled 笔',
+                          color: scheme.secondary,
+                          onTap: () => context.push('/expenses/settle'),
+                        ),
+                      if (conflictCount > 0) ...[
+                        const SizedBox(width: Spacing.sm),
+                        _HeroChip(
+                          label: '冲突 $conflictCount',
+                          color: scheme.error,
+                          onTap: () => context.pushNamed('audit-log'),
+                        ),
+                      ],
+                      if (budgetPercent != null) ...[
+                        const SizedBox(width: Spacing.sm),
+                        _HeroChip(
+                          label: '预算 $budgetPercent%',
+                          color: (budgetPercent ?? 0) >= 80 ? scheme.error : scheme.primary,
+                          onTap: () => context.push('/ledger/budget'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
         ),
-      ),
     );
   }
 }
@@ -933,53 +1017,18 @@ class _BillTileState extends ConsumerState<_BillTile> {
 
   Future<void> _confirmDelete() async {
     HapticFeedback.lightImpact();
-    final scheme = Theme.of(context).colorScheme;
-    await showDraggableSheet<void>(
+    final e = widget.expense;
+    // V2.8.1 S6：删除确认统一走 L2 危险确认（含数量行）
+    final ok = await showDangerConfirm(
       context: context,
-      initialChildSize: 0.34,
-      minChildSize: 0.28,
-      builder: (sheetContext, scrollController) => Padding(
-        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('删掉这笔账？', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: Spacing.xs),
-            Text(widget.expense.title + ' · ' + formatMoneyForDisplay(widget.expense.amountCents) + ' 元',
-                style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: Spacing.xl),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('再想想'),
-                  ),
-                ),
-                const SizedBox(width: Spacing.md),
-                Expanded(
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                        backgroundColor: scheme.error,
-                        foregroundColor: scheme.onError),
-                    onPressed: () async {
-                      Navigator.of(sheetContext).pop();
-                      setState(() => _closing = true);
-                      await deleteExpense(ref, widget.expense.id);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('已删除')));
-                      }
-                    },
-                    child: const Text('删除'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      title: '删除这笔账单？',
+      body: '删除「${e.title}」？共 1 笔，不可恢复，云端共享成员都会看到删除记录。',
+      confirmLabel: '删除',
     );
+    if (!ok || !mounted) return;
+    setState(() => _closing = true);
+    await deleteExpense(ref, widget.expense.id);
+    if (mounted) showAppSnackBar(context, '已删除');
     if (mounted) setState(() => _closing = false);
   }
 
@@ -1086,76 +1135,18 @@ class _BillTileState extends ConsumerState<_BillTile> {
     );
 
     // S7.1.3：viewer 只读态 —— 整块滑动动作（编辑/删除）不挂载。
+    // V2.8.1 S6：手势语言统一 —— 首页最近账单与明细页共用 SwipeableBillTile。
     if (!widget.canEdit) return tile;
 
-    return Dismissible(
-      key: ValueKey('bill-' + e.id),
-      background: _SwipeBackground(
-        alignment: Alignment.centerLeft,
-        color: scheme.primary.withValues(alpha: 0.14),
-        iconColor: scheme.primary,
-        icon: Icons.edit_rounded,
-        label: '编辑',
-      ),
-      secondaryBackground: _SwipeBackground(
-        alignment: Alignment.centerRight,
-        color: scheme.error.withValues(alpha: 0.12),
-        iconColor: scheme.error,
-        icon: Icons.delete_outline_rounded,
-        label: '删除',
-      ),
-      onDismissed: (_) {}, // 由 confirmDismiss 接管，不真正滑除
-      confirmDismiss: (direction) async {
-        if (direction == DismissDirection.startToEnd) {
-          _openEdit();
-        } else {
-          await _confirmDelete();
-        }
-        return false; // 保持行存在，动作由抽屉/页面完成
-      },
+    return SwipeableBillTile(
+      onEdit: _openEdit,
+      onDelete: _confirmDelete,
       child: tile,
     );
   }
 
   String _firstPayerId(ExpenseRecord e) => e.payers.isEmpty ? '' : e.payers.first.memberId;
 }
-
-class _SwipeBackground extends StatelessWidget {
-  const _SwipeBackground({
-    required this.alignment,
-    required this.color,
-    required this.iconColor,
-    required this.icon,
-    required this.label,
-  });
-
-  final Alignment alignment;
-  final Color color;
-  final Color iconColor;
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
-      decoration: BoxDecoration(color: color),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: iconColor),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: AppFontSizes.caption, fontWeight: FontWeight.w600, color: iconColor)),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 关联行程横滑小卡（Hero tag = trip.id）
-// ---------------------------------------------------------------------------
 
 class _LinkedTrips extends StatelessWidget {
   const _LinkedTrips({required this.trips});
@@ -1270,6 +1261,18 @@ Future<void> _openGroupSwitcher(BuildContext context, WidgetRef ref) async {
                 Text('选择要开始记账的旅行团',
                     style: Theme.of(context).textTheme.bodySmall),
               ],
+            ),
+          ),
+          // V2.8.1 S7：团管理去重 —— 「全部」直跳 /ledger/groups（设置页入口保留为正门）。
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.xs, Spacing.xl, Spacing.xs),
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                context.push('/ledger/groups');
+              },
+              icon: const Icon(Icons.grid_view_rounded, size: 18),
+              label: const Text('全部旅行团'),
             ),
           ),
           Flexible(
@@ -1490,14 +1493,60 @@ void _showAlertCenter(BuildContext context, WidgetRef ref) {
   final gid = active?.id;
   if (gid == null) return;
   if (ref.read(budgetAlertsEnabledProvider).value == false) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('预算预警已在“我的”里关闭，可在设置中重新开启')));
+    // V2.8.1 S1：预警关闭时点铃铛 → L3 抽屉空态卡（替代 SnackBar），
+    // 「去开启」跳「我的」页——预算预警开关实际位于该页（偏差登记：规格书原文为跳预算页）。
+    HapticFeedback.selectionClick();
+    showDraggableSheet(
+      context: context,
+      initialChildSize: 0.42,
+      minChildSize: 0.3,
+      builder: (ctx, scrollCtrl) => Padding(
+        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(Spacing.lg),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                borderRadius: AppRadius.card,
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.notifications_off_rounded,
+                      size: 40, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  const SizedBox(height: Spacing.md),
+                  Text('预警已关闭',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: Spacing.xs),
+                  Text('打开后在超支或接近预算上限时，账本页会提醒你',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: Spacing.lg),
+                  FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      context.push('/profile');
+                    },
+                    icon: const Icon(Icons.tune_rounded, size: 18),
+                    label: const Text('去开启'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
     return;
   }
   final alerts = ref.read(budgetAlertsProvider);
   if (alerts.isEmpty) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('暂无预警')));
+    showAppSnackBar(context, '暂无预警');
     return;
   }
   HapticFeedback.selectionClick();

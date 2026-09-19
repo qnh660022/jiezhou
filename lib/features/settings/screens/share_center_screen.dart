@@ -243,23 +243,48 @@ class _ShareCenterScreenState extends ConsumerState<ShareCenterScreen> {
   Future<void> _joinByCode() async {
     final ctl = _codeCtl;
     ctl.clear();
-    final code = await showDialog<String>(
+    final code = await showDraggableSheet<String>(
       context: context,
-      builder: (d) => AlertDialog(
-        title: const Text('加入旅伴空间'),
-        content: TextField(
-          controller: ctl,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          maxLength: 6,
-          decoration: const InputDecoration(
-              labelText: '邀请码（6 位）', counterText: ''),
+      initialChildSize: 0.45,
+      minChildSize: 0.3,
+      builder: (d, scrollController) => ListView(
+        controller: scrollController,
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(
+          Spacing.lg,
+          Spacing.sm,
+          Spacing.lg,
+          Spacing.lg,
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(d), child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(d, ctl.text.trim()),
-              child: const Text('加入')),
+        children: [
+          Text('加入旅伴空间', style: Theme.of(d).textTheme.titleLarge),
+          const SizedBox(height: Spacing.lg),
+          TextField(
+            controller: ctl,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            maxLength: 6,
+            decoration: const InputDecoration(
+                labelText: '邀请码（6 位）', counterText: ''),
+          ),
+          const SizedBox(height: Spacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(d),
+                  child: const Text('取消'),
+                ),
+              ),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(d, ctl.text.trim()),
+                  child: const Text('加入'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -2,13 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:collection/collection.dart';
+
+import '../../../core/date_utils.dart';
 import '../../../core/money.dart';
+import '../../../data/db/database.dart' show SubBudget;
+import '../../../data/providers.dart';
+import '../../../domain/models.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
+import '../widgets/category_icon_box.dart';
 import '../widgets/count_up_text.dart';
+
+/// V2.8.1 S8：子预算流（文件私有 provider，避免与同步层重名）。
+final _subBudgetsProvider = StreamProvider<List<SubBudget>>((ref) {
+  final gid = ref.watch(activeGroupIdProvider).value;
+  if (gid == null) return const Stream.empty();
+  return ref.watch(ledgerRepoProvider).watchSubBudgets(gid);
+});
 
 /// 🎯 预算管理：开关 + 总额 + 四张实时卡。
 class BudgetScreen extends ConsumerStatefulWidget {
@@ -63,9 +80,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     }
     await saveBudget(ref, g.id, _enabled, _enabled ? cents : null);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok ? '预算已保存 ✅' : '预算金额格式不对，没存上'),
-    ));
+    showAppSnackBar(
+      context,
+      ok ? '预算已保存 ✅' : '预算金额格式不对，没存上',
+      tone: ok ? SnackTone.info : SnackTone.destructive,
+    );
     if (ok && mounted) Navigator.of(context).maybePop();
   }
 
@@ -221,8 +240,283 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                const SizedBox(height: Spacing.lg),
+                // ---- V2.8.1 S8：分类子预算（上限 5；独立口径，不计入总预算）----
+                const _SubBudgetSection(),
               ],
             ),
+    );
+  }
+}
+
+/// V2.8.1 S8：分类子预算区。
+/// 添加 = 分类选择抽屉（已选置灰，上限 5，超出禁用+提示）；
+/// 每行 = 图标 + 进度条（80% amber / 100% red，暗色提亮 0.25）+ 编辑金额 + 删除（L2）。
+class _SubBudgetSection extends ConsumerWidget {
+  const _SubBudgetSection();
+
+  static const _maxCount = 5;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final subsAsync = ref.watch(_subBudgetsProvider);
+    final subs = subsAsync.value ?? const <SubBudget>[];
+    final expenses = ref.watch(expensesProvider).value ?? const <ExpenseRecord>[];
+    final categories = ref.watch(categoriesProvider).value ?? const <CategoryView>[];
+    final gid = ref.watch(activeGroupIdProvider).value;
+
+    // 当月各分类支出（int 分；预付不计入）
+    final now = DateTime.now();
+    final monthStart = dateToEpochDay(DateTime(now.year, now.month, 1));
+    final monthSpend = <String, int>{};
+    for (final e in expenses) {
+      if (e.type == ExpenseType.prepay) continue;
+      if (e.dateEpochDay < monthStart) continue;
+      monthSpend[e.categoryKey] =
+          (monthSpend[e.categoryKey] ?? 0) + e.amountCents.abs();
+    }
+    final atCap = subs.length >= _maxCount;
+
+    return Material(
+      color: scheme.brightness == Brightness.dark
+          ? scheme.surfaceContainerHigh
+          : scheme.surfaceContainerLowest,
+      borderRadius: AppRadius.card,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(Spacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('分类子预算', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(width: Spacing.sm),
+                Text('${subs.length}/$_maxCount',
+                    style: Theme.of(context).textTheme.labelSmall),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: gid == null
+                      ? null
+                      : atCap
+                          ? () => showAppSnackBar(
+                              context, '子预算最多 $_maxCount 个，先删一个再添加')
+                          : () => _addSubBudget(
+                              context, ref, categories, subs, gid),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('添加'),
+                ),
+              ],
+            ),
+            Text('独立于总预算：单独盯某几类的月度开销',
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: Spacing.md),
+            if (subs.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: Spacing.md),
+                child: Text(
+                    '还没选要盯的分类，点「添加」选一个（最多 $_maxCount 个）',
+                    style: Theme.of(context).textTheme.bodySmall),
+              )
+            else
+              for (final sub in subs)
+                _SubBudgetRow(
+                  sub: sub,
+                  spentCents: monthSpend[sub.categoryKey] ?? 0,
+                  categoryName: categories
+                          .where((c) => c.key == sub.categoryKey)
+                          .firstOrNull
+                          ?.name ??
+                      sub.categoryKey,
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addSubBudget(BuildContext context, WidgetRef ref,
+      List<CategoryView> categories, List<SubBudget> subs, String gid) async {
+    HapticFeedback.selectionClick();
+    final taken = subs.map((e) => e.categoryKey).toSet();
+    final picked = await showDraggableSheet<String>(
+      context: context,
+      initialChildSize: 0.55,
+      minChildSize: 0.4,
+      builder: (sheetContext, scrollController) => ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        children: [
+          Text('选一个要盯的分类',
+              style: Theme.of(sheetContext).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          for (final c in categories)
+            ListTile(
+              leading:
+                  CategoryIconBox(categoryKey: c.key, icon: c.icon, size: 36),
+              title: Text(c.name),
+              enabled: !taken.contains(c.key),
+              trailing: taken.contains(c.key)
+                  ? const Icon(Icons.check_rounded, size: 18)
+                  : null,
+              onTap: taken.contains(c.key)
+                  ? null
+                  : () => Navigator.of(sheetContext).pop(c.key),
+            ),
+        ],
+      ),
+    );
+    if (picked == null || !context.mounted) return;
+    final amount = await _askAmount(context, '每月上限多少元？');
+    if (amount == null || amount <= 0 || !context.mounted) return;
+    await ref.read(ledgerRepoProvider).addSubBudget(gid, picked, amount);
+    if (context.mounted) showAppSnackBar(context, '子预算已添加');
+  }
+
+  Future<int?> _askAmount(BuildContext context, String title,
+      {int? initial}) async {
+    final controller = TextEditingController(
+        text: initial == null || initial <= 0
+            ? ''
+            : initial % 100 == 0
+                ? (initial ~/ 100).toString()
+                : (initial ~/ 100).toString() +
+                    '.' +
+                    (initial % 100).toString().padLeft(2, '0'));
+    final result = await showDraggableSheet<int>(
+      context: context,
+      initialChildSize: 0.4,
+      minChildSize: 0.3,
+      builder: (sheetContext, scrollController) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          children: [
+            Text(title, style: Theme.of(sheetContext).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+              ],
+              onChanged: (_) => setSheetState(() {}),
+              decoration: const InputDecoration(prefixText: '¥ '),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: (parseMoney(controller.text) ?? 0) <= 0
+                  ? null
+                  : () =>
+                      Navigator.of(sheetContext).pop(parseMoney(controller.text)),
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
+    );
+    return result;
+  }
+}
+
+/// 子预算单行：图标 + 分类名 + 双阈值进度条 + 编辑/删除。
+class _SubBudgetRow extends ConsumerWidget {
+  const _SubBudgetRow({
+    required this.sub,
+    required this.spentCents,
+    required this.categoryName,
+  });
+
+  final SubBudget sub;
+  final int spentCents;
+  final String categoryName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = scheme.brightness == Brightness.dark;
+    final fraction =
+        sub.amount <= 0 ? 0.0 : (spentCents / sub.amount).clamp(0.0, 1.0);
+    // 双阈值：80% amber / 100% red；暗色变体提亮 0.25
+    Color bar = scheme.primary;
+    if (fraction >= 1.0) {
+      bar = scheme.error;
+    } else if (fraction >= 0.8) {
+      bar = SemanticColors.warning;
+    }
+    final barColor = dark ? Color.lerp(bar, Colors.white, 0.25)! : bar;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CategoryIconBox(categoryKey: sub.categoryKey, size: 30),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(categoryName,
+                    style: Theme.of(context).textTheme.titleSmall),
+              ),
+              IconButton(
+                tooltip: '改金额',
+                onPressed: () async {
+                  final amount =
+                      await _SubBudgetSection()._askAmount(context, '改金额', initial: sub.amount);
+                  if (amount != null && amount > 0) {
+                    await ref
+                        .read(ledgerRepoProvider)
+                        .updateSubBudget(sub.id, amount);
+                  }
+                },
+                icon: const Icon(Icons.edit_outlined, size: 18),
+              ),
+              IconButton(
+                tooltip: '删除子预算',
+                onPressed: () async {
+                  final ok = await showDangerConfirm(
+                    context: context,
+                    title: '删除这条子预算？',
+                    body: '删除「$categoryName」的子预算？共 1 条，不影响账单数据。',
+                    confirmLabel: '删除',
+                  );
+                  if (ok) {
+                    await ref.read(ledgerRepoProvider).deleteSubBudget(sub.id);
+                  }
+                },
+                icon: Icon(Icons.delete_outline_rounded,
+                    size: 18, color: scheme.error),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Text('¥${spentCents ~/ 100}',
+                  style: Theme.of(context).textTheme.labelSmall),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: fraction,
+                      minHeight: 5,
+                      backgroundColor: scheme.surfaceContainerHighest,
+                      color: barColor,
+                    ),
+                  ),
+                ),
+              ),
+              Text('¥${sub.amount ~/ 100}',
+                  style: Theme.of(context).textTheme.labelSmall),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

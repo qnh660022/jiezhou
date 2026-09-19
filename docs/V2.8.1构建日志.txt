@@ -1,0 +1,44 @@
+芥舟 V2.8.1 构建日志
+========================================
+构建时间：2026-09-19
+版本号：2.8.1+2810
+Flutter：3.47.1 stable / Dart 3.13.1
+JDK：17.0.2 / Android SDK：D:\AI\env\android-sdk
+构建命令：flutter build apk --release --target-platform android-arm64
+签名：release-key.jks（正式签名）
+
+一、门禁记录（S12 三道门禁）
+----------------------------------------
+1. 静态分析：flutter analyze → 0 error（332 issues = 基线存量 info/warning，未超基线）
+2. 测试：全量 flutter test 全绿
+   - 基线 N1 = 738（2026-09-19 施工前实测）
+   - 门禁标准 ≥ N1 + 120 = 858
+   - 实测总数 = 861（新增 123 例）✅ 达标
+3. 构建：√ Built build\app\outputs\flutter-apk\app-release.apk
+
+二、构建结果
+----------------------------------------
+√ Built build\app\outputs\flutter-apk\app-release.apk（约 33.4MB，arm64 release，正式签名）
+Font asset tree-shaking：MaterialIcons 1.64MB → 33.6KB；CupertinoIcons → 848B
+
+三、产物
+----------------------------------------
+- build/app/outputs/flutter-apk/app-release.apk（arm64 release，正式签名）
+- docs/db_v281.sql（云端幂等增量脚本）
+- docs/V2.8.1验收报告.md（含 §偏差登记 11 项）
+- docs/V2.8.1截图/：未采集（偏差 D-10，建议真机补采）
+
+四、关键产物说明
+----------------------------------------
+- 图标字体：assets/fonts/JieZhouIcons.ttf（36 字形，design/icons/build_font.py 本地构建，工具链不入 pubspec 依赖树）
+- 码点表：design/icons/codepoints.json（提交后冻结）
+- schema：6 → 7（SubBudgets 分类子预算；docs/db_v281.sql 云端对齐）
+- 备份信封：v1 → v2（sub_budgets 纳入团备份；旧包读取兼容）
+- 新增依赖：0（零新增第三方依赖，白名单空表运行达成）
+
+五、阶段新增用例分布（合计 123）
+----------------------------------------
+S1 止血 5 ｜ S2 玻璃 9 ｜ S3 弹层 12 ｜ S4 图标 6+1 ｜ S5 键盘化 13
+S6 明细 15 ｜ S7 首页 8 ｜ S8 引擎+迁移+同步 13 ｜ S9 抽屉 4
+S10/S11 补充 6 ｜ S12 全局回归 14 ｜ 杂项配额 12 ｜ 码点/映射回归等
+（S10 状态卡/搜索经既有 profile_screen_test 回归覆盖 + 新增 UI 回归）

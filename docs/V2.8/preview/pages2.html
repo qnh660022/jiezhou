@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>芥舟 · UI 重设计施工预览 · 第二批（场景 F–N）</title>
+<style>
+  :root{--mint:#2E7D5B;--mint-deep:#1E5C41;--mint-soft:#E3F0E9;--ink:#1B211E;--ink2:#5A655F;--paper:#F4F6F3;--card:#fff;--line:#E2E7E2;--red:#D9553F;--amber:#E8A13C;--green:#1E9E6A}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;background:#EDF1EC;color:var(--ink);padding:0 0 120px}
+  header{padding:56px 6vw 28px;max-width:1280px;margin:0 auto}
+  header h1{font-size:30px;font-weight:800}header h1 span{color:var(--mint)}
+  header p{margin-top:10px;color:var(--ink2);font-size:14px;line-height:1.8;max-width:880px}
+  section{max-width:1280px;margin:34px auto 0;padding:0 6vw}
+  .sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:26px;flex-wrap:wrap}
+  .sec-head h2{font-size:21px;font-weight:800}.sec-head small{color:var(--ink2);font-size:13px}
+  .pill-hold{font-size:11px;font-weight:700;color:#9A6A1B;background:#FBF0DE;border-radius:99px;padding:2px 10px}
+  .pill-ok{font-size:11px;font-weight:700;color:var(--mint-deep);background:#E3F0E9;border-radius:99px;padding:2px 10px}
+  .stage{display:grid;grid-template-columns:auto 1fr;gap:44px;align-items:start}
+  @media (max-width:900px){.stage{grid-template-columns:1fr}}
+  .notes{display:flex;flex-direction:column;gap:14px;padding-top:8px}
+  .note{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 18px;font-size:13.5px;line-height:1.75;box-shadow:0 2px 10px rgba(20,40,30,.04)}
+  .note b.n{display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--mint);color:#fff;align-items:center;justify-content:center;margin-right:8px;font-size:12px;vertical-align:-5px}
+  .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;margin-left:6px;vertical-align:1px}
+  .tag.beauty{background:#FBEFE3;color:#A66A14}.tag.eff{background:#E3F0E9;color:var(--mint-deep)}.tag.a11y{background:#E8ECFB;color:#3D56B0}
+  .pill-ver{font-size:11px;font-weight:800;color:#fff;border-radius:99px;padding:3px 11px;letter-spacing:.5px}
+  .v281{background:var(--mint)}.v282{background:#3D56B0}.vhold{background:var(--amber)}
+  .note .ref{color:#98A39C;font-size:11.5px;margin-top:6px;display:block}
+  code{font-family:Consolas,monospace;font-size:11px;background:rgba(20,45,32,.08);padding:1px 6px;border-radius:6px;color:var(--mint-deep)}
+  .phone{width:375px;height:812px;border-radius:54px;background:#0D0F0E;padding:10px;box-shadow:0 30px 70px rgba(15,30,22,.35),0 4px 14px rgba(15,30,22,.25);position:relative;flex-shrink:0;margin:0 auto}
+  .screen{width:100%;height:100%;border-radius:45px;overflow:hidden;position:relative;background:var(--paper)}
+  .screen .notch{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:120px;height:30px;border-radius:20px;background:#0D0F0E;z-index:60}
+  .screen .status{position:absolute;top:14px;left:26px;z-index:55;font-size:12.5px;font-weight:600}
+  .screen .status.r{left:auto;right:26px;font-size:11px;letter-spacing:1px}
+  .mark{position:absolute;z-index:70;width:22px;height:22px;border-radius:50%;background:var(--mint);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(46,125,91,.25),0 2px 8px rgba(0,0,0,.25)}
+  .mark.warn{background:var(--red);box-shadow:0 0 0 3px rgba(217,85,63,.25),0 2px 8px rgba(0,0,0,.25)}
+  .glass{backdrop-filter:blur(28px) saturate(1.35);-webkit-backdrop-filter:blur(28px) saturate(1.35);position:relative}
+  .glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(160deg,rgba(255,255,255,.5),rgba(255,255,255,.08) 38%,transparent 60%);box-shadow:inset 0 1px 0 rgba(255,255,255,.65),inset 0 0 0 1px rgba(255,255,255,.28)}
+  .shadow{box-shadow:0 18px 40px -14px rgba(20,45,32,.28),0 3px 10px rgba(20,45,32,.10)}
+  .ic{width:1em;height:1em;display:inline-block;vertical-align:-0.12em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .dim{position:absolute;inset:0;background:rgba(20,30,25,.30);backdrop-filter:blur(6px);z-index:10}
+  .sheet{position:absolute;left:0;right:0;bottom:0;height:596px;border-radius:26px 26px 0 0;padding:8px 20px 28px;display:flex;flex-direction:column;z-index:20;background:rgba(250,252,250,.6)}
+  .handle{width:36px;height:4.5px;border-radius:99px;background:rgba(90,101,95,.4);margin:2px auto 12px}
+  .bd-head{display:flex;align-items:center;gap:14px}
+  .plate{width:52px;height:52px;border-radius:17px;background:rgba(46,125,91,.12);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0}
+  .plate::before{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 0 0 1px rgba(46,125,91,.15)}
+  .plate .ic{width:26px;height:26px;color:var(--mint-deep)}
+  .bd-head .tt{font-size:17px;font-weight:800}
+  .bd-head .st{font-size:11px;color:var(--ink2);margin-top:3px}
+  .bd-head .amt{margin-left:auto;text-align:right}
+  .bd-head .amt b{font-size:26px;font-weight:800;color:var(--red);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+  .st-chip{display:inline-flex;align-items:center;gap:7px;margin-top:12px;font-size:12px;font-weight:700;border-radius:99px;padding:6px 14px}
+  .st-amber{background:rgba(232,161,60,.16);color:#9A6A1B}.st-amber i{width:7px;height:7px;border-radius:50%;background:currentColor;font-style:normal}
+  .mini{background:rgba(255,255,255,.66);border:1px solid var(--line);border-radius:18px;padding:13px 16px;margin-top:12px}
+  .mini h6{font-size:11px;font-weight:800;color:var(--ink2);letter-spacing:.5px;margin-bottom:9px}
+  .prow{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:12.5px}
+  .ava{width:26px;height:26px;border-radius:9px;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .prow .mode{margin-left:auto;font-size:10px;border:1px solid var(--line);border-radius:6px;padding:1px 7px;color:var(--ink2)}
+  .prow b{margin-left:8px;font-variant-numeric:tabular-nums}
+  .dl{display:flex;justify-content:space-between;font-size:12.5px;padding:6.5px 2px;border-bottom:1px dashed #EDF0EC}
+  .dl:last-child{border:0}.dl s{text-decoration:none;color:var(--ink2)}
+  .tripc{margin-top:12px;border-radius:16px;padding:11px 14px;display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:600}
+  .tripc .more{margin-left:auto;color:var(--ink2);font-size:16px}
+  .essence{margin-top:12px;border:1.5px dashed rgba(46,125,91,.4);border-radius:15px;padding:10px 14px;font-size:12px;color:var(--mint-deep);display:flex;align-items:center;gap:8px}
+  .bd-act{margin-top:auto;display:flex;gap:10px;padding-top:14px}
+  .b-edit{flex:1.6;height:48px;border-radius:15px;background:var(--mint);color:#fff;font-size:14.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 18px -6px rgba(46,125,91,.55),inset 0 1px 0 rgba(255,255,255,.3)}
+  .b-del{width:48px;height:48px;border-radius:15px;background:rgba(217,85,63,.1);color:var(--red);display:flex;align-items:center;justify-content:center}
+  .b-del .ic{width:20px;height:20px}
+  .htop{position:absolute;top:0;left:0;right:0;z-index:50;padding:52px 20px 10px;background:linear-gradient(var(--paper) 82%,transparent)}
+  .htop .row{display:flex;align-items:center;justify-content:space-between}
+  .htop h1{font-size:30px;font-weight:800;letter-spacing:-.5px}
+  .htop .acts{display:flex;gap:16px;color:var(--ink)}
+  .htop .acts .ic{width:19px;height:19px}
+  .sbar{margin-top:10px;height:42px;border-radius:14px;display:flex;align-items:center;gap:9px;padding:0 14px;font-size:12.5px;color:#9AA59E}
+  .gsec{display:flex;justify-content:space-between;align-items:baseline;margin:14px 20px 9px;font-size:13px;font-weight:800}
+  .gsec small{font-weight:500;color:var(--ink2);font-size:11px}
+  .tcard{margin:0 16px 12px;border-radius:22px;height:148px;position:relative;overflow:hidden;isolation:isolate;padding:18px;display:flex;flex-direction:column;justify-content:flex-end;color:#fff}
+  .tcard .art{position:absolute;inset:0;z-index:-2}
+  .tcard .wm{position:absolute;right:14px;top:12px;color:rgba(255,255,255,.45)}
+  .tcard .wm .ic{width:52px;height:52px;stroke-width:1.6}
+  .tcard .stpill{position:absolute;left:16px;top:14px;font-size:10.5px;font-weight:700;background:rgba(15,25,20,.35);border-radius:99px;padding:4px 11px;display:flex;gap:6px;align-items:center}
+  .tcard .stpill i{width:6px;height:6px;border-radius:50%;background:#7BE3A8}
+  .tcard h3{font-size:19px;font-weight:800}
+  .tcard .meta{font-size:11.5px;opacity:.92;margin-top:4px}
+  .tcard .bar{height:4px;border-radius:99px;background:rgba(255,255,255,.35);margin-top:10px;overflow:hidden;width:70%}
+  .tcard .bar i{display:block;height:100%;width:58%;background:#fff;border-radius:99px}
+  .tcard.hot{box-shadow:0 0 0 1.5px rgba(123,227,168,.85),0 14px 34px -10px rgba(30,92,65,.55)}
+  .dayring{position:absolute;right:14px;bottom:14px;width:44px;height:44px;border-radius:50%;background:conic-gradient(#7BE3A8 0 200deg,rgba(255,255,255,.3) 0);display:flex;align-items:center;justify-content:center}
+  .dayring i{width:34px;height:34px;border-radius:50%;background:rgba(15,25,20,.55);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:800}
+  .tday{margin:4px 16px 0;border-radius:18px;padding:12px 14px;display:flex;align-items:center;gap:11px}
+  .tday .brick{width:40px;height:40px;border-radius:13px;background:var(--mint);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .tday .brick .ic{width:20px;height:20px}
+  .tday b{font-size:13.5px}.tday .sub{font-size:10.5px;color:var(--ink2);margin-top:2px}
+  .tday .go{margin-left:auto;color:var(--ink2)}
+</style>
+</head>
+<body>
+
+<!-- ═══ SVG 图标库（新图标体系 · 24 网格 / 2px 圆头描边 / 继承 currentColor）═══ -->
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-boat" viewBox="0 0 24 24"><path d="M12 2.5v12"/><path d="M12 3l5.5 8.5H12"/><path d="M12 6.5L7.5 11H12"/><path d="M3.5 14.5h17l-2.6 4.2H6.1z"/><path d="M4 21.5c2.6-1.8 5.4-1.8 8 0 2.6-1.8 5.4-1.8 8 0"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5l1.7 4.8 4.8 1.7-4.8 1.7L12 16.5l-1.7-4.8L5.5 10l4.8-1.7z"/><path d="M18.5 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="5.5" y="4.5" width="13" height="17" rx="3"/><path d="M9 4.5V3h6v1.5"/><path d="M9 13l2.2 2.2 4-4.4"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2.1 5-5 2.1 2.1-5z"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><path d="M15.5 14.5H21"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c1.2-3.9 4-5.6 7-5.6s5.8 1.7 7 5.6"/></symbol>
+  <symbol id="i-food" viewBox="0 0 24 24"><path d="M4 12.5h16a8 8 0 01-16 0z"/><path d="M15 3.5l4.5 7M19.5 3.5l-4.5 7"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M5.5 15l1.3-4.5A2 2 0 018.7 9h6.6a2 2 0 011.9 1.5L18.5 15"/><rect x="3.5" y="15" width="17" height="4" rx="1.5"/><path d="M7 17.2h.01M17 17.2h.01"/></symbol>
+  <symbol id="i-bed" viewBox="0 0 24 24"><path d="M3 19V7.5"/><path d="M3 16h18v3"/><path d="M3 13h6.5a3 3 0 013 3"/><path d="M12.5 13V9.5H18a3 3 0 013 3V13"/><circle cx="7" cy="11" r="1.6"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M3 9V7a1 1 0 011-1h16a1 1 0 011 1v2a3 3 0 000 6v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2a3 3 0 000-6z"/><path d="M15 6.5v11" stroke-dasharray="2.4 2.6"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 8.5h12l-1 12.5H7z"/><path d="M9 8.5V6a3 3 0 016 0v2.5"/></symbol>
+  <symbol id="i-cup" viewBox="0 0 24 24"><path d="M5.5 6h13l-1.3 12.6a2 2 0 01-2 1.9H8.8a2 2 0 01-2-1.9z"/><path d="M6.3 11h11.4"/><path d="M13 6l2.2-3.5"/></symbol>
+  <symbol id="i-med" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M12 8.5v7M8.5 12h7"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16v-5.5a5.5 5.5 0 1111 0V16l1.5 2.5H4.5z"/><path d="M10 21a2.2 2.2 0 004 0"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 4v15M8 19h8M4.5 7h15"/><path d="M4.5 7l-2.2 5.5a2.6 2.6 0 004.4 0z"/><path d="M19.5 7l-2.2 5.5a2.6 2.6 0 004.4 0z"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 13.5h5L11 21l8-10.5h-5z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v15H6.5A2.5 2.5 0 004 20.5z"/><path d="M20 18v3H6.5"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.2-6.5-10.5a6.5 6.5 0 1113 0C18.5 15.8 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M7 4h10v17l-5-3.5L7 21z"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M4 10h16M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14"/><path d="M9.5 7V5.5A1.5 1.5 0 0111 4h2a1.5 1.5 0 011.5 1.5V7"/><path d="M7 7l1 13h8l1-13"/><path d="M10.5 11v5M13.5 11v5"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M5 19h3L18.5 8.5l-3-3L5 16z"/><path d="M14 6l3 3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="5.5" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.3 10.8l7.4-4M8.3 13.2l7.4 4"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><path d="M5.5 12h.01M12 12h.01M18.5 12h.01"/></symbol>
+  <symbol id="i-backspace" viewBox="0 0 24 24"><path d="M8 5h11a2 2 0 012 2v10a2 2 0 01-2 2H8L2.5 12z"/><path d="M11 9.5l5 5M16 9.5l-5 5"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 01-.4-9A6 6 0 0118 8.5 4 4 0 0117.5 16z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v6c0 4.6-3.2 7.6-7.5 9-4.3-1.4-7.5-4.4-7.5-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="M4 18h16M4 18l-1-9 5 3 4-6 4 6 5-3-1 9"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M3.5 16.5l4.5-4 4 3.5 3.5-3 5 4.5"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4L3.5 6v14L9 18l6 2 5.5-2V4L15 6z"/><path d="M9 4v14M15 6v14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M9 5.5l6.5 6.5L9 18.5"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14.9-3"/><path d="M5 4v4.5h4.5"/><path d="M4 13a8 8 0 0014.9 3"/><path d="M19 20v-4.5h-4.5"/></symbol>
+</svg>
+
+<header>
+  <h1>芥舟 <span>·</span> UI 重设计施工预览 · 第二批</h1>
+  <p>配套《docs/UI-UX重设计-第二批页面.md》。场景 F–N 为取舍后的 8 项交付 + 全局图标体系专项（场景 N）。延续第一批令牌（<code>GlassTokens σ28 / α0.52 / 高光 0.65</code>）。⏸ 标注项为视觉参考稿，施工以 V2.7.2 规格书为准。</p>
+</header>
+
+<!-- ═══════ 场景 F ═══════ -->
+<section id="f">
+  <div class="sec-head"><h2>场景 F · 账单详情抽屉</h2><small>第二批 §一</small><span class="pill-ver v281">V2.8.1 · S9 账单抽屉</span><span class="pill-ok">✅ 顺手修 P0 #3</span></div>
+  <div class="stage">
+    <div class="phone"><div class="screen">
+      <div class="status">9:41</div><div class="status r">▮▮ ᯤ 87%</div><div class="notch"></div>
+      <div class="dim"></div>
+      <div class="sheet glass shadow">
+        <div class="handle"></div>
+        <div class="bd-head">
+          <div class="plate"><svg class="ic"><use href="#i-food"/></svg></div>
+          <div><div class="tt">午餐 · 一兰拉面</div><div class="st">餐饮 · 10/02 周五 · 微信</div></div>
+          <div class="amt"><b><small>¥</small>128<small>.50</small></b></div>
+        </div>
+        <span class="st-chip st-amber"><i></i>待结清 · 点此标记两清</span>
+        <div class="mini">
+          <h6>谁付了 · 谁分摊</h6>
+          <div class="prow"><span class="ava" style="background:#5B8DEF">舟</span>林小舟 付款<span class="mode">按人头平均</span><b>¥128.50</b></div>
+          <div class="prow"><span class="ava" style="background:#E8833C">凯</span>阿凯 分摊<span class="mode">6 人</span><b>¥21.42</b></div>
+        </div>
+        <div class="mini">
+          <h6>明细</h6>
+          <div class="dl"><s>类型</s>支出 · 餐饮</div>
+          <div class="dl"><s>备注</s>含两人份汤底加面</div>
+        </div>
+        <div class="tripc glass shadow">
+          <svg class="ic" style="width:16px;height:16px;color:var(--mint-deep)"><use href="#i-compass"/></svg>
+          冲绳五日 · D3 水族馆日<span class="more">⋯</span>
+        </div>
+        <div class="essence"><svg class="ic" style="width:14px;height:14px"><use href="#i-book"/></svg>攻略精要<span style="margin-left:auto;opacity:.6">展开 ⌄</span></div>
+        <div class="bd-act">
+          <div class="b-edit"><svg class="ic" style="width:17px;height:17px"><use href="#i-edit"/></svg>编辑</div>
+          <div class="b-del"><svg class="ic"><use href="#i-trash"/></svg></div>
+        </div>
+      </div>
+      <span class="mark" style="top:120px;right:30px">1</span>
+      <span class="mark" style="top:300px;right:30px">2</span>
+      <span class="mark" style="top:395px;right:30px">3</span>
+      <span class="mark warn" style="bottom:44px;right:30px">4</span>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b class="n">1</b>结清状态前置：<code>SwitchListTile</code> 取消 → 头部状态胶囊（amber 待结清 ↔ green 已两清），点击即 toggle。<span class="tag eff">效</span><span class="ref">现状开关沉在第二屏（bill_detail_sheet.dart:98-110）</span></div>
+      <div class="note"><b class="n">2</b>分摊图形化：「谁付了·谁分摊」迷你卡 + 模式标签 + 头像行；分类图标换新体系（语义色 12% 底 + 内高光圈）。<span class="tag beauty">美</span></div>
+      <div class="note"><b class="n">3</b>关联行程玻璃卡，解除关联收进 ⋯ 菜单（危险动作二级化 + 强确认）；虚线框为 <strong>精要随卡预留插槽</strong>——V2.7.2 S10 渲染于此，⏸ 渲染规格以 S10 为准。<span class="tag a11y">A</span></div>
+      <div class="note"><b class="n">4</b>删除改图标钮 → <strong>危险确认弹层</strong>（L2 规范），修复现状直接删无确认（P0 #3）。<span class="tag eff">效</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 场景 G ═══════ -->
+<section id="g">
+  <div class="sec-head"><h2>场景 G · 行程列表</h2><small>第二批 §二</small><span class="pill-ver v282">V2.8.2 · S3 行程列表</span></div>
+  <div class="stage">
+    <div class="phone"><div class="screen">
+      <div class="status">9:41</div><div class="status r">▮▮ ᯤ 87%</div><div class="notch"></div>
+      <div class="htop">
+        <div class="row">
+          <h1>行程</h1>
+          <div class="acts"><svg class="ic"><use href="#i-search"/></svg><svg class="ic"><use href="#i-sync"/></svg><svg class="ic"><use href="#i-more"/></svg></div>
+        </div>
+        <div class="sbar glass shadow"><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg>搜索行程 / 目的地</div>
+      </div>
+      <div style="position:absolute;top:150px;bottom:0;left:0;right:0;overflow:hidden">
+        <div class="gsec">进行中 <small>1 个行程 ›</small></div>
+        <div class="tcard hot">
+          <div class="art" style="background:linear-gradient(135deg,#2E7D5B,#1E5C41)"></div>
+          <span class="stpill"><i></i>进行中</span>
+          <svg class="wm ic"><use href="#i-boat"/></svg>
+          <h3>冲绳五日</h3>
+          <div class="meta">那霸 · 10/01 – 10/05 · 6 人</div>
+          <div class="bar"><i></i></div>
+          <div class="dayring"><i>D3</i></div>
+        </div>
+        <div class="gsec">即将出发 <small>2 个行程 ›</small></div>
+        <div class="tcard">
+          <div class="art" style="background:linear-gradient(135deg,#E8833C,#C4571F)"></div>
+          <span class="stpill"><i style="background:#FFD37B"></i>即将出发</span>
+          <svg class="wm ic"><use href="#i-boat"/></svg>
+          <h3>京都红叶</h3>
+          <div class="meta">京都 · 11/20 – 11/24 · 2 人</div>
+          <div class="bar"><i style="width:0%"></i></div>
+        </div>
+        <div class="gsec">已结束 <small>3 个行程 ›</small></div>
+        <div class="tcard" style="height:104px;filter:saturation(.5)">
+          <div class="art" style="background:linear-gradient(135deg,#5A655F,#39413C)"></div>
+          <h3>青海湖环线</h3>
+          <div class="meta">7 月 · 已结束 · 共 6 天</div>
+        </div>
+        <div class="tday glass shadow">
+          <div class="brick"><svg class="ic"><use href="#i-compass"/></svg></div>
+          <div><b>冲绳五日 · 今日</b><div class="sub">第 3 天/共 5 天 · 安排 4/6 · 花销 ¥412</div></div>
+          <svg class="go ic" style="width:16px;height:16px"><use href="#i-arrow"/></svg>
+        </div>
+      </div>
+      <span class="mark" style="top:118px;right:26px">1</span>
+      <span class="mark" style="top:236px;right:96px">2</span>
+      <span class="mark" style="top:196px;left:16px">3</span>
+      <span class="mark warn" style="top:560px;left:16px">4</span>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b class="n">1</b>补搜索（GlassAppBar 内嵌展开）+ 排序菜单（最近活动/出发日期）——现状无任何检索手段。<span class="tag eff">效</span></div>
+      <div class="note"><b class="n">2</b>封面 <strong>emoji → 品牌图标水印</strong>（默认舟形，白 45% 描边）；<code>trip.emoji</code> 数据字段不动，渲染层映射（⏸ 字段扩展 V2.7.3）。<span class="tag beauty">美</span></div>
+      <div class="note"><b class="n">3</b>进行中行程强化：<strong>D3 进度环</strong> + 主色光晕描边——一眼锁定当前行程。<span class="tag eff">效</span><span class="tag beauty">美</span></div>
+      <div class="note"><b class="n">4</b>已结束组降饱和（<code>saturation .5</code>）制造时间纵深；TodayCard 玻璃化 + 新图标；长按操作抽屉保留。<span class="tag beauty">美</span></div>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* H 行程详情页签 */
+  .th{position:absolute;top:0;left:0;right:0;height:240px;padding:60px 20px 0;color:#fff;z-index:1}
+  .th .art{position:absolute;inset:0;z-index:-1}
+  .th h1{font-size:24px;font-weight:800;margin-top:36px}
+  .th .meta{font-size:12px;opacity:.92;margin-top:5px}
+  .th .pills{display:flex;gap:8px;margin-top:10px}
+  .th .pills span{font-size:10.5px;font-weight:700;background:rgba(15,25,20,.32);border-radius:99px;padding:4px 11px}
+  .segbar{position:absolute;top:216px;left:12px;right:12px;z-index:40;border-radius:18px;padding:5px;display:flex;gap:4px;background:rgba(250,252,250,.6)}
+  .seg{flex:1;height:36px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink2)}
+  .seg.on{background:var(--mint);color:#fff;box-shadow:0 6px 14px -4px rgba(46,125,91,.55)}
+  .seg .ic{width:15px;height:15px}
+  .tlx{position:absolute;top:282px;left:0;right:0;bottom:0;padding:10px 18px}
+  .dpick{display:flex;gap:8px;overflow:hidden;margin-bottom:14px}
+  .dpick span{flex-shrink:0;font-size:11.5px;font-weight:700;border-radius:12px;padding:8px 13px;background:#fff;border:1px solid var(--line);color:var(--ink2)}
+  .dpick span.on{background:var(--mint);color:#fff;border-color:var(--mint)}
+  .trow{display:flex;gap:12px;padding-bottom:16px}
+  .rail{display:flex;flex-direction:column;align-items:center;width:36px;flex-shrink:0}
+  .rail .dot{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+  .rail .dot .ic{width:17px;height:17px}
+  .rail .ln{width:2px;flex:1;background:#DDE4DE;margin-top:4px;border-radius:2px}
+  .cx{flex:1;background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+  .cx h4{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+  .gb{font-size:9px;color:var(--mint);border:1px solid rgba(46,125,91,.4);border-radius:6px;padding:1px 6px;display:inline-flex;align-items:center;gap:3px;font-weight:700}
+  .gb .ic{width:9px;height:9px}
+  .cx .inf{display:flex;gap:10px;font-size:10.5px;color:var(--ink2);margin-top:7px;flex-wrap:wrap;align-items:center}
+  .cx .inf span{display:flex;align-items:center;gap:3px}
+  .cx .inf .ic{width:11px;height:11px}
+  .paid{margin-left:auto;font-size:9.5px;font-weight:700;background:var(--mint-soft);color:var(--mint-deep);border-radius:6px;padding:2px 7px}
+  .fabx{position:absolute;right:18px;bottom:26px;z-index:45;height:48px;border-radius:16px;background:var(--mint);color:#fff;font-size:13.5px;font-weight:800;display:flex;align-items:center;gap:7px;padding:0 17px;box-shadow:0 12px 26px -8px rgba(46,125,91,.6),inset 0 1px 0 rgba(255,255,255,.35)}
+  /* I 攻略 */
+  .gh{position:absolute;top:96px;left:16px;right:16px;border-radius:20px;padding:16px 18px;color:#fff;background:linear-gradient(135deg,#2E7D5B,#3E9470)}
+  .gh h2{font-size:26px;font-weight:800}
+  .gh .pos{font-size:11.5px;opacity:.92;margin-top:3px}
+  .gh .stats{display:flex;gap:8px;margin-top:11px}
+  .gh .stats span{font-size:10.5px;font-weight:700;background:rgba(15,25,20,.22);border-radius:99px;padding:4px 10px;display:flex;gap:5px;align-items:center}
+  .gh .stats .ic{width:11px;height:11px}
+  .gg{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 16px 0}
+  .gc{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px}
+  .gc .ic{width:17px;height:17px;color:var(--mint)}
+  .gc b{font-size:11.5px;display:block;margin-top:5px}
+  .gc small{font-size:9.5px;color:var(--ink2)}
+  .gi{margin:10px 16px 0;background:#fff;border:1px solid var(--line);border-radius:16px;padding:13px 15px}
+  .gi h4{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+  .gi .ms{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+  .gi .ms span{font-size:10px;border-radius:6px;padding:2px 8px}
+  .m-addr{border:1px solid var(--line);color:var(--ink2)}
+  .m-tag{background:rgba(46,125,91,.1);color:var(--mint-deep);font-weight:700}
+  .m-dur{background:rgba(232,161,60,.12);color:#9A6A1B}
+  .gi p{font-size:11.5px;color:var(--ink2);line-height:1.7;margin-top:8px;border-top:1px solid #F0F3EF;padding-top:8px}
+  .gi .acts2{display:flex;gap:8px;margin-top:11px;align-items:center}
+  .a1{height:34px;border-radius:99px;background:var(--mint);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px;padding:0 15px;box-shadow:0 6px 14px -5px rgba(46,125,91,.5)}
+  .a2{height:34px;border-radius:99px;border:1.5px solid rgba(46,125,91,.4);color:var(--mint-deep);font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;padding:0 14px}
+  .gi .done{margin-left:auto;font-size:10.5px;font-weight:800;background:var(--mint);color:#fff;border-radius:99px;padding:6px 12px;display:flex;align-items:center;gap:5px}
+  .gi .inwl{margin-left:auto;font-size:10.5px;font-weight:700;color:var(--ink2);border:1.5px solid var(--line);border-radius:99px;padding:5px 11px;display:flex;align-items:center;gap:5px}
+  .gi .acts2 .done,.gi .acts2 .inwl{margin-left:auto}
+</style>
+
+<!-- ═══════ 场景 H ═══════ -->
+<section id="h">
+  <div class="sec-head"><h2>场景 H · 行程详情 · 页签容器</h2><small>第二批 §三</small><span class="pill-ver v282">V2.8.2 · S5 页签层（仅页签层）</span></div>
+  <div class="stage">
+    <div class="phone"><div class="screen">
+      <div class="status">9:41</div><div class="status r">▮▮ ᯤ 87%</div><div class="notch"></div>
+      <div class="th">
+        <div class="art" style="background:linear-gradient(135deg,#3E9470,#1E5C41)"></div>
+        <svg class="ic" style="width:20px;height:20px;transform:rotate(180deg)"><use href="#i-arrow"/></svg>
+        <h1>冲绳五日</h1>
+        <div class="meta">那霸 · 10/01 – 10/05</div>
+        <div class="pills"><span>进行中 · D3</span><span>共 5 天</span><span>☁ 26°</span></div>
+      </div>
+      <div class="segbar glass shadow">
+        <span class="seg on"><svg class="ic"><use href="#i-clock"/></svg>时间轴</span>
+        <span class="seg"><svg class="ic"><use href="#i-clip"/></svg>大纲</span>
+        <span class="seg"><svg class="ic"><use href="#i-bolt"/></svg>装配</span>
+        <span class="seg"><svg class="ic"><use href="#i-bag"/></svg>锦囊</span>
+      </div>
+      <div class="tlx">
+        <div class="dpick"><span class="on">D3 · 10/03</span><span>D4 · 10/04</span><span>D5 · 10/05</span><span>总览</span></div>
+        <div class="trow">
+          <div class="rail"><div class="dot" style="background:#2E7D5B"><svg class="ic"><use href="#i-ticket"/></svg></div><div class="ln"></div></div>
+          <div class="cx">
+            <h4>美丽海水族馆 <span class="gb"><svg class="ic"><use href="#i-book"/></svg>攻略</span></h4>
+            <div class="inf"><span><svg class="ic"><use href="#i-clock"/></svg>09:00</span><span>2.5h</span><span class="paid">已入账 ✓</span></div>
+          </div>
+        </div>
+        <div class="trow">
+          <div class="rail"><div class="dot" style="background:#E8833C"><svg class="ic"><use href="#i-food"/></svg></div><div class="ln"></div></div>
+          <div class="cx">
+            <h4>午餐 · 備瀬食堂</h4>
+            <div class="inf"><span><svg class="ic"><use href="#i-clock"/></svg>12:30</span><span>1h</span><span class="paid">已入账 ✓</span></div>
+          </div>
+        </div>
+        <div class="trow">
+          <div class="rail"><div class="dot" style="background:#5B8DEF"><svg class="ic"><use href="#i-car"/></svg></div></div>
+          <div class="cx">
+            <h4>古宇利大桥自驾</h4>
+            <div class="inf"><span><svg class="ic"><use href="#i-clock"/></svg>15:00</span><span>1.5h</span><span class="paid" style="background:#F2F4F2;color:var(--ink2)">未入账</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="fabx"><svg class="ic" style="width:16px;height:16px"><use href="#i-check"/></svg>添加安排</div>
+      <span class="mark" style="top:232px;left:22px">1</span>
+      <span class="mark" style="top:382px;left:60px">2</span>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b class="n">1</b>页签栏（时间轴/大纲/装配/锦囊）：玻璃吸顶 SegmentedTab，选中主色胶囊 240ms 滑移。<strong>⏸ 页签结构与四页签内容归 V2.7.2（S3/S6/S7/S9），本稿仅定义视觉基线</strong>。<span class="tag beauty">美</span></div>
+      <div class="note"><b class="n">2</b>时间轴行保留 TypeDot + 连接线 + 「攻略」互链角标（S5 已完工），材质玻璃化 + 新图标替换（🕐→ic-clock 等）。大纲页签 = 等宽文本域 + 想去池侧栏（S3 §6.5）；装配页签 = 容量条 + 左池右缩略（S7 §10.3）；锦囊页签 = 四分组卡（S9 §12.3）。<span class="ref">其余三页签布局详见文档 §三 3–5 点</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 场景 I ═══════ -->
+<section id="i">
+  <div class="sec-head"><h2>场景 I · 攻略页</h2><small>第二批 §四 · S5 已完工基线</small><span class="pill-ver v282">V2.8.2 · S4 攻略打磨</span></div>
+  <div class="stage">
+    <div class="phone"><div class="screen">
+      <div class="status">9:41</div><div class="status r">▮▮ ᯤ 87%</div><div class="notch"></div>
+      <div style="position:absolute;top:52px;left:20px;right:20px;display:flex;justify-content:space-between;font-size:18px;z-index:5">
+        <span style="font-weight:800">攻略</span><span style="color:var(--ink2);display:flex;gap:14px"><svg class="ic" style="width:17px;height:17px"><use href="#i-sync"/></svg><svg class="ic" style="width:17px;height:17px"><use href="#i-more"/></svg></span>
+      </div>
+      <div class="gh">
+        <h2>冲绳</h2>
+        <div class="pos">琉球王国故地 · 离岛度假胜地</div>
+        <div class="stats"><span><svg class="ic"><use href="#i-pin"/></svg>18 个景点</span><span><svg class="ic"><use href="#i-food"/></svg>12 家美食</span><span><svg class="ic"><use href="#i-clock"/></svg>约 8 分钟</span></div>
+      </div>
+      <div class="gg">
+        <div class="gc"><svg class="ic"><use href="#i-shield"/></svg><b>行前准备</b><small>6 条</small></div>
+        <div class="gc"><svg class="ic"><use href="#i-photo"/></svg><b>景点</b><small>18 处</small></div>
+        <div class="gc"><svg class="ic"><use href="#i-food"/></svg><b>美食</b><small>12 家</small></div>
+        <div class="gc"><svg class="ic"><use href="#i-car"/></svg><b>交通</b><small>5 条</small></div>
+        <div class="gc"><svg class="ic"><use href="#i-bell"/></svg><b>避坑</b><small>4 条</small></div>
+        <div class="gc"><svg class="ic"><use href="#i-wallet"/></svg><b>预算</b><small>8 项</small></div>
+      </div>
+      <div class="gi">
+        <h4>美丽海水族馆 <span class="done"><svg class="ic" style="width:10px;height:10px"><use href="#i-calendar"/></svg>已安排 · 第 3 天</span></h4>
+        <div class="ms"><span class="m-addr">📍 国头郡本部町</span><span class="m-tag">必去</span><span class="m-dur">建议 2-3小时</span></div>
+        <p>黑潮之海是世界第二大水族馆穹顶，鲸鲨喂食时间值得提前占位…（来自 官方攻略）</p>
+      </div>
+      <div class="gi">
+        <h4>古宇利岛心形岩</h4>
+        <div class="ms"><span class="m-addr">📍 国头郡今归仁村</span><span class="m-tag">经典</span><span class="m-dur">建议 1-2小时</span></div>
+        <div class="acts2">
+          <span class="a1"><svg class="ic" style="width:13px;height:13px"><use href="#i-calendar"/></svg>直接排</span>
+          <span class="a2"><svg class="ic" style="width:13px;height:13px"><use href="#i-bookmark"/></svg>先想去</span>
+        </div>
+      </div>
+      <div class="gi">
+        <h4>暖暮拉面 · 那霸店</h4>
+        <div class="ms"><span class="m-addr">📍 那霸市牧志</span><span class="m-tag">小众</span></div>
+        <div class="acts2">
+          <span class="a1"><svg class="ic" style="width:13px;height:13px"><use href="#i-calendar"/></svg>直接排</span>
+          <span class="a2"><svg class="ic" style="width:13px;height:13px"><use href="#i-bookmark"/></svg>先想去</span>
+        </div>
+      </div>
+      <span class="mark" style="top:428px;right:26px">1</span>
+      <span class="mark" style="top:540px;right:26px">2</span>
+      <span class="mark" style="top:348px;left:24px">3</span>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b class="n">1</b>状态徽记强化：「已安排 · 第 N 天」→ 主色实底胶囊（白字+日历图标）；「已在想去」→ outline 胶囊 + bookmark——可排/已排/已入池三态一眼可辨。<span class="tag eff">效</span></div>
+      <div class="note"><b class="n">2</b>双动作按钮升级：两个平权 TextButton → <strong>「直接排」Filled 主色 +「先想去」Outlined</strong>，主次分明；S5 交互契约（动词/字段映射/去重）完全不动。<span class="tag beauty">美</span><span class="tag eff">效</span></div>
+      <div class="note"><b class="n">3</b>六栏宫格换新图标；meta 分色（地址 outline / tag mint 8% / 建议 amber 8%）——扫读可按形辨义。<span class="tag beauty">美</span></div>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* J 设置页 */
+  .pbody{position:absolute;inset:0;padding-top:96px}
+  .pbig{font-size:30px;font-weight:800;margin:6px 20px 12px}
+  .ucard{margin:0 16px;border-radius:22px;padding:16px;display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+  .ucard .uava{width:52px;height:52px;border-radius:18px;background:linear-gradient(145deg,#F6C879,#E8833C);display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
+  .ucard .un{font-size:15.5px;font-weight:800}
+  .ucard .us{font-size:11px;color:var(--ink2);margin-top:3px}
+  .uchips{display:flex;gap:7px;width:100%}
+  .uchips span{font-size:10px;font-weight:700;border-radius:99px;padding:4px 9px;display:flex;gap:4px;align-items:center;background:rgba(255,255,255,.7);border:1px solid var(--line);color:var(--ink2)}
+  .uchips .ic{width:11px;height:11px}
+  .uchips .ok i{width:6px;height:6px;border-radius:50%;background:var(--green);font-style:normal}
+  .psub{display:flex;justify-content:space-between;align-items:center;margin:16px 20px 8px;font-size:13px;font-weight:800;color:var(--ink2)}
+  .ptile{display:flex;align-items:center;gap:12px;margin:0 16px 8px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:11px 15px}
+  .ptile .pi{width:34px;height:34px;border-radius:11px;background:rgba(46,125,91,.1);color:var(--mint-deep);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .ptile .pi .ic{width:17px;height:17px}
+  .ptile b{font-size:13px}
+  .ptile small{display:block;font-size:10.5px;color:var(--ink2);margin-top:2px}
+  .ptile .sw{margin-left:auto;width:40px;height:23px;border-radius:99px;background:var(--mint);position:relative;flex-shrink:0}
+  .ptile .sw i{position:absolute;top:2.5px;right:2.5px;width:18px;height:18px;border-radius:50%;background:#fff;font-style:normal}
+  .ptile .chv{margin-left:auto;color:#B4BFB8}
+  .quote{text-align:center;font-size:11px;color:#98A39C;margin-top:16px}
+  /* K 锁屏/开屏 */
+  .lockscr{background:linear-gradient(180deg,#10231B,#1E5C41 130%);color:#fff}
+  .lock-in{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding-top:110px}
+  .lock-in .lt{font-size:17px;font-weight:800;display:flex;gap:8px;align-items:center}
+  .lock-in .lt .ic{width:18px;height:18px}
+  .lock-in .ls{font-size:11.5px;opacity:.75;margin-top:7px}
+  .pindots{display:flex;gap:10px;margin-top:26px}
+  .pindots i{width:26px;height:5px;border-radius:99px;background:rgba(255,255,255,.22)}
+  .pindots i.on{background:#7BE3A8;box-shadow:0 0 10px rgba(123,227,168,.6)}
+  .err{height:22px;margin-top:14px;font-size:11px;color:#FFB4A6}
+  .pad{display:grid;grid-template-columns:repeat(3,72px);gap:14px;margin-top:18px}
+  .pad span{height:60px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:600;background:rgba(255,255,255,.10);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 6px 16px -6px rgba(0,0,0,.4)}
+  .pad .bs{color:rgba(255,255,255,.8)}
+  .waves{position:absolute;bottom:0;left:0;right:0;height:110px;opacity:.16}
+  .disc{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-size:9px;color:rgba(255,255,255,.5);padding:0 40px;line-height:1.7}
+  .splashscr{background:linear-gradient(180deg,#F7FAF7,#E9F2EC);display:flex;align-items:center;justify-content:center}
+  .logo-wrap{text-align:center}
+  .halo{width:150px;height:150px;margin:0 auto;border-radius:50%;background:radial-gradient(circle,rgba(46,125,91,.18),transparent 68%);display:flex;align-items:center;justify-content:center}
+  .logo-plate{width:108px;height:108px;border-radius:50%;background:linear-gradient(135deg,#2E7D5B,#3E9470);display:flex;align-items:center;justify-content:center;box-shadow:0 22px 44px -12px rgba(46,125,91,.55),inset 0 2px 0 rgba(255,255,255,.35)}
+  .logo-plate .ic{width:58px;height:58px;color:#fff;stroke-width:1.7}
+  .logo-wrap h1{font-family:"Songti SC","SimSun",serif;font-size:34px;font-weight:900;letter-spacing:10px;margin-top:26px;text-indent:10px}
+  .logo-wrap p{font-size:12px;color:var(--ink2);margin-top:10px;letter-spacing:3px}
+  .two{display:flex;gap:40px;flex-wrap:wrap;justify-content:center}
+</style>
+
+<!-- ═══════ 场景 J ═══════ -->
+<section id="j">
+  <div class="sec-head"><h2>场景 J · 设置页（我的）</h2><small>第二批 §五 · 主方案 §3.5</small><span class="pill-ver v281">V2.8.1 · S10 设置页</span></div>
+  <div class="stage">
+    <div class="phone"><div class="screen">
+      <div class="status">9:41</div><div class="status r">▮▮ ᯤ 87%</div><div class="notch"></div>
+      <div class="pbody">
+        <div class="pbig">我的</div>
+        <div class="ucard glass shadow">
+          <div class="uava">🧳</div>
+          <div><div class="un">林小舟</div><div class="us">cloud@jiezhou.app</div></div>
+          <div class="uchips">
+            <span class="ok"><i></i>上次同步 2h 前</span>
+            <span><svg class="ic"><use href="#i-compass"/></svg>冲绳五日</span>
+            <span><svg class="ic"><use href="#i-pin"/></svg>进行中 1</span>
+          </div>
+        </div>
+        <div class="psub">偏好设置 <span style="display:flex;gap:12px"><svg class="ic" style="width:15px;height:15px"><use href="#i-search"/></svg></span></div>
+        <div class="ptile"><div class="pi"><svg class="ic"><use href="#i-compass"/></svg></div><div><b>外观主题</b><small>薄荷绿 · 跟随系统</small></div><span class="chv">›</span></div>
+        <div class="ptile"><div class="pi"><svg class="ic"><use href="#i-bell"/></svg></div><div><b>预算预警</b><small>超 80% 提醒 · 当前 68%</small></div><span class="sw"><i></i></span></div>
+        <div class="ptile"><div class="pi"><svg class="ic"><use href="#i-bag"/></svg></div><div><b>账本工具箱</b><small>变更记录 · 导入导出 · 分类管理</small></div><span class="chv">›</span></div>
+        <div class="ptile"><div class="pi"><svg class="ic"><use href="#i-scale"/></svg></div><div><b>记账团管理</b><small>3 个团 · 当前「冲绳五日」</small></div><span class="chv">›</span></div>
+        <div class="psub">数据与隐私</div>
+        <div class="ptile"><div class="pi"><svg class="ic"><use href="#i-shield"/></svg></div><div><b>启动锁</b><small>6 位数字 PIN · 已开启</small></div><span class="chv">›</span></div>
+        <div class="ptile"><div class="pi"><svg class="ic"><use href="#i-cloud"/></svg></div><div><b>云同步</b><small>已连接 · 自动同步</small></div><span class="chv">›</span></div>
+        <div class="quote">「 山一程，水一程，账一程 」</div>
+      </div>
+      <span class="mark" style="top:118px;right:26px">1</span>
+      <span class="mark" style="top:290px;right:26px">2</span>
+      <span class="mark warn" style="top:342px;left:16px">3</span>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b class="n">1</b>用户卡 → <strong>状态摘要卡</strong>：上次同步 / 当前团 / 进行中行程三 chip——一卡即「我的现状」，整卡可点进云账号不变（emoji 头像为内容层，保留）。<span class="tag eff">效</span></div>
+      <div class="note"><b class="n">2</b>组内搜索：放大镜展开过滤 tile（与桌面命令面板呼应）。</div>
+      <div class="note"><b class="n">3</b>P0 #3 修复：预算预警 tile 整体可点 toggle（现状 <code>onTap: () {}</code> 空函数）；新增「账本工具箱」入口（主方案 §3.0.1 入口收敛）；tile 图标换新体系。<span class="tag eff">效</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 场景 K ═══════ -->
+<section id="k">
+  <div class="sec-head"><h2>场景 K · 启动锁 / 开屏</h2><small>第二批 §六 · 品牌动线「解锁即启航」</small><span class="pill-ver v282">V2.8.2 · S2 锁屏开屏</span></div>
+  <div class="two">
+    <div class="stage" style="display:grid;grid-template-columns:auto 1fr;gap:36px">
+      <div class="phone"><div class="screen lockscr">
+        <div class="status" style="color:#fff">9:41</div><div class="notch"></div>
+        <div class="lock-in">
+          <div class="lt"><svg class="ic"><use href="#i-shield"/></svg>芥舟已上锁</div>
+          <div class="ls">输入 6 位数字 PIN 继续</div>
+          <div class="pindots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+          <div class="err">PIN 不对，还可以再试 3 次</div>
+          <div class="pad glass">
+            <span>1</span><span>2</span><span>3</span>
+            <span>4</span><span>5</span><span>6</span>
+            <span>7</span><span>8</span><span>9</span>
+            <span></span><span>0</span><span class="bs"><svg class="ic" style="width:20px;height:20px"><use href="#i-backspace"/></svg></span>
+          </div>
+        </div>
+        <svg class="waves ic" viewBox="0 0 375 110" style="stroke:rgba(255,255,255,.5);stroke-width:1.5;fill:none"><path d="M-10 60c40-14 80-14 120 0s80 14 120 0 80-14 120 0 60 10 90 4"/><path d="M-10 84c40-14 80-14 120 0s80 14 120 0 80-14 120 0 60 10 90 4"/></svg>
+        <div class="disc">忘了 PIN 只能通过备份恢复数据；芥舟不提供后门、不上云、不设找回码。</div>
+      </div></div>
+      <div class="notes">
+        <div class="note"><b class="n">1</b>锁屏玻璃键帽（blur 16 + 高光圈 + 按压 scale .94 + selectionClick）；圆点阵 → <strong>胶囊分段条</strong>（填充段 160ms 弹性生长）；错误态整盘抖动 320ms + error 触觉。<span class="tag beauty">美</span><span class="tag a11y">A</span></div>
+        <div class="note"><b class="n">2</b>底部波纹母题与开屏共享——「解锁即启航」品牌叙事；免责声明保留（信任资产）；<code>disableAnimations</code> 降级保留。<span class="tag a11y">A</span></div>
+      </div>
+    </div>
+    <div class="stage" style="display:grid;grid-template-columns:auto 1fr;gap:36px;margin-top:40px">
+      <div class="phone"><div class="screen splashscr">
+        <div class="status">9:41</div><div class="notch"></div>
+        <div class="logo-wrap">
+          <div class="halo"><div class="logo-plate"><svg class="ic"><use href="#i-boat"/></svg></div></div>
+          <h1>芥舟</h1>
+          <p>载一叶舟 · 记一路山海</p>
+        </div>
+      </div></div>
+      <div class="notes">
+        <div class="note"><b class="n">1</b>开屏 ✈️ emoji → <strong>品牌舟形 Logo</strong>（帆 + 船体 + 波纹）；入场：光环扩散 → 舟身描边生长（900ms easeOutCubic）→ 波纹二次扩散（1.4s 间隔两次）。<span class="tag beauty">美</span><span class="ref">splash_screen.dart:163 现状为 emoji</span></div>
+        <div class="note"><b class="n">2</b>主标题启用衬线字体（SerifTitle 资产已在 pubspec）；副标题品牌诗句沿用 <code>CopyTokens.splashSubtitle</code>；底色改 primary 4% → surface 微渐变。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* L 弹层规范 */
+  .lgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:22px;max-width:1020px}
+  .lcard{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;min-height:150px}
+  .lcard h5{font-size:13px;font-weight:800;color:var(--ink2);margin-bottom:12px}
+  .l2c{border-radius:24px;background:rgba(250,252,250,.72);padding:18px;text-align:center}
+  .l2c .ico{width:46px;height:46px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center}
+  .l2c .ico.danger{background:rgba(217,85,63,.12);color:var(--red)}
+  .l2c .ico .ic{width:22px;height:22px}
+  .l2c b{font-size:14px}
+  .l2c p{font-size:11.5px;color:var(--ink2);margin-top:5px;line-height:1.7}
+  .l2c .btns{display:flex;gap:9px;margin-top:13px}
+  .l2c .bn{flex:1;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800}
+  .l2c .bn.d{background:var(--red);color:#fff}
+  .l2c .bn.n{background:#EEF2EE;color:var(--ink)}
+  .l3row{display:flex;align-items:center;gap:11px;padding:11px 4px;border-bottom:1px solid #F0F3EF;font-size:12.5px}
+  .l3row .ic{width:17px;height:17px;color:var(--mint-deep)}
+  .l3row small{display:block;font-size:10px;color:var(--ink2);margin-top:1px}
+  .l3row.dgr{color:var(--red)}.l3row.dgr .ic{color:var(--red)}
+  .snackx{border-radius:18px;background:rgba(29,34,31,.85);backdrop-filter:blur(24px) saturate(1.3);color:#fff;padding:13px 16px;font-size:12.5px;display:flex;align-items:center;gap:10px;position:relative;overflow:hidden}
+  .snackx::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3.5px;background:var(--red)}
+  .snackx .undo{margin-left:auto;color:#8FE3BE;font-weight:700}
+  .perm{border-radius:18px;background:rgba(250,252,250,.7);padding:15px;display:flex;gap:12px;align-items:flex-start}
+  .perm .ico{width:38px;height:38px;border-radius:12px;background:rgba(46,125,91,.12);color:var(--mint-deep);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .perm .ico .ic{width:18px;height:18px}
+  .perm b{font-size:12.5px}
+  .perm p{font-size:10.5px;color:var(--ink2);margin-top:3px;line-height:1.6}
+  .perm .go{margin-left:auto;font-size:11px;font-weight:800;color:var(--mint-deep);background:var(--mint-soft);border-radius:10px;padding:7px 11px;align-self:center;flex-shrink:0}
+  /* M 空间 */
+  .sph{position:absolute;top:0;left:0;right:0;padding:56px 20px 0;z-index:5}
+  .sph .row1{display:flex;align-items:center;justify-content:space-between;font-size:18px}
+  .sph h1{font-size:22px;font-weight:800;margin-top:10px}
+  .avstack{display:flex}
+  .avstack .ava{width:30px;height:30px;border:2px solid #fff;margin-left:-8px}
+  .avstack .ava:first-child{margin-left:0}
+  .badges{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .badges span{font-size:11px;font-weight:700;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:6px 12px;display:flex;gap:6px;align-items:center;color:var(--ink2)}
+  .badges .ic{width:12px;height:12px}
+  .badges .nfr{color:#B2402E;border-color:rgba(217,85,63,.3)}
+  .stabs{display:flex;gap:22px;margin:16px 20px 0;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:700;color:var(--ink2)}
+  .stabs span{padding:9px 2px}
+  .stabs span.on{color:var(--mint-deep);border-bottom:2.5px solid var(--mint)}
+  .feed{padding:14px 20px;position:relative}
+  .feed .lnv{position:absolute;left:36px;top:20px;bottom:20px;width:2px;background:#E4EAE5}
+  .fitem{display:flex;gap:12px;position:relative;padding-bottom:18px}
+  .fitem .nd{width:32px;height:32px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;z-index:1}
+  .fitem .nd .ic{width:15px;height:15px}
+  .fitem b{font-size:12.5px}
+  .fitem .fx{font-size:11.5px;color:var(--ink2);margin-top:3px;line-height:1.6}
+  .fitem .tm{font-size:10px;color:#98A39C;margin-top:3px}
+  /* N 图标体系 */
+  .icon-wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:14px;max-width:1020px}
+  .icell{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 8px;text-align:center}
+  .icell .ib{width:46px;height:46px;border-radius:14px;margin:0 auto 8px;background:rgba(46,125,91,.1);display:flex;align-items:center;justify-content:center;color:var(--mint-deep)}
+  .icell .ib .ic{width:24px;height:24px}
+  .icell b{font-size:11.5px;display:block}
+  .icell small{font-size:9.5px;color:#98A39C}
+  .vs-bar{display:flex;gap:16px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 20px;max-width:600px;margin-top:18px;flex-wrap:wrap}
+  .vs-bar .old{font-size:30px}
+  .vs-bar .arr{color:#B4BFB8;font-size:20px}
+  .vs-bar .new{width:46px;height:46px;border-radius:14px;background:var(--mint);color:#fff;display:flex;align-items:center;justify-content:center}
+  .vs-bar .new .ic{width:24px;height:24px}
+  .vs-bar p{font-size:12px;color:var(--ink2);line-height:1.7;flex:1;min-width:200px}
+  .tab-demo{display:flex;border-radius:22px;padding:8px 6px;margin:16px auto 0;max-width:520px}
+  .tab-demo span{flex:1;text-align:center;font-size:10.5px;color:var(--ink2);display:flex;flex-direction:column;gap:4px;align-items:center}
+  .tab-demo .ib{width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center}
+  .tab-demo .ib .ic{width:20px;height:20px}
+  .tab-demo span.on{color:var(--mint-deep);font-weight:800}
+  .tab-demo span.on .ib{background:var(--mint);color:#fff;box-shadow:0 8px 16px -6px rgba(46,125,91,.6)}
+</style>
+
+<!-- ═══════ 场景 L ═══════ -->
+<section id="l">
+  <div class="sec-head"><h2>场景 L · 系统级弹层规范</h2><small>第二批 §七 · L1–L4 四层统一语言</small><span class="pill-ver v281">V2.8.1 · S3 弹层规范</span></div>
+  <div class="lgrid">
+    <div class="lcard"><h5>L1 · 轻提示（玻璃 SnackBar）</h5><div class="snackx">已删除「午餐 · 一兰拉面」<span class="undo">撤销</span></div><p style="font-size:11.5px;color:#98A39C;margin-top:12px;line-height:1.7">语义左缘条 3.5px（删除红/保存绿）+ 圆角 18 + blur24。撤销 action 为 V2.7.3 预留。</p></div>
+    <div class="lcard"><h5>L2 · 确认弹层（新 showConfirmSheet，迁移 30 处 AlertDialog）</h5>
+      <div class="l2c glass shadow">
+        <div class="ico danger"><svg class="ic"><use href="#i-trash"/></svg></div>
+        <b>删掉这笔账？</b>
+        <p>将删除 1 笔账单（¥128.50），<br>此操作无法恢复。</p>
+        <div class="btns"><span class="bn n">取消</span><span class="bn d">删除</span></div>
+      </div>
+    </div>
+    <div class="lcard"><h5>L3 · 操作抽屉（showDraggableSheet 既有 + 新图标）</h5>
+      <div class="l3row"><svg class="ic"><use href="#i-edit"/></svg><span>编辑行程<small>改名 · 改日期 · 换封面</small></span></div>
+      <div class="l3row"><svg class="ic"><use href="#i-share"/></svg><span>分享 / 导出<small>生成链接 · 导出 .tat</small></span></div>
+      <div class="l3row dgr" style="border-top:1px solid #F0F3EF"><svg class="ic"><use href="#i-trash"/></svg><span>删除行程<small>强确认 · 不可恢复</small></span></div>
+    </div>
+    <div class="lcard"><h5>L4 · 权限引导（新增两段式，拒绝后页内降级提示条）</h5>
+      <div class="perm">
+        <div class="ico"><svg class="ic"><use href="#i-photo"/></svg></div>
+        <div><b>需要相机权限</b><p>用于扫描旅伴邀请二维码加入行程，照片与数据不会上传。</p></div>
+        <span class="go">去开启</span>
+      </div>
+    </div>
+  </div>
+  <div class="notes" style="max-width:1020px;margin-top:20px">
+    <div class="note"><b class="n">·</b>危险确认全量覆盖：凡物理删/不可逆（删账单/删团/删行程/解除关联/覆盖整程）一律 L2 危险态，正文必须含影响数量（V2.7.2 强确认口径一致）；现状 30 处 <code>AlertDialog</code> 渐进迁移，迁移节奏避让 S1–S13 占用文件。<span class="tag eff">效</span><span class="tag a11y">A</span></div>
+  </div>
+</section>
+
+<!-- ═══════ 场景 M ═══════ -->
+<section id="m">
+  <div class="sec-head"><h2>场景 M · 旅伴空间详情</h2><small>第二批 §八 · 动态流时间线化</small><span class="pill-ver vhold">仅登记 · V2.8.3 候选（不施工）</span></div>
+  <div class="stage">
+    <div class="phone"><div class="screen">
+      <div class="status">9:41</div><div class="status r">▮▮ ᯤ 87%</div><div class="notch"></div>
+      <div class="sph">
+        <div class="row1">
+          <svg class="ic" style="width:20px;height:20px;transform:rotate(180deg)"><use href="#i-arrow"/></svg>
+          <div class="avstack"><span class="ava" style="background:#5B8DEF">舟</span><span class="ava" style="background:#E8833C">凯</span><span class="ava" style="background:#2E7D5B">舟</span><span class="ava" style="background:#9A6FB8">+2</span></div>
+        </div>
+        <h1>冲绳五日 · 共同行</h1>
+        <div class="badges">
+          <span><svg class="ic"><use href="#i-compass"/></svg>行程</span>
+          <span><svg class="ic"><use href="#i-wallet"/></svg>账本</span>
+          <span class="nfr"><svg class="ic"><use href="#i-bell"/></svg>新动态 3</span>
+          <span><svg class="ic"><use href="#i-crown"/></svg>我是主理人</span>
+        </div>
+      </div>
+      <div class="stabs"><span>行程</span><span>账本</span><span>成员</span><span class="on">动态</span></div>
+      <div class="feed">
+        <div class="lnv"></div>
+        <div class="fitem">
+          <div class="nd" style="background:#2E7D5B"><svg class="ic"><use href="#i-compass"/></svg></div>
+          <div><b>阿凯 新增了安排</b><div class="fx">「万座毛日落观景」排入 D4 · 17:30</div><div class="tm">12 分钟前</div></div>
+        </div>
+        <div class="fitem">
+          <div class="nd" style="background:#E8833C"><svg class="ic"><use href="#i-wallet"/></svg></div>
+          <div><b>阿凯 记了一笔</b><div class="fx">晚餐 · 暖暮拉面 ¥96.00 · 微信</div><div class="tm">1 小时前</div></div>
+        </div>
+        <div class="fitem">
+          <div class="nd" style="background:#9A6FB8"><svg class="ic"><use href="#i-user"/></svg></div>
+          <div><b>小棠 加入了空间</b><div class="fx">经邀请链接加入 · 角色编辑者</div><div class="tm">昨天 21:40</div></div>
+        </div>
+      </div>
+      <span class="mark" style="top:158px;right:26px">1</span>
+      <span class="mark" style="top:340px;left:24px">2</span>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b class="n">1</b>Hero 徽章 emoji（🧳💰👤📦）→ 新图标胶囊；「新动态」红色胶囊保留未读语义；角色徽标图形化（crown/pen/eye）。<span class="tag beauty">美</span></div>
+      <div class="note"><b class="n">2</b>动态流 → <strong>时间线</strong>：左侧垂直线 + entityKind 着色节点（行程 mint / 账本 amber / 成员 purple），协作历史一眼回溯。<span class="tag beauty">美</span></div>
+      <div class="note">⏸ 4 Tab 结构与账本子 Tab（账单/成员/统计/结算）保留现状；viewer 只读口径（隐藏不置灰）不受影响；本稿为方向参考，施工需专项立项。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ 场景 N ═══════ -->
+<section id="n">
+  <div class="sec-head"><h2>场景 N · 图标体系：去 emoji 化</h2><small>第二批 §〇 · 全局性最高优先</small><span class="pill-ver v281">V2.8.1 · S4 图标基建</span><span class="pill-ver v282">V2.8.2 · S1 全量换装</span></div>
+  <div class="vs-bar">
+    <span class="old">🤖 📋 🧳 💰 👤</span><span class="arr">→</span>
+    <span class="new"><svg class="ic"><use href="#i-boat"/></svg></span>
+    <p><b>底栏 Tab / 分类图标 / 开屏 Logo / 徽章胶囊 → 统一线性图标</b>。24 网格 · 2px 圆头描边 · 继承 currentColor（随主题/选中态变色）；「舟」为品牌主标识（替代开屏 ✈️）。行程封面 emoji 属内容层，短中期保留。</p>
+  </div>
+  <div class="tab-demo glass shadow">
+    <span class="on"><span class="ib"><svg class="ic"><use href="#i-spark"/></svg></span>AI</span>
+    <span><span class="ib"><svg class="ic"><use href="#i-clip"/></svg></span>清单</span>
+    <span><span class="ib"><svg class="ic"><use href="#i-compass"/></svg></span>行程</span>
+    <span><span class="ib"><svg class="ic"><use href="#i-wallet"/></svg></span>账本</span>
+    <span><span class="ib"><svg class="ic"><use href="#i-user"/></svg></span>我的</span>
+  </div>
+  <div style="height:20px"></div>
+  <div class="icon-wall">
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-food"/></svg></div><b>餐饮</b><small>分类</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-car"/></svg></div><b>交通</b><small>分类</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-bed"/></svg></div><b>住宿</b><small>分类 · 内置🔒</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-ticket"/></svg></div><b>门票</b><small>分类</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-bag"/></svg></div><b>购物</b><small>分类</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-cup"/></svg></div><b>饮品</b><small>分类</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-med"/></svg></div><b>医疗</b><small>分类</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-search"/></svg></div><b>搜索</b><small>功能</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-bell"/></svg></div><b>预警</b><small>功能</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-scale"/></svg></div><b>结算</b><small>功能</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-bolt"/></svg></div><b>快速记</b><small>功能</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-book"/></svg></div><b>攻略</b><small>互链角标</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-sync"/></svg></div><b>同步</b><small>功能</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-bookmark"/></svg></div><b>先想去</b><small>S5 动词</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-shield"/></svg></div><b>锦囊</b><small>行前准备</small></div>
+    <div class="icell"><div class="ib"><svg class="ic"><use href="#i-map"/></svg></div><b>地图</b><small>快捷</small></div>
+  </div>
+  <div class="notes" style="max-width:1020px;margin-top:22px">
+    <div class="note"><b class="n">·</b><strong>落地路线</strong>：SVG 源 → iconfont 工具生成 <code>JieZhouIcons.ttf</code> → pubspec 声明 → <code>lib/theme/app_icons.dart</code> 常量表（<code>IconData(0xe900, fontFamily:'JieZhouIcons')</code>）。iconfont 为构建期工具链，不进 pubspec 依赖树，不触碰 V2.7.2「零新增依赖」红线。<span class="ref">替换范围矩阵见文档 §0.3：底栏/分类/开屏 S13 后并入；trip_detail 内天气图标等 S13 后；封面 emoji 字段 V2.7.3</span></div>
+    <div class="note"><b class="n">·</b><strong>分层原则</strong>：功能图标岗位 emoji 全部退场；内容岗位保留（行程封面数据、用户备注表情、emoji 头像）——emoji 是内容特色，不是 UI 语言。</div>
+  </div>
+</section>
+
+<footer>
+  芥舟 · UI 重设计施工预览 · 第二批 —— 配套文档《docs/UI-UX重设计-第二批页面.md》，令牌体系与第一批《docs/ui-preview/index.html》（场景 A–E）一致。<br>
+  ⏸ 场景 H（页签容器）施工归 V2.7.2；场景 M 需专项立项；图标体系按文档 §0.3 矩阵分批替换。
+</footer>
+</body>
+</html>

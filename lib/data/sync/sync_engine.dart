@@ -245,6 +245,7 @@ class SyncEngine {
         case 'inbox_items':
         case 'expenses':
         case 'settlements':
+        case 'sub_budgets': // V2.8.1：分类子预算随团上云开关（团级账本域）
           final gid = row['group_id'];
           return gid is String ? engine.groupSyncEnabled(gid) : true;
         default:
@@ -400,6 +401,8 @@ class SyncEngine {
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final entity in const [
       'groups', 'members', 'funds', 'inbox_items', 'expenses', 'settlements',
+      // V2.8.1：分类子预算随团域一并引导上传
+      'sub_budgets',
       'trips', 'trip_items', 'wishlist_items', 'categories',
       // 空间：只有「我创建的」会上行（space_members / space_events 由 RPC 维护，
       // 不入引导全量上传，避免成员端把必被 RLS 拒绝的行塞进 outbox）
@@ -468,7 +471,8 @@ class SyncEngine {
         await syncNow(manual: true);
       } else {
         await outbox.enqueue('groups', id, 'upsert', now);
-        for (final table in const ['members', 'funds', 'inbox_items', 'expenses', 'settlements']) {
+        // V2.8.1：团开关重开时分类子预算全量重传
+        for (final table in const ['members', 'funds', 'inbox_items', 'expenses', 'settlements', 'sub_budgets']) {
           final rows = await _rowsOfGroup(table, id);
           for (final r in rows) {
             await outbox.enqueue(table, r, 'upsert', now);
@@ -497,6 +501,9 @@ class SyncEngine {
       case 'settlements':
         return (await (db.select(db.settlements)..where((s) => s.groupId.equals(groupId))).get())
             .map((s) => s.id).toList();
+      case 'sub_budgets': // V2.8.1：分类子预算按团收集行 id
+        return (await (db.select(db.subBudgets)..where((b) => b.groupId.equals(groupId))).get())
+            .map((b) => b.id).toList();
     }
     return const [];
   }
@@ -513,7 +520,8 @@ class SyncEngine {
     } else {
       for (final table in const [
         'members_sync', 'funds_sync', 'inbox_items_sync',
-        'expenses_sync', 'settlements_sync', 'groups_sync',
+        'expenses_sync', 'settlements_sync', 'sub_budgets_sync', // V2.8.1
+        'groups_sync',
       ]) {
         await transport.deleteWhere(table, {'group_id': id});
       }
@@ -524,6 +532,7 @@ class SyncEngine {
       await outbox.clearEntity('inbox_items');
       await outbox.clearEntity('expenses');
       await outbox.clearEntity('settlements');
+      await outbox.clearEntity('sub_budgets'); // V2.8.1
     }
   }
 

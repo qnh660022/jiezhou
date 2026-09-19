@@ -8,6 +8,7 @@ import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../lan_sync_service.dart';
 import '../ledger_providers.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 局域网离线协作记账：同 Wi-Fi 口令快照同步。
 /// 「发起」= 主机（出示口令+IP，等对方连接）；「加入」= 输入口令连接，可双向收发。
@@ -54,9 +55,7 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    showAppSnackBar(context, msg);
   }
 
   Future<void> _startHost() async {
@@ -468,9 +467,7 @@ class _InfoCard extends StatelessWidget {
               icon: const Icon(Icons.copy_rounded, size: 18),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: code));
-                ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(const SnackBar(content: Text('口令已复制')));
+                showAppSnackBar(context, '口令已复制');
               },
             ),
           ]),

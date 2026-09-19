@@ -41,6 +41,9 @@ class SyncDbAccessor {
       case 'inbox_items':
         final rows = await (db.select(db.inboxItems)..where((t) => t.id.equals(rowId))).get();
         return rows.isEmpty ? null : SyncCodec.inboxItemToCloud(rows.first);
+      case 'sub_budgets':
+        final rows = await (db.select(db.subBudgets)..where((t) => t.id.equals(rowId))).get();
+        return rows.isEmpty ? null : SyncCodec.subBudgetToCloud(rows.first);
       case 'expenses':
         final rows = await (db.select(db.expenses)..where((t) => t.id.equals(rowId))).get();
         return rows.isEmpty ? null : SyncCodec.expenseToCloud(rows.first);

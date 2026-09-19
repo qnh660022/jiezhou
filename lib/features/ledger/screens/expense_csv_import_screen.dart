@@ -7,6 +7,7 @@ import '../../../core/date_utils.dart';
 import '../../../core/money.dart' show parseMoney;
 import '../../../data/providers.dart';
 import '../../../domain/csv_parser.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../theme/tokens.dart';
@@ -41,9 +42,7 @@ class _ExpenseCsvImportScreenState extends ConsumerState<ExpenseCsvImportScreen>
 
   void _toast(String m) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(m)));
+    showAppSnackBar(context, m);
   }
 
   Future<void> _pickFile() async {

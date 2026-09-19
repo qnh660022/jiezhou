@@ -60,7 +60,8 @@ void main() {
     tearDown(() async => db.close());
 
     test('3. 迁移矩阵回归：全新 v6 库默认值与表齐备', () async {
-      expect(db.schemaVersion, 6);
+      // V2.8.1：schemaVersion 升到 7（新增 sub_budgets 表），钉死断言随之更新。
+      expect(db.schemaVersion, 7);
       await db.into(db.trips).insert(TripsCompanion.insert(
             id: 't1',
             name: '行',

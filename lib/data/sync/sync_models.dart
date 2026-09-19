@@ -22,6 +22,8 @@ enum SyncEntity {
   inboxItems('inbox_items_sync'),
   expenses('expenses_sync'),
   settlements('settlements_sync'),
+  // V2.8.1：分类子预算（团级账本域，随团开关；非协作镜像，无 Shared 变体）
+  subBudgets('sub_budgets_sync'),
   // V2.7.2：想去池（随行程开关，父实体 trips/tripItems 先行）
   wishlistItems('wishlist_items_sync'),
   categories('categories_sync');
@@ -46,6 +48,9 @@ enum SyncEntity {
     SyncEntity.inboxItems,
     SyncEntity.expenses,
     SyncEntity.settlements,
+    // V2.8.1：分类子预算属团级账本域，拉取序放团域尾部（settlements 之后、
+    // trips 之前）：行内 group_id 引用团，需在团/成员之后落库。
+    SyncEntity.subBudgets,
     SyncEntity.trips,
     SyncEntity.tripItems,
     // V2.7.2：想去池在行程项之后拉（行内 trip_id 引用行程，LWW 无外键强约束，
@@ -82,6 +87,9 @@ enum SyncEntity {
         // V2.7.2：枚举名是 `wishlistItems`，本地表名/全仓写路径键是
         // `wishlist_items`——不映射将复现 H10 同款静默丢数据。
         SyncEntity.wishlistItems => 'wishlist_items',
+        // V2.8.1：枚举名是 `subBudgets`，本地表名/全仓写路径键是
+        // `sub_budgets`——不映射将复现 H10 同款静默丢数据。
+        SyncEntity.subBudgets => 'sub_budgets',
         _ => name,
       };
 

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 /// 「芥舟」设计令牌：唯一颜色/圆角/间距/字体来源，禁止业务代码硬编码色值。
@@ -386,6 +387,11 @@ ThemeData buildAppTheme(String themeKey, {ColorScheme? overrideScheme}) {
     scaffoldBackgroundColor: scheme.surface,
     splashFactory: InkSparkle.splashFactory,
     highlightColor: scheme.primary.withValues(alpha: 0.08),
+    // V2.8.1 S2：页面转场 —— iOS 右滑返回（Cupertino），Android 缩放（Zoom）。
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.android: ZoomPageTransitionsBuilder(),
+    }),
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
@@ -860,3 +866,29 @@ ThemeData buildAppThemeFor(
     ),
   );
 }
+
+/// V2.8.1 玻璃令牌：全 App 毛玻璃唯一参数源（S2）。
+/// 结构总装见 `lib/shared/widgets/glass_surface.dart`；业务页面不得直接读取
+/// sigma/alpha 自行拼装 BackdropFilter（唯一玻璃实现收口）。
+class GlassTokens {
+  /// 背景模糊强度（标准档）
+  static const double sigma = 28;
+
+  /// 玻璃 tint 不透明度（浅/深色分档：深色更低以透出光感）
+  static const double tintAlphaLight = 0.52;
+  static const double tintAlphaDark = 0.42;
+
+  /// 顶边内高光强度（受光边）
+  static const double highlightAlphaLight = 0.65;
+  static const double highlightAlphaDark = 0.22;
+
+  /// 全周描边亮线
+  static const double edgeAlphaLight = 0.28;
+  static const double edgeAlphaDark = 0.07;
+
+  /// 背景饱和度补偿倍率（blur + saturate 组合）
+  static const double saturation = 1.35;
+}
+
+/// 玻璃档位：决定阴影强度与 tint 叠加（S2）。
+enum GlassLevel { navBar, sheet, floatingCard, overlay }

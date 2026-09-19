@@ -16794,6 +16794,420 @@ class SharedWishlistItemsCompanion extends UpdateCompanion<SharedWishlistItem> {
   }
 }
 
+class $SubBudgetsTable extends SubBudgets
+    with TableInfo<$SubBudgetsTable, SubBudget> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SubBudgetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _groupIdMeta = const VerificationMeta(
+    'groupId',
+  );
+  @override
+  late final GeneratedColumn<String> groupId = GeneratedColumn<String>(
+    'group_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES "groups" (id)',
+    ),
+  );
+  static const VerificationMeta _categoryKeyMeta = const VerificationMeta(
+    'categoryKey',
+  );
+  @override
+  late final GeneratedColumn<String> categoryKey = GeneratedColumn<String>(
+    'category_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: Constant(""),
+  );
+  static const VerificationMeta _amountMeta = const VerificationMeta('amount');
+  @override
+  late final GeneratedColumn<int> amount = GeneratedColumn<int>(
+    'amount',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    groupId,
+    categoryKey,
+    amount,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sub_budgets';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SubBudget> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('group_id')) {
+      context.handle(
+        _groupIdMeta,
+        groupId.isAcceptableOrUnknown(data['group_id']!, _groupIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_groupIdMeta);
+    }
+    if (data.containsKey('category_key')) {
+      context.handle(
+        _categoryKeyMeta,
+        categoryKey.isAcceptableOrUnknown(
+          data['category_key']!,
+          _categoryKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('amount')) {
+      context.handle(
+        _amountMeta,
+        amount.isAcceptableOrUnknown(data['amount']!, _amountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_amountMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SubBudget map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SubBudget(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      groupId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}group_id'],
+      )!,
+      categoryKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category_key'],
+      )!,
+      amount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}amount'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SubBudgetsTable createAlias(String alias) {
+    return $SubBudgetsTable(attachedDatabase, alias);
+  }
+}
+
+class SubBudget extends DataClass implements Insertable<SubBudget> {
+  final String id;
+  final String groupId;
+  final String categoryKey;
+  final int amount;
+  final int createdAt;
+  final int updatedAt;
+  const SubBudget({
+    required this.id,
+    required this.groupId,
+    required this.categoryKey,
+    required this.amount,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['group_id'] = Variable<String>(groupId);
+    map['category_key'] = Variable<String>(categoryKey);
+    map['amount'] = Variable<int>(amount);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SubBudgetsCompanion toCompanion(bool nullToAbsent) {
+    return SubBudgetsCompanion(
+      id: Value(id),
+      groupId: Value(groupId),
+      categoryKey: Value(categoryKey),
+      amount: Value(amount),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SubBudget.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SubBudget(
+      id: serializer.fromJson<String>(json['id']),
+      groupId: serializer.fromJson<String>(json['groupId']),
+      categoryKey: serializer.fromJson<String>(json['categoryKey']),
+      amount: serializer.fromJson<int>(json['amount']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'groupId': serializer.toJson<String>(groupId),
+      'categoryKey': serializer.toJson<String>(categoryKey),
+      'amount': serializer.toJson<int>(amount),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SubBudget copyWith({
+    String? id,
+    String? groupId,
+    String? categoryKey,
+    int? amount,
+    int? createdAt,
+    int? updatedAt,
+  }) => SubBudget(
+    id: id ?? this.id,
+    groupId: groupId ?? this.groupId,
+    categoryKey: categoryKey ?? this.categoryKey,
+    amount: amount ?? this.amount,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SubBudget copyWithCompanion(SubBudgetsCompanion data) {
+    return SubBudget(
+      id: data.id.present ? data.id.value : this.id,
+      groupId: data.groupId.present ? data.groupId.value : this.groupId,
+      categoryKey: data.categoryKey.present
+          ? data.categoryKey.value
+          : this.categoryKey,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SubBudget(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('categoryKey: $categoryKey, ')
+          ..write('amount: $amount, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, groupId, categoryKey, amount, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SubBudget &&
+          other.id == this.id &&
+          other.groupId == this.groupId &&
+          other.categoryKey == this.categoryKey &&
+          other.amount == this.amount &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SubBudgetsCompanion extends UpdateCompanion<SubBudget> {
+  final Value<String> id;
+  final Value<String> groupId;
+  final Value<String> categoryKey;
+  final Value<int> amount;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const SubBudgetsCompanion({
+    this.id = const Value.absent(),
+    this.groupId = const Value.absent(),
+    this.categoryKey = const Value.absent(),
+    this.amount = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SubBudgetsCompanion.insert({
+    required String id,
+    required String groupId,
+    this.categoryKey = const Value.absent(),
+    required int amount,
+    required int createdAt,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       groupId = Value(groupId),
+       amount = Value(amount),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<SubBudget> custom({
+    Expression<String>? id,
+    Expression<String>? groupId,
+    Expression<String>? categoryKey,
+    Expression<int>? amount,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (groupId != null) 'group_id': groupId,
+      if (categoryKey != null) 'category_key': categoryKey,
+      if (amount != null) 'amount': amount,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SubBudgetsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? groupId,
+    Value<String>? categoryKey,
+    Value<int>? amount,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SubBudgetsCompanion(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      categoryKey: categoryKey ?? this.categoryKey,
+      amount: amount ?? this.amount,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (groupId.present) {
+      map['group_id'] = Variable<String>(groupId.value);
+    }
+    if (categoryKey.present) {
+      map['category_key'] = Variable<String>(categoryKey.value);
+    }
+    if (amount.present) {
+      map['amount'] = Variable<int>(amount.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SubBudgetsCompanion(')
+          ..write('id: $id, ')
+          ..write('groupId: $groupId, ')
+          ..write('categoryKey: $categoryKey, ')
+          ..write('amount: $amount, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -16829,6 +17243,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $WishlistItemsTable wishlistItems = $WishlistItemsTable(this);
   late final $SharedWishlistItemsTable sharedWishlistItems =
       $SharedWishlistItemsTable(this);
+  late final $SubBudgetsTable subBudgets = $SubBudgetsTable(this);
   late final TripsDao tripsDao = TripsDao(this as AppDatabase);
   late final GroupsDao groupsDao = GroupsDao(this as AppDatabase);
   late final ExpensesDao expensesDao = ExpensesDao(this as AppDatabase);
@@ -16867,6 +17282,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     conflictRecords,
     wishlistItems,
     sharedWishlistItems,
+    subBudgets,
   ];
 }
 
@@ -16989,6 +17405,24 @@ final class $$GroupsTableReferences
     ).filter((f) => f.groupId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_inboxItemsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$SubBudgetsTable, List<SubBudget>>
+  _subBudgetsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.subBudgets,
+    aliasName: 'groups__id__sub_budgets__group_id',
+  );
+
+  $$SubBudgetsTableProcessedTableManager get subBudgetsRefs {
+    final manager = $$SubBudgetsTableTableManager(
+      $_db,
+      $_db.subBudgets,
+    ).filter((f) => f.groupId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_subBudgetsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -17170,6 +17604,31 @@ class $$GroupsTableFilterComposer
           }) => $$InboxItemsTableFilterComposer(
             $db: $db,
             $table: $db.inboxItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> subBudgetsRefs(
+    Expression<bool> Function($$SubBudgetsTableFilterComposer f) f,
+  ) {
+    final $$SubBudgetsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.subBudgets,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SubBudgetsTableFilterComposer(
+            $db: $db,
+            $table: $db.subBudgets,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -17409,6 +17868,31 @@ class $$GroupsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> subBudgetsRefs<T extends Object>(
+    Expression<T> Function($$SubBudgetsTableAnnotationComposer a) f,
+  ) {
+    final $$SubBudgetsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.subBudgets,
+      getReferencedColumn: (t) => t.groupId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SubBudgetsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.subBudgets,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$GroupsTableTableManager
@@ -17430,6 +17914,7 @@ class $$GroupsTableTableManager
             bool settlementsRefs,
             bool fundsRefs,
             bool inboxItemsRefs,
+            bool subBudgetsRefs,
           })
         > {
   $$GroupsTableTableManager(_$AppDatabase db, $GroupsTable table)
@@ -17510,6 +17995,7 @@ class $$GroupsTableTableManager
                 settlementsRefs = false,
                 fundsRefs = false,
                 inboxItemsRefs = false,
+                subBudgetsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -17519,6 +18005,7 @@ class $$GroupsTableTableManager
                     if (settlementsRefs) db.settlements,
                     if (fundsRefs) db.funds,
                     if (inboxItemsRefs) db.inboxItems,
+                    if (subBudgetsRefs) db.subBudgets,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -17612,6 +18099,27 @@ class $$GroupsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (subBudgetsRefs)
+                        await $_getPrefetchedData<
+                          Group,
+                          $GroupsTable,
+                          SubBudget
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GroupsTableReferences
+                              ._subBudgetsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GroupsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).subBudgetsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.groupId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -17638,6 +18146,7 @@ typedef $$GroupsTableProcessedTableManager =
         bool settlementsRefs,
         bool fundsRefs,
         bool inboxItemsRefs,
+        bool subBudgetsRefs,
       })
     >;
 typedef $$MembersTableCreateCompanionBuilder = MembersCompanion Function({
@@ -26917,6 +27426,340 @@ typedef $$SharedWishlistItemsTableProcessedTableManager =
       SharedWishlistItem,
       PrefetchHooks Function()
     >;
+typedef $$SubBudgetsTableCreateCompanionBuilder = SubBudgetsCompanion Function({
+  required String id,
+  required String groupId,
+  Value<String> categoryKey,
+  required int amount,
+  required int createdAt,
+  required int updatedAt,
+  Value<int> rowid,
+});
+typedef $$SubBudgetsTableUpdateCompanionBuilder = SubBudgetsCompanion Function({
+  Value<String> id,
+  Value<String> groupId,
+  Value<String> categoryKey,
+  Value<int> amount,
+  Value<int> createdAt,
+  Value<int> updatedAt,
+  Value<int> rowid,
+});
+
+final class $$SubBudgetsTableReferences
+    extends BaseReferences<_$AppDatabase, $SubBudgetsTable, SubBudget> {
+  $$SubBudgetsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GroupsTable _groupIdTable(_$AppDatabase db) =>
+      db.groups.createAlias('sub_budgets__group_id__groups__id');
+
+  $$GroupsTableProcessedTableManager get groupId {
+    final $_column = $_itemColumn<String>('group_id')!;
+
+    final manager = $$GroupsTableTableManager(
+      $_db,
+      $_db.groups,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_groupIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$SubBudgetsTableFilterComposer
+    extends Composer<_$AppDatabase, $SubBudgetsTable> {
+  $$SubBudgetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get categoryKey => $composableBuilder(
+    column: $table.categoryKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get amount => $composableBuilder(
+    column: $table.amount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$GroupsTableFilterComposer get groupId {
+    final $$GroupsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableFilterComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SubBudgetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SubBudgetsTable> {
+  $$SubBudgetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get categoryKey => $composableBuilder(
+    column: $table.categoryKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get amount => $composableBuilder(
+    column: $table.amount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$GroupsTableOrderingComposer get groupId {
+    final $$GroupsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableOrderingComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SubBudgetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SubBudgetsTable> {
+  $$SubBudgetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get categoryKey => $composableBuilder(
+    column: $table.categoryKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get amount =>
+      $composableBuilder(column: $table.amount, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$GroupsTableAnnotationComposer get groupId {
+    final $$GroupsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.groupId,
+      referencedTable: $db.groups,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GroupsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.groups,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$SubBudgetsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SubBudgetsTable,
+          SubBudget,
+          $$SubBudgetsTableFilterComposer,
+          $$SubBudgetsTableOrderingComposer,
+          $$SubBudgetsTableAnnotationComposer,
+          $$SubBudgetsTableCreateCompanionBuilder,
+          $$SubBudgetsTableUpdateCompanionBuilder,
+          (SubBudget, $$SubBudgetsTableReferences),
+          SubBudget,
+          PrefetchHooks Function({bool groupId})
+        > {
+  $$SubBudgetsTableTableManager(_$AppDatabase db, $SubBudgetsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SubBudgetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SubBudgetsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SubBudgetsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> groupId = const Value.absent(),
+                Value<String> categoryKey = const Value.absent(),
+                Value<int> amount = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SubBudgetsCompanion(
+                id: id,
+                groupId: groupId,
+                categoryKey: categoryKey,
+                amount: amount,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String groupId,
+                Value<String> categoryKey = const Value.absent(),
+                required int amount,
+                required int createdAt,
+                required int updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SubBudgetsCompanion.insert(
+                id: id,
+                groupId: groupId,
+                categoryKey: categoryKey,
+                amount: amount,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SubBudgetsTable, SubBudget>(table),
+                  $$SubBudgetsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({groupId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (groupId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.groupId,
+                        referencedTable: $$SubBudgetsTableReferences
+                            ._groupIdTable(db),
+                        referencedColumn: $$SubBudgetsTableReferences
+                            ._groupIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$SubBudgetsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SubBudgetsTable,
+      SubBudget,
+      $$SubBudgetsTableFilterComposer,
+      $$SubBudgetsTableOrderingComposer,
+      $$SubBudgetsTableAnnotationComposer,
+      $$SubBudgetsTableCreateCompanionBuilder,
+      $$SubBudgetsTableUpdateCompanionBuilder,
+      (SubBudget, $$SubBudgetsTableReferences),
+      SubBudget,
+      PrefetchHooks Function({bool groupId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -26973,4 +27816,6 @@ class $AppDatabaseManager {
       $$WishlistItemsTableTableManager(_db, _db.wishlistItems);
   $$SharedWishlistItemsTableTableManager get sharedWishlistItems =>
       $$SharedWishlistItemsTableTableManager(_db, _db.sharedWishlistItems);
+  $$SubBudgetsTableTableManager get subBudgets =>
+      $$SubBudgetsTableTableManager(_db, _db.subBudgets);
 }

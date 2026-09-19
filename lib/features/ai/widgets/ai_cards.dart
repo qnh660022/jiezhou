@@ -787,7 +787,7 @@ class _TravelPackCardState extends ConsumerState<TravelPackCard> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(children: [
-              const Icon(Icons.luggage_rounded, size: 18, color: _primary),
+              Icon(Icons.luggage_rounded, size: 18, color: scheme.primary),
               const SizedBox(width: Spacing.sm),
               const Text('一键旅行包',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: AppFontSizes.body)),
@@ -844,7 +844,7 @@ class _TravelPackCardState extends ConsumerState<TravelPackCard> {
     );
   }
 
-  static const Color _primary = Color(0xFF2E7D5B);
+  // V2.8.1 S1：硬编码色值已收口到 ColorScheme.primary（架构基线 2.2）。
 
   Widget _buildButton(ColorScheme scheme) {
     return Row(

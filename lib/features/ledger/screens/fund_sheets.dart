@@ -18,6 +18,7 @@ import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
 import '../widgets/member_avatar.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 记入金：选缴款人与各自金额（默认按计划金额全员均分）。
 /// 返回 true 表示已写入。
@@ -110,13 +111,11 @@ Future<bool> showFundContributionSheet(
                         await addFundContribution(ref,
                             fundId: fund.id, contributions: contributions);
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('已记入金 ✅')));
+                          showAppSnackBar(context, '已记入金 ✅');
                         }
                       } catch (e) {
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('记入金失败：${e.toString()}')));
+                          showAppSnackBar(context, '记入金失败：${e.toString()}', tone: SnackTone.destructive);
                         }
                       }
                     },
@@ -313,13 +312,11 @@ Future<bool> showFundExpenseSheet(
                           portions: portions,
                         );
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('已记出金 ✅')));
+                          showAppSnackBar(context, '已记出金 ✅');
                         }
                       } catch (e) {
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('记出金失败：${e.toString()}')));
+                          showAppSnackBar(context, '记出金失败：${e.toString()}', tone: SnackTone.destructive);
                         }
                       }
                     },

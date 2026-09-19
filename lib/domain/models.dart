@@ -163,6 +163,64 @@ class WishlistRecord {
   int get hashCode => id.hashCode;
 }
 
+/// 分类子预算（SubBudgets 表镜像，V2.8.1 S8 全量同步登记）。
+///
+/// 团级实体（与公款池同级），独立于总预算口径（groups.budget_cents）；
+/// 金额 int 分，LWW 以 updatedAt 为准。
+class SubBudgetRecord {
+  const SubBudgetRecord({
+    required this.id,
+    required this.groupId,
+    this.categoryKey = '',
+    required this.amountCents,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String groupId;
+
+  /// 内置分类 key 或自定义分类 id；空串兜底按「其他」处理
+  final String categoryKey;
+
+  /// 子预算金额（分，恒为正整数）
+  final int amountCents;
+  final int createdAt;
+  final int updatedAt;
+
+  SubBudgetRecord copyWith({
+    String? categoryKey,
+    int? amountCents,
+    int? updatedAt,
+  }) =>
+      SubBudgetRecord(
+        id: id,
+        groupId: groupId,
+        categoryKey: categoryKey ?? this.categoryKey,
+        amountCents: amountCents ?? this.amountCents,
+        createdAt: createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SubBudgetRecord &&
+          other.id == id &&
+          other.groupId == groupId &&
+          other.categoryKey == categoryKey &&
+          other.amountCents == amountCents &&
+          other.createdAt == createdAt &&
+          other.updatedAt == updatedAt;
+
+  @override
+  int get hashCode => Object.hash(id, groupId, categoryKey, amountCents, createdAt, updatedAt);
+
+  @override
+  String toString() =>
+      'SubBudgetRecord($id, $groupId, $categoryKey, amountCents=$amountCents)';
+}
+
 const Object _unset = Object();
 
 /// 账单（Expenses 表镜像）

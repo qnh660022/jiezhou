@@ -34,6 +34,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../../../theme/tokens.dart';
 import '../../desktop/sync/sync_code.dart';
 import '../ledger_providers.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 送进解码 isolate 的帧数据（亮度平面 + 宽高）。
 class _FrameJob {
@@ -122,9 +123,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
 
   void _toast(String m) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(m)));
+    showAppSnackBar(context, m);
   }
 
   // ---------------------------------------------------------------------------

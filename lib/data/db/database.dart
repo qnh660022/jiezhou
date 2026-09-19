@@ -1,4 +1,4 @@
-/// AppDatabase：Drift 单例，schemaVersion=6（V2.7.2 想去池 2 表 + TripItems
+/// AppDatabase：Drift 单例，schemaVersion=7（V2.8.1 分类子预算表；V2.7.2 想去池 2 表 + TripItems
 /// guideRef/backupOf + Trips.pace）。
 library;
 
@@ -29,6 +29,8 @@ part 'database.g.dart';
   Funds, InboxItems, AuditLogs, ConflictRecords,
   // V2.7.2：想去池（行程内候选区）+ 受邀端镜像
   WishlistItems, SharedWishlistItems,
+  // V2.8.1：分类子预算（团级，用户自选分类，上限 5）
+  SubBudgets,
 ], daos: [
   TripsDao, GroupsDao, ExpensesDao,
   ChecklistDao, AlbumDao, CategoriesDao,
@@ -38,7 +40,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? openDbConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -93,6 +95,10 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(trips, trips.pace);
             // 镜像表与业务表列同构：pace 需一并补齐（否则受邀端下行构造缺列）。
             await m.addColumn(sharedTrips, sharedTrips.pace);
+          }
+          // v6 -> v7：V2.8.1 分类子预算表（幂等可重复执行）。
+          if (from < 7) {
+            await m.createTable(subBudgets);
           }
         },
         beforeOpen: (details) async {

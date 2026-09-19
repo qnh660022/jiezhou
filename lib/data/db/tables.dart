@@ -438,3 +438,16 @@ class SharedWishlistItems extends Table {
   IntColumn get updatedAt => integer()();
   @override Set<Column> get primaryKey => {id};
 }
+
+/// V2.8.1 S8：分类子预算 —— 团级，用户自选分类（上限 5），金额 int 分。
+/// 独立口径：子预算不计入总预算（总预算仍为 groups.budget_cents 单一总额）。
+class SubBudgets extends Table {
+  TextColumn get id => text()();
+  TextColumn get groupId => text().references(Groups, #id)();
+  // 内置分类 key 或自定义分类 id；空串兜底按「其他」处理
+  TextColumn get categoryKey => text().withDefault(Constant(""))();
+  IntColumn get amount => integer()();
+  IntColumn get createdAt => integer()();
+  IntColumn get updatedAt => integer()();
+  @override Set<Column> get primaryKey => {id};
+}

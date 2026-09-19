@@ -10,6 +10,7 @@ import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../theme/tokens.dart';
 import '../../companions/space_actions.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 class InviteScreen extends ConsumerStatefulWidget {
   const InviteScreen({super.key, this.code});
@@ -49,10 +50,8 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       if (!mounted) return;
       if (err.isEmpty) {
         // 加入成功：重置空间域 + 行程域游标并全量拉取（引擎内部处理）
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(legacy
-                ? '已加入（旧共享账本已自动升级为旅伴空间）'
-                : copy('share.joinOk'))));
+        showAppSnackBar(context,
+            legacy ? '已加入（旧共享账本已自动升级为旅伴空间）' : copy('share.joinOk'));
         if (spaceId.isNotEmpty) {
           context.go('/companions/space/$spaceId');
         } else {

@@ -16,6 +16,7 @@ import '../ledger_providers.dart';
 import '../widgets/member_avatar.dart';
 import 'invite_companion_sheet.dart';
 import '../widgets/stagger_in.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 👤 成员管理：八色轮换头像、新增改名、被引用拦截。
 class MembersScreen extends ConsumerWidget {
@@ -155,8 +156,7 @@ class MembersScreen extends ConsumerWidget {
                   await addMember(ref, groupId, name);
                 } catch (_) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(const SnackBar(content: Text('添加失败，再试一次')));
+                    showAppSnackBar(context, '添加失败，再试一次', tone: SnackTone.destructive);
                   }
                 }
               },

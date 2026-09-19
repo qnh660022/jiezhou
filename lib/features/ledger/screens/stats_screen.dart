@@ -1,14 +1,18 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/date_utils.dart';
 import '../../../core/money.dart';
+import '../../../domain/insight_engine.dart';
 import '../../../domain/models.dart';
 import '../../../domain/stats_calculator.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
+import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/progress_ring.dart';
 import '../../../theme/tokens.dart';
@@ -19,7 +23,7 @@ import '../widgets/member_avatar.dart';
 
 /// 📊 消费统计：预算环 + 月度趋势 + 分类圆盘 + 支付方式 + 每日柱状 + 成员排行。
 ///
-/// S6：顶部时间范围筛选（全部/本月/上月/今年/自定义，**会话级不持久化**），
+/// S6：顶部时间范围筛选（全部/本月/上月/今年/自定义；V2.8.1 S1 起持久化），
 /// 作用于趋势卡、分类占比、每日合计、支付方式分组、成员榜；预算环保持全部口径。
 /// 时区口径：一律按 `dateEpochDay`（设备本地日），与今日驾驶舱的目的地时区不同。
 class StatsScreen extends ConsumerStatefulWidget {
@@ -33,6 +37,70 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
   StatsRange _range = StatsRange.all;
   int? _customFrom;
   int? _customTo;
+
+  /// V2.8.1 S1：时间范围持久化（进入恢复，离开即存）。
+  /// 键名按规格书：`app.stats.range`（all/month/lastMonth/year/custom）
+  /// + custom 起止 `app.stats.range.custom`（epochDay 逗号对）。
+  static const _rangePrefKey = 'app.stats.range';
+  static const _customRangePrefKey = 'app.stats.range.custom';
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreRange();
+  }
+
+  Future<void> _restoreRange() async {
+    final prefs = await SharedPreferences.getInstance();
+    final restored = _rangeFromPref(prefs.getString(_rangePrefKey));
+    if (restored == null || !mounted) return;
+    int? from;
+    int? to;
+    if (restored == StatsRange.custom) {
+      final pair = prefs.getString(_customRangePrefKey)?.split(',');
+      from = (pair != null && pair.length == 2) ? int.tryParse(pair[0]) : null;
+      to = (pair != null && pair.length == 2) ? int.tryParse(pair[1]) : null;
+      if (from == null || to == null) return; // 起止缺失不恢复 custom
+    }
+    setState(() {
+      _range = restored;
+      _customFrom = from;
+      _customTo = to;
+    });
+  }
+
+  static StatsRange? _rangeFromPref(String? raw) => switch (raw) {
+        'all' => StatsRange.all,
+        'month' => StatsRange.thisMonth,
+        'lastMonth' => StatsRange.lastMonth,
+        'year' => StatsRange.thisYear,
+        'custom' => StatsRange.custom,
+        _ => null,
+      };
+
+  static String _rangeToPref(StatsRange r) => switch (r) {
+        StatsRange.all => 'all',
+        StatsRange.thisMonth => 'month',
+        StatsRange.lastMonth => 'lastMonth',
+        StatsRange.thisYear => 'year',
+        StatsRange.custom => 'custom',
+      };
+
+  Future<void> _setRange(StatsRange r, {int? customFrom, int? customTo}) async {
+    setState(() {
+      _range = r;
+      if (customFrom != null) _customFrom = customFrom;
+      if (customTo != null) _customTo = customTo;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_rangePrefKey, _rangeToPref(r));
+    if (r == StatsRange.custom &&
+        _customFrom != null &&
+        _customTo != null) {
+      await prefs.setString(
+          _customRangePrefKey, '$_customFrom,$_customTo');
+    }
+  }
 
   DayRange get _bounds => statsRangeBounds(_range,
       customFromEpochDay: _customFrom, customToEpochDay: _customTo);
@@ -55,11 +123,9 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
       ),
     );
     if (picked == null) return;
-    setState(() {
-      _customFrom = dateToEpochDay(picked.start);
-      _customTo = dateToEpochDay(picked.end);
-      _range = StatsRange.custom;
-    });
+    _setRange(StatsRange.custom,
+        customFrom: dateToEpochDay(picked.start),
+        customTo: dateToEpochDay(picked.end));
   }
 
   @override
@@ -142,7 +208,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                   padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md,
                       Spacing.xl, Spacing.huge * 2 + Spacing.xxl),
                   children: [
-                    // S6：时间范围（会话级；不持久化）
+                    // V2.8.1 S1：时间范围（SharedPreferences 持久化，进入恢复）
                     SegmentedButton<StatsRange>(
                       showSelectedIcon: false,
                       style: const ButtonStyle(
@@ -162,7 +228,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                         if (s.first == StatsRange.custom) {
                           _pickCustomRange();
                         } else {
-                          setState(() => _range = s.first);
+                          _setRange(s.first);
                         }
                       },
                     ),
@@ -185,7 +251,24 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                     ),
                     // 趋势卡插入 index 1（预算环之后）
                     StaggeredSection(index: 1, child: _TrendLine(trend: trend)),
-                    StaggeredSection(index: 2, child: _CategoryPie(breakdown: breakdown)),
+                    StaggeredSection(
+                        index: 2,
+                        child: Column(
+                          children: [
+                            _InsightsCapsule(
+                              all: all,
+                              categoryName: (key) => categories
+                                      .where((c) => c.key == key)
+                                      .firstOrNull
+                                      ?.name ??
+                                  key,
+                            ),
+                            const SizedBox(height: Spacing.sm),
+                            _CategoryPie(
+                                breakdown: breakdown,
+                                range: (_range, _customFrom, _customTo)),
+                          ],
+                        )),
                     StaggeredSection(
                         index: 3, child: _PayMethodBreakdown(rows: payRows)),
                     StaggeredSection(index: 4, child: _DailyBars(daily: daily)),
@@ -533,13 +616,107 @@ class _BudgetHero extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
+// V2.8.1 S8：洞察语玻璃胶囊（仅环比；无则不渲染；点击下钻该分类）
+// ---------------------------------------------------------------------------
+
+class _InsightsCapsule extends ConsumerWidget {
+  const _InsightsCapsule({required this.all, required this.categoryName});
+
+  final List<ExpenseRecord> all;
+  final String Function(String key) categoryName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = DateTime.now();
+    final curStart = dateToEpochDay(DateTime(now.year, now.month, 1));
+    final prevStart = dateToEpochDay(
+        (now.month == 1) ? DateTime(now.year - 1, 12, 1) : DateTime(now.year, now.month - 1, 1));
+    final curMap = <String, int>{};
+    final prevMap = <String, int>{};
+    var curCount = 0;
+    for (final e in all) {
+      if (e.type == ExpenseType.prepay) continue;
+      final amt = e.amountCents.abs();
+      if (e.dateEpochDay >= curStart) {
+        curCount++;
+        curMap[e.categoryKey] = (curMap[e.categoryKey] ?? 0) + amt;
+      } else if (e.dateEpochDay >= prevStart) {
+        prevMap[e.categoryKey] = (prevMap[e.categoryKey] ?? 0) + amt;
+      }
+    }
+    final insights = monthlyInsights(
+      curMonth: curMap,
+      prevMonth: prevMap,
+      categoryName: categoryName,
+      curCount: curCount,
+    );
+    if (insights.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        for (final ins in insights)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Spacing.sm),
+            child: GlassSurface(
+              level: GlassLevel.overlay,
+              borderRadius: BorderRadius.circular(999),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  context.push('/expenses?category=' +
+                      Uri.encodeQueryComponent(ins.categoryKey));
+                },
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: Spacing.sm + 2),
+                  child: Row(
+                    children: [
+                      Icon(Icons.insights_rounded, size: 18, color: scheme.primary),
+                      const SizedBox(width: Spacing.sm),
+                      Expanded(
+                        child: Text(ins.text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: AppFontSizes.caption,
+                                fontWeight: FontWeight.w700,
+                                color: scheme.onSurface)),
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 16, color: scheme.onSurfaceVariant),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 分类占比圆盘
 // ---------------------------------------------------------------------------
 
 class _CategoryPie extends StatelessWidget {
-  const _CategoryPie({required this.breakdown});
+  const _CategoryPie({required this.breakdown, this.range});
 
   final List<CategoryShareView> breakdown;
+
+  /// V2.8.1 S8：下钻携带当前时间范围（null=不限时）
+  final (StatsRange, int?, int?)? range;
+
+  void _drill(BuildContext context, String categoryKey) {
+    HapticFeedback.selectionClick();
+    final query = StringBuffer('category=')..write(Uri.encodeQueryComponent(categoryKey));
+    if (range != null && range!.$1 == StatsRange.custom &&
+        range!.$2 != null && range!.$3 != null) {
+      query.write('&from=${range!.$2}&to=${range!.$3}');
+    }
+    context.push('/expenses?$query');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -577,6 +754,18 @@ class _CategoryPie extends StatelessWidget {
                       sections: sections,
                       centerSpaceRadius: 34,
                       sectionsSpace: 2,
+                      // V2.8.1 S8：扇区点击下钻（top8；「其他」扇区在 top8 外不可点）
+                      pieTouchData: PieTouchData(
+                        touchCallback: (event, response) {
+                          if (event is FlTapUpEvent &&
+                              response?.touchedSection != null) {
+                            final idx = response!.touchedSection!.touchedSectionIndex;
+                            if (idx >= 0 && idx < breakdown.take(8).length) {
+                              _drill(context, breakdown[idx].category.key);
+                            }
+                          }
+                        },
+                      ),
                     )),
                   ),
                   const SizedBox(width: Spacing.lg),
@@ -588,26 +777,31 @@ class _CategoryPie extends StatelessWidget {
                         for (final row in breakdown.take(5))
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 3),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 9,
-                                  height: 9,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: AvatarPalette.colorForName(row.category.key),
+                            // V2.8.1 S8：图例行可点下钻
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => _drill(context, row.category.key),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 9,
+                                    height: 9,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: AvatarPalette.colorForName(row.category.key),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(row.category.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context).textTheme.labelMedium),
-                                ),
-                                Text((row.fraction * 100).toStringAsFixed(0) + '%',
-                                    style: Theme.of(context).textTheme.labelSmall),
-                              ],
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(row.category.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context).textTheme.labelMedium),
+                                  ),
+                                  Text((row.fraction * 100).toStringAsFixed(0) + '%',
+                                      style: Theme.of(context).textTheme.labelSmall),
+                                ],
+                              ),
                             ),
                           ),
                       ],
