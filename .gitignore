@@ -58,6 +58,9 @@ _test_full.txt
 _buildrunner_full.txt
 _build_apk*.err
 *.apk
+# 例外：官网静态站的直链下载包必须随仓库部署，才能被 Vercel 发布出去。
+# 升版时用新的正式签名包覆盖同路径文件，并把同名 .sha1 一并更新。
+!website/download/*.apk
 # Windows reserved device name (created by `> nul` redirection; git cannot track it)
 nul
 

@@ -41,7 +41,15 @@ class TripTemplatesScreen extends ConsumerWidget {
             );
           }
           return ListView(
-            padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.huge),
+            padding: EdgeInsets.fromLTRB(
+              Spacing.xl,
+              Spacing.md,
+              Spacing.xl,
+              AppBottomLayout.withSafeArea(
+                context,
+                AppBottomLayout.navBarHeight,
+              ),
+            ),
             children: [
               for (final t in templates)
                 _TemplateCard(template: t),

@@ -35,6 +35,8 @@ body {
 /* ================= 全页流萤 ================= */
 #dust { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 main { position: relative; z-index: 1; }
+/* 固定导航高约 62px；锚点跳转留出余量，避免落点被顶栏盖住 */
+[id] { scroll-margin-top: 92px; }
 
 /* ================= 通用 ================= */
 .section-inner { max-width: 1160px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 2; }
@@ -233,15 +235,17 @@ main { position: relative; z-index: 1; }
   content:''; position: absolute; left: 0; top: 14px; width: 8px; height: 8px; border-radius: 50%;
   background: var(--accent-grad); box-shadow: 0 0 10px rgba(103,232,249,.5);
 }
-/* 三块各自的强调色，让两张相邻块不再同色 */
+/* 四块各自的强调色，让相邻居两块不再同色 */
 .feat-trip .feat-text li::before { background: #5ee0f4; box-shadow: 0 0 10px rgba(94,224,244,.55); }
+.feat-guide .feat-text li::before { background: #b6a6f5; box-shadow: 0 0 10px rgba(182,166,245,.55); }
 .feat-list .feat-text li::before { background: #7de8c0; box-shadow: 0 0 10px rgba(125,232,192,.55); }
 .feat-ledger .feat-text li::before { background: #f2c98c; box-shadow: 0 0 10px rgba(242,201,140,.55); }
 .feat-trip .f-index { color: #5ee0f4; }
+.feat-guide .f-index { color: #b6a6f5; }
 .feat-list .f-index { color: #7de8c0; }
 .feat-ledger .f-index { color: #f2c98c; }
 
-/* 三块不同的示例面板 */
+/* 四块不同的示例面板 */
 .panel {
   width: 100%; max-width: 360px; border-radius: 20px; padding: 22px 22px 20px;
   background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
@@ -290,6 +294,37 @@ main { position: relative; z-index: 1; }
 }
 .lg-settle b { font-size: 17px; color: #fff; font-variant-numeric: tabular-nums; }
 
+/* 攻略面板：六栏格 + 景点样例卡（与前三块的面板刻意不同构） */
+.panel-guide { max-width: 396px; }
+.panel-guide .p-title { color: #b6a6f5; }
+.gcols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.gcell {
+  border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 9px;
+  background: rgba(255,255,255,0.025);
+}
+.gcell i {
+  display: block; font-style: normal; font-family: var(--font-serif); font-size: 10.5px;
+  letter-spacing: .14em; color: rgba(182,166,245,.75); margin-bottom: 4px;
+}
+.gcell span { display: block; font-size: 13px; color: var(--ink); margin-bottom: 2px; }
+.gcell em { display: block; font-style: normal; font-size: 11px; color: var(--ink-faint); }
+.spot {
+  margin-top: 12px; border: 1px solid rgba(182,166,245,.28); border-radius: 14px;
+  padding: 12px 14px 11px; background: linear-gradient(150deg, rgba(182,166,245,.10), rgba(255,255,255,.01));
+}
+.spot-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+.spot-head b { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.45; }
+.spot-tags { display: flex; gap: 5px; flex-shrink: 0; }
+.spot-tags i {
+  font-style: normal; font-size: 10.5px; color: #cdc2fb; padding: 2px 8px;
+  border: 1px solid rgba(182,166,245,.4); border-radius: 999px; white-space: nowrap;
+}
+.spot-note { margin: 0 0 10px; font-size: 11.8px; line-height: 1.75; color: var(--ink-faint); }
+.spot-actions { display: flex; gap: 8px; }
+.spot-actions span { font-size: 11.5px; padding: 5px 13px; border-radius: 999px; }
+.sa-main { color: #1a1030; background: linear-gradient(135deg, #cdc2fb, #a5b4fc); font-weight: 600; }
+.sa-sub { color: var(--ink-dim); border: 1px solid var(--line); }
+
 /* ================= 更多能力：求精不多，逐条细说 ================= */
 .more { background: rgba(4,28,42,.30); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .plist { margin-top: 34px; }
@@ -312,6 +347,33 @@ main { position: relative; z-index: 1; }
   border-radius: 999px; white-space: nowrap;
 }
 @media (max-width: 640px) { .ptag { display: none; } }
+
+/* ================= 能力全景：三组分列 ================= */
+.capability { background: rgba(3,18,30,.28); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.cap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 40px; }
+@media (max-width: 960px) { .cap-grid { grid-template-columns: 1fr; } }
+.cap-card {
+  position: relative; border: 1px solid var(--line); border-radius: 20px;
+  padding: 28px 26px 24px; background: rgba(255,255,255,0.02);
+  transition: border-color .3s, transform .3s, box-shadow .3s;
+}
+.cap-card:hover { transform: translateY(-4px); }
+.cap-card:nth-child(1):hover { border-color: rgba(94,224,244,.45); box-shadow: 0 22px 54px rgba(94,224,244,.12); }
+.cap-card:nth-child(2):hover { border-color: rgba(242,201,140,.45); box-shadow: 0 22px 54px rgba(242,201,140,.12); }
+.cap-card:nth-child(3):hover { border-color: rgba(182,166,245,.45); box-shadow: 0 22px 54px rgba(182,166,245,.12); }
+.cap-head { padding-bottom: 16px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.cap-kicker { font-size: 11px; letter-spacing: .3em; color: var(--teal); display: block; margin-bottom: 8px; }
+.cap-head h4 { font-family: var(--font-serif); font-size: 21px; margin: 0; letter-spacing: .02em; }
+.cap-list { list-style: none; counter-reset: cap; margin: 0; padding: 0; }
+.cap-list li { counter-increment: cap; position: relative; padding: 18px 0 16px 34px; border-bottom: 1px dashed rgba(179,212,230,.10); }
+.cap-list li:last-child { border-bottom: none; padding-bottom: 4px; }
+.cap-list li::before {
+  content: counter(cap, decimal-leading-zero); position: absolute; left: 0; top: 19px;
+  font-family: var(--font-serif); font-size: 13px; font-weight: 700; color: transparent;
+  -webkit-text-stroke: .8px rgba(165,243,252,.5);
+}
+.cap-list b { display: block; font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.cap-list p { margin: 0; font-size: 13.2px; line-height: 1.85; color: var(--ink-faint); }
 
 /* ================= 亮点 ================= */
 .highlights-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; counter-reset: h; }
@@ -356,6 +418,7 @@ main { position: relative; z-index: 1; }
 .get-glow { position: absolute; width: 380px; height: 380px; border-radius: 50%; filter: blur(80px); background: rgba(56,189,248,.2); top: -130px; left: 50%; transform: translateX(-50%); }
 .get-card .eyebrow, .get-card .section-title, .get-sub { position: relative; z-index: 1; text-align: center; }
 .get-sub { color: var(--ink-dim); font-size: 15px; margin: 0 0 32px; }
+.get-note { position: relative; z-index: 1; color: var(--ink-faint); font-size: 12.5px; line-height: 1.9; margin: 22px 0 0; letter-spacing: .02em; }
 .get-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; position: relative; z-index: 1; }
 .get-docs { display: flex; gap: 34px; justify-content: center; margin-top: 34px; flex-wrap: wrap; position: relative; z-index: 1; }
 .doc-link { color: var(--ink-dim); text-decoration: none; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; padding-bottom: 4px; border-bottom: 1px solid transparent; transition: all .25s; }

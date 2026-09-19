@@ -30,8 +30,8 @@ abstract final class Spacing {
 }
 
 /// 悬浮胶囊底栏上的操作控件统一避让值。
-/// HomeShell 使用 extendBody，页面内容会延伸到导航栏后方，所有浮动按钮
-/// 必须使用同一套 inset，避免在不同页面出现上下跳动或被底栏遮挡。
+/// HomeShell 将底栏叠放在分支内容之上，页面内容会延伸到导航栏后方，
+/// 所有浮动按钮必须使用同一套 inset，避免在不同页面出现上下跳动或被底栏遮挡。
 abstract final class AppBottomLayout {
   // 统一 FAB 底部：整体下移贴近底部，跨页面使用同一套 inset。
   // 仍略高于底部悬浮胶囊栏（约 74 + safe），避免被其遮挡。

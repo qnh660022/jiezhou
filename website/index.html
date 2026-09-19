@@ -3,16 +3,66 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>芥舟 · 旅途助手 — 以芥为舟，行万水千山</title>
-  <meta name="description" content="芥舟（旅途助手）是一叶以芥子为楫、可离线航行的旅行之舟。行程规划 · 出行清单 · AA 记账，三大主线，纯本地运行，V2.6.0。" />
-  <meta property="og:title" content="芥舟 · 旅途助手" />
-  <meta property="og:description" content="以芥为舟，行万水千山。行程规划 · 出行清单 · AA 记账，纯本地离线运行。" />
-  <meta property="og:image" content="assets/logo.png" />
+  <title>芥舟 · 旅途助手 — 行程规划 · 城市攻略 · 出行清单 · AA 记账</title>
+  <meta name="description" content="芥舟（JieZhou）是一款开源旅途助手：行程规划、城市攻略、出行清单与 AA 记账四大主线。安卓 App + 网页版，无广告、无追踪，Apache-2.0 开源免费。" />
+  <meta name="keywords" content="芥舟,旅途助手,旅行App,行程规划,旅行攻略,城市攻略,出行清单,AA记账,旅行记账,多人分摊,结算,公款池,旅行基金,PlanB,开源旅行App,Flutter,安卓旅行软件,JieZhou,Purser" />
+  <meta name="author" content="芥舟" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="theme-color" content="#020b16" />
+  <link rel="canonical" href="https://jiezhou.22006.dpdns.org/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="芥舟 · 旅途助手" />
+  <meta property="og:locale" content="zh_CN" />
+  <meta property="og:url" content="https://jiezhou.22006.dpdns.org/" />
+  <meta property="og:title" content="芥舟 · 旅途助手 — 行程规划 · 城市攻略 · 出行清单 · AA 记账" />
+  <meta property="og:description" content="以芥为舟，行万水千山。行程 · 攻略 · 清单 · AA 记账四大主线，开源免费。" />
+  <meta property="og:image" content="https://jiezhou.22006.dpdns.org/assets/logo.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:image:alt" content="芥舟 · 旅途助手 图标" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="芥舟 · 旅途助手" />
+  <meta name="twitter:description" content="行程规划 · 城市攻略 · 出行清单 · AA 记账，开源免费。" />
+  <meta name="twitter:image" content="https://jiezhou.22006.dpdns.org/assets/logo.png" />
+
   <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="apple-touch-icon" href="assets/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "芥舟",
+    "alternateName": ["芥舟 · 旅途助手", "JieZhou Travel Assistant", "Purser Travel Assistant"],
+    "description": "开源旅途助手：行程规划、城市攻略、出行清单与 AA 记账四大主线，安卓 App + 网页版。",
+    "applicationCategory": "TravelApplication",
+    "applicationSubCategory": "行程规划与旅行记账",
+    "operatingSystem": "Android 8.0 及以上；Web（桌面版）",
+    "softwareVersion": "2.8",
+    "inLanguage": "zh-CN",
+    "url": "https://jiezhou.22006.dpdns.org/",
+    "installUrl": "https://purser.22006.dpdns.org/",
+    "downloadUrl": "https://jiezhou.22006.dpdns.org/download/jiezhou-v2.8-arm64.apk",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+    "featureList": [
+      "行程规划：多天时间线、拖拽排序与跨天移动、增减天数顺延、大纲往返编辑",
+      "城市攻略：六栏成册（行前准备 / 景点推荐 / 美食 / 交通 / 避坑注意 / 预算参考），随包内置",
+      "出行清单：分类清单与场景模板，可从攻略行前准备一键生成",
+      "AA 记账：多人分摊、百分比分摊、公款池、记账收件箱、最优结算与 PDF 导出",
+      "旅伴协作：三级角色权限、邀请码入团、只读分享链接、云同步与局域网同步",
+      "跨端同步：云端与局域网两种同步方式，备份文件可跨端迁移"
+    ],
+    "author": { "@type": "Organization", "name": "芥舟" },
+    "sameAs": ["https://github.com/qnh660022/jiezhou"]
+  }
+  </script>
 </head>
 <body>
   <!-- 全页流萤粒子 -->
@@ -29,7 +79,8 @@
       <nav class="nav-links" aria-label="主导航">
         <a href="#story">品牌故事</a>
         <a href="#features">功能</a>
-        <a href="#more">更多能力</a>
+        <a href="#guide">攻略</a>
+        <a href="#capability">能力</a>
         <a href="#highlights">亮点</a>
         <a href="#get">下载</a>
       </nav>
@@ -59,10 +110,10 @@
       </div>
 
       <div class="hero-content">
-        <p class="hero-version">旅途助手 · VERSION 2.6.0</p>
+        <p class="hero-version">旅途助手 · V2.8</p>
         <h1 class="hero-title">芥<span class="hl">舟</span></h1>
         <p class="hero-slogan">以芥为舟 · 泛于万顷烟波</p>
-        <p class="hero-desc">芥舟，是为旅途而生的离线助手——<br class="br-sm" />行程 · 清单 · AA 记账，一舟尽纳。</p>
+        <p class="hero-desc">芥舟，是为旅途而生的随身助手——<br class="br-sm" />行程 · 攻略 · 清单 · AA 记账，一舟尽纳。</p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#get"><span class="btn-icon">↓</span> 载舟启航</a>
           <a class="btn btn-ghost" href="https://purser.22006.dpdns.org/" target="_blank" rel="noopener">在线体验</a>
@@ -75,16 +126,16 @@
     <!-- 特色：一路航向的滚动字条 -->
     <div class="marquee" aria-hidden="true">
       <div class="marquee-track">
-        <span>行程规划</span><span>·</span><span>出行清单</span><span>·</span>
-        <span>AA 记账</span><span>·</span><span>预算提醒</span><span>·</span>
-        <span>成员结算</span><span>·</span><span>地图导览</span><span>·</span>
-        <span>天气航班</span><span>·</span><span>离线运行</span><span>·</span>
-        <span>隐私优先</span><span>·</span>
-        <span>行程规划</span><span>·</span><span>出行清单</span><span>·</span>
-        <span>AA 记账</span><span>·</span><span>预算提醒</span><span>·</span>
-        <span>成员结算</span><span>·</span><span>地图导览</span><span>·</span>
-        <span>天气航班</span><span>·</span><span>离线运行</span><span>·</span>
-        <span>隐私优先</span><span>·</span>
+        <span>行程规划</span><span>·</span><span>城市攻略</span><span>·</span>
+        <span>出行清单</span><span>·</span><span>AA 记账</span><span>·</span>
+        <span>预算提醒</span><span>·</span><span>成员结算</span><span>·</span>
+        <span>公款池</span><span>·</span><span>跨端同步</span><span>·</span>
+        <span>隐私优先</span><span>·</span><span>开源免费</span><span>·</span>
+        <span>行程规划</span><span>·</span><span>城市攻略</span><span>·</span>
+        <span>出行清单</span><span>·</span><span>AA 记账</span><span>·</span>
+        <span>预算提醒</span><span>·</span><span>成员结算</span><span>·</span>
+        <span>公款池</span><span>·</span><span>跨端同步</span><span>·</span>
+        <span>隐私优先</span><span>·</span><span>开源免费</span><span>·</span>
       </div>
     </div>
 
@@ -104,19 +155,19 @@
           <p>
             芥，本是微小的种子。当一洼清水承载起一枚芥子，它便化为一叶足以远行的舟。
             芥舟取名于此——再小的行囊，也能装下一段宏大的旅程；再远的远方，也能被一划一桨地抵达。
-            我们把纷繁的行程、清单与账单，安放在这一叶轻舟之上，
+            我们把纷繁的行程、攻略、清单与账单，安放在这一叶轻舟之上，
             月下烟波里，载你稳稳地驶过每一程山水、每一片人海。
           </p>
         </div>
       </div>
     </section>
 
-    <!-- 功能：三大主线，逐一细说 -->
+    <!-- 功能：四大主线，逐一细说 -->
     <section class="section features" id="features">
       <div class="section-inner">
-        <p class="eyebrow">OUR CRAFT · 三大主线</p>
-        <h2 class="section-title">一叶扁舟，三种行法</h2>
-        <p class="lead">芥舟把一趟旅程收敛成三件最要紧的事——去哪、带什么、花了多少。三条主线各自独立，又在指间彼此打通。</p>
+        <p class="eyebrow">OUR CRAFT · 四大主线</p>
+        <h2 class="section-title">一叶扁舟，四种行法</h2>
+        <p class="lead">芥舟把一趟旅程收敛成四件最要紧的事——去哪、看什么、带什么、花了多少。四条主线各自独立，又在指间彼此打通。</p>
 
         <!-- 01 行程 -->
         <div class="feat feat-trip">
@@ -124,42 +175,68 @@
             <div class="panel panel-trip">
               <div class="p-title">第 1 程 · 杭州 3 日</div>
               <div class="tl">
-                <div class="tl-row"><i class="tl-dot"></i><span><b>D1</b> 出发 · 12:40 落地</span><em>机场值机</em></div>
-                <div class="tl-row"><i class="tl-dot"></i><span><b>D2</b> 西湖 · 苏堤</span><em>☀ 22°C</em></div>
-                <div class="tl-row"><i class="tl-dot"></i><span><b>D3</b> 九溪 · 徒步</span><em>晴 · 微风</em></div>
-                <div class="tl-row"><i class="tl-dot"></i><span><b>D4</b> 返程返航</span><em>—</em></div>
+                <div class="tl-row"><i class="tl-dot"></i><span><b>D1</b> 出发 · 12:40 落地</span><em>交通</em></div>
+                <div class="tl-row"><i class="tl-dot"></i><span><b>D2</b> 西湖 · 苏堤</span><em>已排 3 项</em></div>
+                <div class="tl-row"><i class="tl-dot"></i><span><b>D3</b> 九溪 · 徒步</span><em>已排 2 项</em></div>
+                <div class="tl-row"><i class="tl-dot"></i><span><b>D4</b> 返程返航</span><em>交通</em></div>
               </div>
-              <div class="p-foot">☁ 天气已接入 · 🗺 地图导航</div>
+              <div class="p-foot">⇅ 拖拽跨天 · ☰ 大纲往返编辑</div>
             </div>
           </div>
           <div class="feat-text">
             <span class="f-index">01 · 行程规划</span>
             <h3>把「去哪」排成一条顺畅的时间线</h3>
-            <p>从敲定出发那天起，交通、住宿、景点便逐项码进同一条时间线。点开任一程，地图定位、天气、航班情报一次取齐，不必在几个 App 之间来回横跳。</p>
-            <p>若不想从零规划，自带行程模板与精选路线——挑一个，连返程该买到哪天，都替你料理好了。</p>
+            <p>从敲定出发那天起，交通、住宿、景点便逐项码进同一条时间线。哪天排得太满，把安排拖到别的日子，后面几天自动顺延；想让行程多留一天，插进去便是。</p>
+            <p>不喜欢在界面里改？整份行程可以导出成纯文本，在记事本里改完再导回来——顺序、日期、备注都按同一份规则解析，不会错位。</p>
             <ul>
-              <li>多天行程时间线，串起交通·住宿·风景</li>
-              <li>地图导览与点位，路线一眼定位</li>
-              <li>天气 · 航班 · 目的地情报统合随取</li>
-              <li>模板与精选路线，一键从零到出发</li>
+              <li>多天时间线，串起交通 · 住宿 · 景点</li>
+              <li>拖拽排序 + 跨天移动 + 多选批量</li>
+              <li>增减天数全篇顺延，删天可选处理方式</li>
+              <li>大纲往返编辑：导出纯文本，改完导回</li>
             </ul>
           </div>
         </div>
 
-        <!-- 02 清单 -->
-        <div class="feat feat-list">
+        <!-- 02 攻略 -->
+        <div class="feat feat-guide" id="guide">
           <div class="feat-text">
-            <span class="f-index">02 · 出行清单</span>
-            <h3>把「带什么」备得妥帖而不冗余</h3>
-            <p>证件、药品、充电线……每一种物品，都按旅程场景归进对应的智能模板。临行前三两分钟，逐项打勾，进度一目了然。</p>
-            <p>清单会照着你的行程，自动荐上容易漏的备查项；也有现成模板可随时补齐。你只管轻装，剩下的交给它。</p>
+            <span class="f-index">02 · 城市攻略</span>
+            <h3>把「看什么」预先备在舟上</h3>
+            <p>每座可去的城，都有一份预先编好的攻略册：行前准备、景点推荐、美食、交通、避坑注意与预算参考，六栏各归其位。落地即翻，不必临时在网上翻找。</p>
+            <p>攻略里的每个景点都带着自己的定位——必去、经典、小众还是亲子——以及大致要花的时间。看中一条，可以直接排进当天，也可以先收进想去池。</p>
             <ul>
-              <li>分类清单，查缺补漏一目了然</li>
-              <li>随场景切换的智能模板</li>
-              <li>按事项智能推荐备查项</li>
-              <li>勾选进度追踪，出发前不留盲区</li>
+              <li>六栏成册：行前准备 · 景点推荐 · 美食 · 交通 · 避坑注意 · 预算参考</li>
+              <li>覆盖主要旅行目的地，按大区归类，换城市即换册</li>
+              <li>景点带类型标签与预估时长，可直接排入行程</li>
+              <li>攻略随包内置，落地即翻</li>
             </ul>
           </div>
+          <div class="feat-visual">
+            <div class="panel panel-guide">
+              <div class="p-title">城市攻略 · 杭州</div>
+              <div class="gcols">
+                <div class="gcell"><i>01</i><span>行前准备</span><em>证件与时令</em></div>
+                <div class="gcell"><i>02</i><span>景点推荐</span><em>必去与冷门</em></div>
+                <div class="gcell"><i>03</i><span>美食</span><em>本地吃法</em></div>
+                <div class="gcell"><i>04</i><span>交通</span><em>落地怎么走</em></div>
+                <div class="gcell"><i>05</i><span>避坑注意</span><em>时段与避让</em></div>
+                <div class="gcell"><i>06</i><span>预算参考</span><em>大致开销</em></div>
+              </div>
+              <div class="spot">
+                <div class="spot-head">
+                  <b>西湖环湖（断桥 · 白堤 · 苏堤）</b>
+                  <span class="spot-tags"><i>必去</i><i>一天</i></span>
+                </div>
+                <p class="spot-note">地铁 1 号线龙翔桥站出即到湖滨。北线走法：断桥残雪碑起步，沿白堤过平湖秋月到孤山，全程约 4 公里。</p>
+                <div class="spot-actions"><span class="sa-main">直接排</span><span class="sa-sub">先想去</span></div>
+              </div>
+              <div class="p-foot">随包内置 · 换城即换册</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 03 清单 -->
+        <div class="feat feat-list">
           <div class="feat-visual">
             <div class="panel panel-list">
               <div class="p-title">出发前 · 行李清点</div>
@@ -172,10 +249,34 @@
               <div class="cl-note">9 / 12 已备齐</div>
             </div>
           </div>
+          <div class="feat-text">
+            <span class="f-index">03 · 出行清单</span>
+            <h3>把「带什么」备得妥帖而不冗余</h3>
+            <p>证件、药品、充电线……每一种物品，都按旅程场景归进对应的模板。临行前三两分钟，逐项打勾，进度一目了然。</p>
+            <p>攻略册里的「行前准备」还能一键转成清单——这座城该带什么、什么时节去要添什么，不必自己再想一遍。</p>
+            <ul>
+              <li>分类清单，查缺补漏一目了然</li>
+              <li>随场景切换的模板（证件、衣物、数码…）</li>
+              <li>攻略的「行前准备」一键转成清单</li>
+              <li>勾选进度追踪，出发前不留盲区</li>
+            </ul>
+          </div>
         </div>
 
-        <!-- 03 记账 -->
+        <!-- 04 记账 -->
         <div class="feat feat-ledger">
+          <div class="feat-text">
+            <span class="f-index">04 · AA 记账</span>
+            <h3>把「花了多少」算得清清楚楚</h3>
+            <p>旅途里的每一笔随记随清：谁付、谁收、谁该给谁多少，系统自动分摊。按人头分不匀，就按百分比分，零头自动归一。退款与优惠按同一口径冲减，一分都不含糊。</p>
+            <p>来不及归类？先丢进收件箱，回头再理。公费先充进公款池，从池里往外花，账目自然并入结算。旅程结束，一键算出最优还法，再以 PDF、纪念海报或 CSV 快照留档。</p>
+            <ul>
+              <li>多人分摊，人头制 / 百分比制随选</li>
+              <li>公款池先充后花，余额纳入结算口径</li>
+              <li>记账收件箱：先记后理，不打断当下</li>
+              <li>最优结算，可选最少笔数或最少人参与</li>
+            </ul>
+          </div>
           <div class="feat-visual">
             <div class="panel panel-ledger">
               <div class="p-title">缘起 · 浙江 账本</div>
@@ -183,20 +284,83 @@
               <div class="lg-row"><span>🏨 民宿 · 3 晚</span><b>¥ 1260</b></div>
               <div class="lg-row"><span>🚕 打车 · 分摊</span><b>−¥ 92</b></div>
               <div class="lg-row lg-refund"><span>退款 · 门票</span><b>−¥ 60</b></div>
+              <div class="lg-row"><span>💰 公款池 · 余</span><b>¥ 480</b></div>
               <div class="lg-settle"><span>静静 应收 · 小舟 应付</span><b>¥ 695</b></div>
             </div>
           </div>
-          <div class="feat-text">
-            <span class="f-index">03 · AA 记账</span>
-            <h3>把「花了多少」算得清清楚楚</h3>
-            <p>旅途里的每一笔，随记随清：谁付、谁收、谁该给谁多少，系统自动分摊。退款、优惠也按同一口径冲减，零头都不含糊。</p>
-            <p>预算设好，逼近阈值便轻轻兜住；旅程结束，一键生成结算单，再以 PDF、纪念海报或 CSV 快照，随时留档、分享。</p>
-            <ul>
-              <li>明细记账，多人 · 分类随记随清</li>
-              <li>预算提醒，超额及时兜住</li>
-              <li>成员 AA 自动结算，零头也明</li>
-              <li>分类统计 · PDF / 海报 / CSV 导出</li>
-            </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 能力全景：四大主线之外，还有这些 -->
+    <section class="section capability" id="capability">
+      <div class="section-inner">
+        <p class="eyebrow">FULL PICTURE · 能力全景</p>
+        <h2 class="section-title">舟小，也装得下一队人</h2>
+        <p class="lead">一趟旅程往往不止一个人、不止一本账。以下三组能力，是四大主线之外最常用到的那些。</p>
+
+        <div class="cap-grid">
+          <div class="cap-card">
+            <div class="cap-head">
+              <span class="cap-kicker">其一</span>
+              <h4>旅伴协作与权限</h4>
+            </div>
+            <ol class="cap-list">
+              <li>
+                <b>三级角色</b>
+                <p>旅伴空间分管理者 / 编辑者 / 观察者，邀请时即定角色；观察者天然只读，写入口不会出现。</p>
+              </li>
+              <li>
+                <b>邀请码入团</b>
+                <p>一条带码的邀请链接，对方登录后自动加入该团，行程与账本随之共享。</p>
+              </li>
+              <li>
+                <b>只读分享链接</b>
+                <p>生成一条分享链接与口令，未登录的人也能查看行程与结算结果，但只能看，写不进去。</p>
+              </li>
+            </ol>
+          </div>
+
+          <div class="cap-card">
+            <div class="cap-head">
+              <span class="cap-kicker">其二</span>
+              <h4>旅行的钱</h4>
+            </div>
+            <ol class="cap-list">
+              <li>
+                <b>公款池</b>
+                <p>一池一管理人。先把公费充进池里，公共开销从池中走，余额直接进结算口径。</p>
+              </li>
+              <li>
+                <b>个人账本与百分比分摊</b>
+                <p>个人账本独立成册，与团账互不干扰；分摊按百分比来时，余数自动归一，不出现分不平。</p>
+              </li>
+              <li>
+                <b>变更记录与启动锁</b>
+                <p>每一笔改动留痕（管理角色可见）；6 位 PIN 启动锁守住入口。</p>
+              </li>
+            </ol>
+          </div>
+
+          <div class="cap-card">
+            <div class="cap-head">
+              <span class="cap-kicker">其三</span>
+              <h4>行程装配</h4>
+            </div>
+            <ol class="cap-list">
+              <li>
+                <b>想去池</b>
+                <p>看中但还没排期的，先收进想去池——全行程唯一的候选区，按城市分组待选。</p>
+              </li>
+              <li>
+                <b>想去装配台</b>
+                <p>按一天的容量三档（松 / 标准 / 紧凑）自动找空档、按时段落点，排一天不用手算。</p>
+              </li>
+              <li>
+                <b>Plan B 备胎</b>
+                <p>给某一天挂一位替补，天变了或时间不够，一键与主安排互换，日期不动。</p>
+              </li>
+            </ol>
           </div>
         </div>
       </div>
@@ -237,7 +401,7 @@
             <span class="pnum">04</span>
             <div class="pbody">
               <h4>导出与分享</h4>
-              <p>账本成 PDF、旅程成纪念海报、数据成 CSV 快照，一路的回忆，随时打包带走。</p>
+              <p>账本成 PDF、行程成总览页、数据成 CSV 快照，一路的回忆，随时打包带走。</p>
             </div>
             <span class="ptag">PDF · 海报 · CSV</span>
           </div>
@@ -253,8 +417,8 @@
         <div class="highlights-grid">
           <div class="hl-item">
             <div class="hl-icon">🕊</div>
-            <h4>纯本地离线</h4>
-            <p>数据存于设备，无云端依赖。无网之下，旅途依旧。</p>
+            <h4>四大主线合一</h4>
+            <p>行程、攻略、清单与账本收在同一个 App 里，不必在四个应用之间来回切换。</p>
           </div>
           <div class="hl-item">
             <div class="hl-icon">🔀</div>
@@ -263,13 +427,13 @@
           </div>
           <div class="hl-item">
             <div class="hl-icon">✦</div>
-            <h4>苹果级质感</h4>
-            <p>Material 3 之上，毛玻璃、动效与留白，处处克制而精致。</p>
+            <h4>开源免费</h4>
+            <p>Apache-2.0 授权，源码公开可查，不设付费墙。</p>
           </div>
           <div class="hl-item">
             <div class="hl-icon">↗</div>
             <h4>导出与分享</h4>
-            <p>PDF 账本、海报记录、CSV 快照，把回忆打包带走。</p>
+            <p>PDF 账本、行程总览页、海报记录、CSV 快照，把回忆打包带走。</p>
           </div>
           <div class="hl-item">
             <div class="hl-icon">𝆺𝅥</div>
@@ -279,7 +443,7 @@
           <div class="hl-item">
             <div class="hl-icon">🔒</div>
             <h4>隐私优先</h4>
-            <p>核心能力不依赖云端，你的行程与账单只属于你自己。</p>
+            <p>无广告、无追踪，不拿你的行程与账单做任何商业用途。</p>
           </div>
         </div>
       </div>
@@ -292,14 +456,16 @@
           <div class="get-glow"></div>
           <p class="eyebrow">GET STARTED · 载舟启航</p>
           <h2 class="section-title">把旅程，放进这一叶舟</h2>
-          <p class="get-sub">芥舟 V2.6.0 · 现可下载 · 安卓 / 网页在线体验</p>
+          <p class="get-sub">芥舟 V2.8 · 安卓 arm64 安装包 / 网页在线版 · 无需注册即可开始</p>
           <div class="get-actions">
             <a class="btn btn-primary" href="https://github.com/qnh660022/jiezhou/releases" target="_blank" rel="noopener">下载安卓版</a>
+            <a class="btn btn-ghost" href="download/jiezhou-v2.8-arm64.apk">直链下载 APK</a>
             <a class="btn btn-ghost" href="https://purser.22006.dpdns.org/" target="_blank" rel="noopener">网页在线版</a>
           </div>
+          <p class="get-note">网页版为桌面专属布局，暂不支持手机端访问；GitHub 访问不畅时，可用「直链下载 APK」。</p>
           <div class="get-docs">
-            <a class="doc-link" href="#" data-coming="使用文档页正在制作中，稍后开放">使用文档 <span class="doc-arrow">→</span></a>
-            <a class="doc-link" href="#" data-coming="版本更新日志正在制作中，稍后开放">更新日志 <span class="doc-arrow">→</span></a>
+            <a class="doc-link" href="https://github.com/qnh660022/jiezhou/releases" target="_blank" rel="noopener">更新日志 <span class="doc-arrow">→</span></a>
+            <a class="doc-link" href="https://github.com/qnh660022/jiezhou" target="_blank" rel="noopener">源码仓库 <span class="doc-arrow">→</span></a>
           </div>
         </div>
       </div>
@@ -314,7 +480,7 @@
         <span>芥舟 · 旅途助手</span>
       </div>
       <p class="footer-tag">覆杯水于坳堂之上，则芥为之舟。</p>
-      <p class="footer-meta">V2.6.0 · 纯本地离线运行 · © 2026 芥舟 · <a href="https://github.com/qnh660022/jiezhou" target="_blank" rel="noopener" style="color:inherit">GitHub</a></p>
+      <p class="footer-meta">V2.8 · Apache-2.0 开源 · © 2026 芥舟 · <a href="https://github.com/qnh660022/jiezhou" target="_blank" rel="noopener" style="color:inherit">GitHub</a></p>
     </div>
   </footer>
 

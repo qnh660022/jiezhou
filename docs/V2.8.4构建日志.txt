@@ -1,0 +1,113 @@
+芥舟 V2.8.4 构建日志（底栏悬浮层 + 行程页尾距统一版）
+=========================================
+构建时间 : 2026-09-19 17:32~17:38 (本地)，会话整体 17:08~17:40
+版本     : 2.8.4+2840 (versionName 2.8.4 / versionCode 2840)
+产物     : build\app\outputs\flutter-apk\app-release.apk (33.5 MB / 35,131,440 字节)
+归档     : release\jiezhou-2.8.4+2840-arm64.apk
+           sha1   9880088b048617968a078c6933b4321d57ae3fed
+           sha256 b85d8cf969ab79714545a0bc2d358da029be305679d1367f0c5a642d04578b7a
+目标架构 : android-arm64
+
+构建背景
+-------------------------------------
+本轮为 V2.8.3.5 之后的增量构建，含用户未提交的全部改动：
+  1) lib/router.dart        HomeShell 把悬浮胶囊底栏从 Scaffold.bottomNavigationBar
+                            改为 Stack + Positioned 叠放，使其成为真正的悬浮层。
+                            原写法会先按底栏高度缩短 StatefulNavigationShell，
+                            分支内页面再自行按 navBarHeight / 安全区让位 → 重复留白。
+  2) lib/features/trips/screens/ 四个页面把尾部 Spacing.huge 换成
+                            AppBottomLayout.withSafeArea(context, navBarHeight)：
+                            item_detail / trip_export / trip_share（尾部 SizedBox）
+                            trip_templates（ListView 的 padding.bottom）
+                            → 底栏占位改走单一真值令牌，不再各自硬编码。
+  3) lib/theme/tokens.dart  AppBottomLayout 注释随写法更新（extendBody → 叠放）。
+  4) Android / Web 图标换装：mipmap-* 与 ic_launcher_foreground、
+                            web/favicon + Icon-192/512 + maskable 两档。
+    （lib/features/trips/screens/trip_guide_screen.dart 仅时间戳变动，内容与 HEAD 无差异）
+
+工具链（scripts/env.local.ps1）
+-------------------------------------
+JAVA_HOME            : D:\AI\env\jdk\jdk-17.0.2
+ANDROID_HOME         : D:\AI\env\android-sdk
+FLUTTER_ROOT         : D:\AI\env\flutter
+GRADLE_USER_HOME     : D:\AI\env\gradle-home
+PUB_HOSTED_URL       : https://pub.flutter-io.cn
+FLUTTER_STORAGE_BASE : https://storage.flutter-io.cn
+Flutter              : 3.47.1 stable / Dart 3.13.1
+AGP build-tools      : 36.0.0
+
+执行方式 : 沿用 Git Bash 手工序列（scripts/build_apk.ps1 仍无法由本机 PowerShell 会话驱动）。
+           JAVA_HOME 必须用 Windows 形式（D:/AI/env/jdk/jdk-17.0.2），POSIX 形式会让
+           Gradle 报 "JAVA_HOME is set to an invalid directory"。
+
+云端密钥注入（§3.2.2 契约）
+-------------------------------------
+密钥取自 scripts/env.local.ps1（已 gitignore，不入库），读入长度校验 URL=40 / KEY=46 ✓
+  --dart-define=SUPABASE_URL=https://yxclvavejcxhkobnldyx.supabase.co
+  --dart-define=SUPABASE_ANON_KEY=sb_publishable_***（不打印本体）
+注入断言（解包 APK 后对 lib/arm64-v8a/libapp.so 检索）:
+  SUPABASE_URL      片段命中 ✓
+  SUPABASE_ANON_KEY 前缀（sb_publishable_）命中 ✓
+
+构建门禁（逐项通过）
+-------------------------------------
+1) flutter pub get                                          OK
+2) dart run build_runner build                              OK（355 输出）
+3) flutter analyze   （要求 0 error）                       OK：0 error / 349 存量 warning·info
+4) flutter test      （要求全绿）                           OK：971 全绿（0 失败）
+5) flutter build apk --release --target-platform android-arm64   OK
+
+版本号与门禁改动（本轮一并处理，需留意）
+-------------------------------------
+pubspec.yaml             : 2.8.3+2835 → 2.8.4+2840
+lib/shared/app_meta.dart : kAppVersionLabel 'v2.8.3.5' → 'v2.8.4'
+
+test/features/v282_s7_regression_test.dart（S7-1）**本轮被修改**：
+  原规则「构建号末位 == 标签末段」在语义版本恰好三位时无解 —— 构建号 2840 末位是 0、
+  标签 v2.8.4 末段是 4，会把「升 minor」这一正常动作判为失败。原规则隐含假设标签恒为
+  四段（v2.8.3.5 ↔ 2835）。
+  改为「按数字序列逐位对齐」：标签去点后的数字串即构建号；标签省略 seq 段（=0）时，
+  构建号允许补一位 0（v2.8.4 ↔ 2840）。同时保留「构建号 ≥ 2835 不回退」与
+  「标签以 pubspec 语义版本开头」两条。
+  规则推演已验证 10 组用例：v2.8.4/2840、v2.8.3.5/2835 判过；标签未升（v2.8.3.5/2840）、
+  构建号未升（v2.8.4/2835）、末段错位（v2.8.3.9/2835）、标签泄漏旧版（v2.7.1/2840）、
+  构建号回退（v2.8.4/2834）、标签漏段（v2.8/2840）全部判失败 —— 防漂移能力不降反升。
+  结论：门禁强度未削弱，仅修掉了对「四段标签」的隐含依赖。
+
+构建输出
+-------------------------------------
+Running Gradle task 'assembleRelease'...  352.7s
+Font asset "JieZhouIcons.ttf"          tree-shaken: 8792 -> 6012 bytes (-31.6%)
+Font asset "MaterialIcons-Regular.otf" tree-shaken: 1645184 -> 33736 bytes (-97.9%)
+Font asset "CupertinoIcons.ttf"        tree-shaken: 257628 -> 848 bytes (-99.7%)
+√ Built build\app\outputs\flutter-apk\app-release.apk (33.5MB)
+
+签名验证（apksigner verify --print-certs）
+-------------------------------------
+Signer #1 certificate DN : CN=Travel Assistant, OU=Dev, O=Travel, L=Shanghai, ST=Shanghai, C=CN
+Signer #1 SHA-256 digest : 4469f25aa6a9402f12aaf0cfa4cd4f9cc9c77cf8be37408b24833e4e0a85ea28
+                           （与 V2.8.2 / V2.8.3.3 / V2.8.3.4 / V2.8.3.5 交付指纹逐位一致 → 同一密钥库）
+Signer #1 SHA-1 digest   : 45b2663bde5170960de256bc49c0a8834f9d1362
+密钥库                   : android/app/release-key.jks（android/key.properties 引用，不入库）
+验证结论                 : ✅ 正式签名有效
+
+内容校验（勿混用）
+-------------------------------------
+release/jiezhou-2.8.3+2835-arm64.apk  35,093,372 字节  sha1 6ffded4b0ac26d70…  （V2.8.3.5 包）
+release/jiezhou-2.8.4+2840-arm64.apk  35,131,440 字节  sha1 9880088b04861796…  （本包）
+字节数与上一包不同（+38,068），内容摘要亦不同。
+
+Git 提交
+-------------------------------------
+按用户指令：本轮**不做 git 提交**（未 add、未 commit、未推送）。
+工作区仍为「V2.8.3.5 已提交 + 本轮改动未提交」状态，改动清单见上方「构建背景」。
+
+已知遗留（未处理，如实登记）
+-------------------------------------
+1) test/sync/v272_sync_registration_test.dart:11 有一处 unused_import 警告，非本轮引入，未动。
+2) 提示条收口仍有约 20 处直连 SnackBar 未合并（V2.8.3.3 裁定：带 5 秒撤销窗口的删除提示
+   需先给 showAppSnackBar 加 duration，不能套用固定 2.6s 形态）。
+3) desktop_* 与 companions 两个区域按 V2.8.3.3 裁定维持登记态。
+4) 本轮未做的收尾：官网 index.html 与 README 的版本号/功能描述仍停留在 V2.6 口径（R-7 债务）。
+5) 底栏改为 Stack 叠放后，页面统一靠 AppBottomLayout.navBarHeight 让位；本轮只覆盖行程域
+   四个页面，其余已用 withSafeArea 的 24 处未逐个复核，建议真机跑一遍底部贴合。

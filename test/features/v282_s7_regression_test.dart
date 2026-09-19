@@ -21,6 +21,10 @@ void main() {
   // V2.8.3.5：本组原先硬编码 '2.8.3+2831'，导致每次升版都要改测试（V2.8.3.2/3/4
   // 一路漏改）。改为**同源校验**：pubspec 语义版本与 kAppVersionLabel 必须对齐，
   // 且构建号不得回退 —— 既守住「升版」意图，又不再逐版维护。
+  // V2.8.4：原规则「构建号末位 == 标签末段」在语义版本恰好三位（v2.8.4）时无解
+  //（2840 末位是 0、标签末段是 4），会把「升 minor」这一正常动作判为失败。改为
+  // **按数字序列逐位对齐**：标签去点后的数字串即构建号，标签省略 seq 段（=0）时
+  // 构建号允许补一位 0。防漂移强度不降反升（v2.8.3.9 ↔ 2835 这类错位照样抓得住）。
   group('S7-1 版本号（pubspec ↔ app_meta 同源，构建号不回退）', () {
     test('pubspec version 与 kAppVersionLabel 对齐且未回退', () {
       final src = File('pubspec.yaml').readAsStringSync();
@@ -35,9 +39,16 @@ void main() {
 
       expect(kAppVersionLabel, startsWith('v$semver'),
           reason: '标签须以 pubspec 语义版本开头，实得 $kAppVersionLabel');
-      final tail = kAppVersionLabel.split('.').last; // v2.8.3.5 → 5
-      expect('$build'.endsWith(tail), isTrue,
-          reason: '构建号 $build 应与标签 $kAppVersionLabel 的末段对齐');
+      final semverDigits = semver.replaceAll('.', ''); // 2.8.4 → 284
+      final labelDigits = kAppVersionLabel.replaceFirst('v', '').split('.').join();
+      expect(labelDigits.startsWith(semverDigits), isTrue,
+          reason: '标签 $kAppVersionLabel 的数字序列须以语义版本 $semver 开头');
+      // 标签末段省略 0（v2.8.4 ↔ 2840）时补一位；其余情况必须逐位相同。
+      final buildStr = '$build';
+      final expectBuild =
+          buildStr.length == labelDigits.length ? labelDigits : '${labelDigits}0';
+      expect(buildStr, expectBuild,
+          reason: '构建号 $build 应与标签 $kAppVersionLabel 的数字序列对齐');
     });
   });
 

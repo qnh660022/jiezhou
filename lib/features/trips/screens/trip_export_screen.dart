@@ -177,7 +177,12 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
                 ),
               ),
             ),
-          const SizedBox(height: Spacing.huge),
+          SizedBox(
+            height: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.navBarHeight,
+            ),
+          ),
         ],
       ),
     );

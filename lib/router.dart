@@ -450,14 +450,29 @@ class HomeShell extends StatelessWidget {
     if (isDesktopWeb(context)) {
       return DesktopShell(shell: shell, tabs: _tabs);
     }
+    // 让导航栏成为真正的悬浮层，而不是 Scaffold 的 bottomNavigationBar
+    // 布局子项。后者会先缩短 StatefulNavigationShell 的高度，分支内页面
+    // 再按 navBarHeight / safe area 让位时就会重复留白，尤其影响行程详情
+    // 的「时间线 / 攻略」停靠条和新建行程的提交区。
     return Scaffold(
-      extendBody: true,
-      body: shell,
-      bottomNavigationBar: FloatingCapsuleNavBar(
-        items: _tabs,
-        currentIndex: shell.currentIndex,
-        onTap: (index) =>
-            shell.goBranch(index, initialLocation: index == shell.currentIndex),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          shell,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: FloatingCapsuleNavBar(
+              items: _tabs,
+              currentIndex: shell.currentIndex,
+              onTap: (index) => shell.goBranch(
+                index,
+                initialLocation: index == shell.currentIndex,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

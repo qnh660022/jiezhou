@@ -237,7 +237,12 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
                   entityType: 'trip', entityId: trip.id),
             ),
           ),
-          const SizedBox(height: Spacing.huge),
+          SizedBox(
+            height: AppBottomLayout.withSafeArea(
+              context,
+              AppBottomLayout.navBarHeight,
+            ),
+          ),
         ],
       ),
     );

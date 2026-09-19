@@ -176,7 +176,12 @@ class _DetailView extends StatelessWidget {
                       expanded: true,
                       onPressed: onEdit,
                     ),
-                  const SizedBox(height: Spacing.huge),
+                  SizedBox(
+                    height: AppBottomLayout.withSafeArea(
+                      context,
+                      AppBottomLayout.navBarHeight,
+                    ),
+                  ),
                 ],
               ),
             ),

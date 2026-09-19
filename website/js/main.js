@@ -99,7 +99,7 @@
   window.addEventListener('scroll', onScroll, { passive: true });
 
   /* ================= 滚动登场 ================= */
-  var revealEls = document.querySelectorAll('.section, .hl-item, .feat-text, .panel, .prow, .f-index');
+  var revealEls = document.querySelectorAll('.section, .hl-item, .feat-text, .panel, .prow, .f-index, .cap-card, .cap-head');
   var io = new IntersectionObserver(function (entries) {
     entries.forEach(function (e) {
       if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }

@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# 安装包体积大且随版本更替，不参与索引
+Disallow: /download/
+
+Sitemap: https://jiezhou.22006.dpdns.org/sitemap.xml
