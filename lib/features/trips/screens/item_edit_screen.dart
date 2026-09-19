@@ -1,4 +1,10 @@
-// ✏️ 行程安排编辑：类型五分段 + POI搜索 + 地图选点 + 航班号 + 费用 + 备注
+// ✏️ 行程安排编辑（V2.8.3.5 重设计：卡片 8 → 4）。
+//
+// 布局：紧凑类型 chip 条 → 主卡（名称无框输入 + POI 内联建议 + 地址 /
+// 交通走出发-到达两段 + 「什么时候」实时摘要 + 时长快捷 chips）→ 航班卡
+// （仅交通）→ 费用一行 → 备注折叠 → 底部停靠提交（编辑模式带删除）。
+// 字段与落库逻辑不变；文件头原先写的「地图选点」是过期描述（build 里从无
+// 该 UI），本次一并清掉。
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -14,6 +20,8 @@ import '../../../data/services/poi_service.dart';
 import '../../../data/services/flight_service.dart';
 import '../../../domain/trip_bill_linker.dart';
 
+import '../../../features/desktop/desktop_utils.dart' show isDesktopWeb;
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/sheet.dart';
@@ -59,6 +67,8 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
   int? _dateEpochDay;
   String? _editId;
   Trip? _trip;
+  // V2.8.3.5：备注默认折叠成一行。
+  bool _noteOpen = false;
 
   @override
   void initState() {
@@ -247,271 +257,603 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final isTransport = _type == 'transport';
     final types = allTripTypes();
     return Scaffold(
       appBar: GlassAppBar(title: _editId == null ? '添加安排' : '编辑安排'),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(Spacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Type selector
-            SectionCard(
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.xl, Spacing.md, Spacing.xl, Spacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // V2.8.3.5：类型由整卡 5 等宽格压成紧凑横滑 chip 条
+                  _buildTypeStrip(types),
+                  const SizedBox(height: Spacing.md),
+                  _buildMainCard(isTransport),
+                  const SizedBox(height: Spacing.md),
+                  if (isTransport) ...[
+                    _buildFlightCard(),
+                    const SizedBox(height: Spacing.md),
+                  ],
+                  _buildCostCard(),
+                  const SizedBox(height: Spacing.md),
+                  _buildNoteCard(),
+                ],
+              ),
+            ),
+          ),
+          _buildDockSave(),
+        ],
+      ),
+    );
+  }
+
+  // ============ 新区块（V2.8.3.5 重设计） ============
+
+  static const List<int> _quickDurations = [30, 60, 90, 120, 180];
+
+  Widget _sectionLabel(String text, {String? hint}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.4,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        if (hint != null) ...[
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: Text(
+              hint,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.75),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 类型 chip 条：emoji 属内容岗位，类型色由 [TripTypeVisual.color] 提供。
+  Widget _buildTypeStrip(List<TripTypeVisual> types) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: types.length,
+        separatorBuilder: (_, __) => const SizedBox(width: Spacing.sm),
+        itemBuilder: (context, i) {
+          final t = types[i];
+          final selected = _type == t.key;
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _type = t.key);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.md + 1),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? t.color : scheme.surfaceContainerLowest,
+                borderRadius: AppRadius.capsule,
+                border: Border.all(
+                  color: selected
+                      ? t.color
+                      : scheme.outlineVariant.withValues(alpha: 0.75),
+                ),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: t.color.withValues(alpha: 0.28),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
               child: Row(
                 children: [
-                  for (final t in types)
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => _type = t.key);
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
-                          decoration: BoxDecoration(
-                            color: _type == t.key ? t.color.withValues(alpha: 0.15) : Colors.transparent,
-                            borderRadius: AppRadius.button,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(t.icon, style: TextStyle(fontSize: 20, color: _type == t.key ? t.color : scheme.onSurfaceVariant)),
-                              const SizedBox(height: 2),
-                              Text(t.name, style: TextStyle(fontSize: AppFontSizes.caption - 1, fontWeight: _type == t.key ? FontWeight.w700 : FontWeight.w500, color: _type == t.key ? t.color : scheme.onSurfaceVariant)),
-                            ],
-                          ),
-                        ),
-                      ),
+                  Text(t.icon, style: const TextStyle(fontSize: 15)),
+                  const SizedBox(width: 5),
+                  Text(
+                    t.name,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: selected
+                          ? AvatarPalette.onColor
+                          : scheme.onSurfaceVariant,
                     ),
-                ],
-              ),
-            ),
-            const SizedBox(height: Spacing.lg),
-
-            // Name + Address
-            SectionCard(
-              child: Column(
-                children: [
-                  LabeledField(
-                    label: '名称',
-                    child: TextField(controller: _nameCtrl, decoration: const InputDecoration(hintText: '例如：浅草寺')),
-                  ),
-                  const SizedBox(height: Spacing.lg),
-                  LabeledField(
-                    label: '地址',
-                    child: TextField(controller: _addrCtrl, decoration: const InputDecoration(hintText: '选填')),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: Spacing.lg),
+          );
+        },
+      ),
+    );
+  }
 
-            // POI Search
-            SectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LabeledField(
-                    label: '搜索地点 (POI)',
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: '输入关键字搜索…',
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: _poiLoading
-                            ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width:20,height:20,child: CircularProgressIndicator(strokeWidth: 2)))
-                            : null,
-                      ),
-                      onChanged: _onPoiChanged,
-                    ),
-                  ),
-                  if (_poiResults.isNotEmpty) ...[
-                    const SizedBox(height: Spacing.sm),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 200),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: _poiResults.length,
-                        itemBuilder: (ctx, i) {
-                          final poi = _poiResults[i];
-                          return ListTile(
-                            dense: true,
-                            leading: Text(poi.icon, style: const TextStyle(fontSize: 18)),
-                            title: Text(poi.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text(poi.address, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: AppFontSizes.caption - 1)),
-                            trailing: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: scheme.surfaceContainerHigh, borderRadius: AppRadius.capsule),
-                              child: Text(poi.source == PoiSource.offline ? '离线' : '在线', style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
-                            ),
-                            onTap: () => _selectPoi(poi),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+  /// 无框输入（名称 / 地址共用）。
+  Widget _bareField({
+    required TextEditingController controller,
+    required String hint,
+    double fontSize = AppFontSizes.body,
+    FontWeight weight = FontWeight.w600,
+    Color? color,
+    int? maxLines = 1,
+    ValueChanged<String>? onChanged,
+    TextInputAction action = TextInputAction.next,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      onChanged: onChanged,
+      textInputAction: action,
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: weight,
+        color: color ?? scheme.onSurface,
+      ),
+      decoration: InputDecoration(
+        hintText: hint,
+        isDense: true,
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        contentPadding: const EdgeInsets.symmetric(vertical: Spacing.xs),
+        hintStyle: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w500,
+          color: scheme.onSurfaceVariant.withValues(alpha: 0.55),
+        ),
+      ),
+    );
+  }
+
+  /// 主卡：非交通 = 名称 + 地址 + POI 建议 + 什么时候；
+  /// 交通 = 名称 + 出发/到达两段 + 什么时候。
+  Widget _buildMainCard(bool isTransport) {
+    final scheme = Theme.of(context).colorScheme;
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel('安排内容'),
+          const SizedBox(height: Spacing.xs),
+          _bareField(
+            controller: _nameCtrl,
+            hint: isTransport ? '例如：轮渡往返' : '例如：浅草寺',
+            fontSize: 21,
+            weight: FontWeight.w800,
+            action: TextInputAction.next,
+            // V2.8.3.5：名称即 POI 搜索入口（原独立「搜索地点」卡并入此处）
+            onChanged: isTransport ? null : _onPoiChanged,
+          ),
+          if (!isTransport) ...[
+            const SizedBox(height: Spacing.xs),
+            _bareField(
+              controller: _addrCtrl,
+              hint: '地址（选填，选 POI 会自动填入）',
+              fontSize: AppFontSizes.caption,
+              weight: FontWeight.w500,
+              color: scheme.onSurfaceVariant,
+              action: TextInputAction.done,
             ),
-            const SizedBox(height: Spacing.lg),
-
-            // Day selector: an arrangement must belong to one of the trip days.
-            if (_trip != null) ...[
-              SectionCard(
-                child: LabeledField(
-                  label: '安排日期',
-                  child: InkWell(
+            // POI 内联建议（最多 3 条，点一条即回填名称 + 地址 + 经纬度）
+            if (_poiLoading || _poiResults.isNotEmpty) ...[
+              const SizedBox(height: Spacing.md),
+              if (_poiLoading)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+                  child: Row(children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: Spacing.sm),
+                    Text('正在搜索…',
+                        style: TextStyle(
+                            fontSize: AppFontSizes.caption,
+                            color: scheme.onSurfaceVariant)),
+                  ]),
+                )
+              else
+                Container(
+                  decoration: BoxDecoration(
                     borderRadius: AppRadius.input,
-                    onTap: _pickDay,
-                    child: Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
-                      alignment: Alignment.centerLeft,
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerLow,
-                        borderRadius: AppRadius.input,
-                      ),
-                      child: Text(
-                        _dateEpochDay == null
-                            ? '请选择日期'
-                            : '第 ${_dateEpochDay! - _trip!.startEpochDay + 1} 天 · ${fmtMonthDayOfEpoch(_dateEpochDay!)}',
-                      ),
-                    ),
+                    border: Border.all(
+                        color: scheme.outlineVariant.withValues(alpha: 0.8)),
                   ),
-                ),
-              ),
-              const SizedBox(height: Spacing.lg),
-            ],
-
-            // Transport: from/to
-            if (isTransport) ...[
-              SectionCard(
-                child: Column(
-                  children: [
-                    LabeledField(
-                      label: '出发地',
-                      child: TextField(controller: _fromNameCtrl, decoration: const InputDecoration(hintText: '出发地名称')),
-                    ),
-                    const SizedBox(height: Spacing.lg),
-                    LabeledField(
-                      label: '到达地',
-                      child: TextField(controller: _toNameCtrl, decoration: const InputDecoration(hintText: '到达地名称')),
-                    ),
-                    const SizedBox(height: Spacing.lg),
-                    LabeledField(
-                      label: '航班号 (选填)',
-                      child: TextField(
-                        controller: _flightCtrl,
-                        textCapitalization: TextCapitalization.characters,
-                        decoration: InputDecoration(
-                          hintText: '例如 MU5137',
-                          suffixIcon: _flightLoading
-                              ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width:18,height:18,child: CircularProgressIndicator(strokeWidth: 2)))
-                              : IconButton(icon: const Icon(Icons.search_rounded, size: 20), onPressed: _lookupFlight),
-                        ),
-                        onEditingComplete: _lookupFlight,
-                      ),
-                    ),
-                    if (_flightInfo != null) ...[
-                      const SizedBox(height: Spacing.sm),
-                      Container(
-                        padding: const EdgeInsets.all(Spacing.md),
-                        decoration: BoxDecoration(
-                          color: scheme.primaryContainer.withValues(alpha: 0.4),
-                          borderRadius: AppRadius.input,
-                        ),
-                        child: Row(
-                          children: [
-                            const Text('✈️', style: TextStyle(fontSize: 18)),
-                            const SizedBox(width: Spacing.sm),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(_flightInfo!.airlineName, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                  Text('${_flightInfo!.fromAirport} → ${_flightInfo!.toAirport}',
-                                      style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: Spacing.lg),
-            ],
-
-            // Time + Duration
-            SectionCard(
-              child: Column(
-                children: [
-                  Row(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: LabeledField(
-                          label: '开始时间',
-                          child: GestureDetector(
-                            onTap: _pickTime,
-                            child: Container(
-                              height: 48,
-                              alignment: Alignment.centerLeft,
-                              padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
-                              decoration: BoxDecoration(color: scheme.surfaceContainerLow, borderRadius: AppRadius.input),
-                              child: Text(_startTimeMin != null ? hhmm(_startTimeMin!) : '点击选择',
-                                  style: TextStyle(color: _startTimeMin != null ? scheme.onSurface : scheme.onSurfaceVariant)),
+                      for (var i = 0;
+                          i < _poiResults.length && i < 3;
+                          i++)
+                        InkWell(
+                          onTap: () => _selectPoi(_poiResults[i]),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: Spacing.md,
+                                vertical: Spacing.sm + 1),
+                            decoration: BoxDecoration(
+                              color: scheme.surfaceContainerLowest,
+                              border: i == 0
+                                  ? null
+                                  : Border(
+                                      top: BorderSide(
+                                          color: scheme.outlineVariant
+                                              .withValues(alpha: 0.7))),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(_poiResults[i].icon,
+                                    style: const TextStyle(fontSize: 15)),
+                                const SizedBox(width: Spacing.sm),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(_poiResults[i].name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700)),
+                                      if (_poiResults[i]
+                                          .address
+                                          .isNotEmpty)
+                                        Text(_poiResults[i].address,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: scheme
+                                                    .onSurfaceVariant)),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: Spacing.sm),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: scheme.surfaceContainerHigh,
+                                    borderRadius: AppRadius.capsule,
+                                  ),
+                                  child: Text(
+                                    _poiResults[i].source ==
+                                            PoiSource.offline
+                                        ? '离线'
+                                        : '在线',
+                                    style: TextStyle(
+                                        fontSize: 9.5,
+                                        color: scheme.onSurfaceVariant),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: Spacing.lg),
-                      Expanded(
-                        child: LabeledField(
-                          label: '时长 (分钟)',
-                          child: MiniStepper(
-                            valueText: _durationMin != null ? '${_durationMin}分钟' : '未设',
-                            onMinus: () => setState(() { _durationMin = (_durationMin ?? 0) - 15; if (_durationMin! < 0) _durationMin = 0; }),
-                            onPlus: () => setState(() => _durationMin = (_durationMin ?? 0) + 15),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+            ],
+          ],
+          // 交通专属：出发 / 到达 两段（时间轴式，橙点起、绿点终）
+          if (isTransport) ...[
+            const SizedBox(height: Spacing.md),
+            _sectionLabel('行程'),
+            const SizedBox(height: Spacing.sm),
+            _buildLeg(
+              label: '出发',
+              controller: _fromNameCtrl,
+              hint: '出发地名称',
+              dotColor: tripTypeVisual('transport').color,
             ),
-            const SizedBox(height: Spacing.lg),
+            Container(
+              width: 1.5,
+              height: 16,
+              margin: const EdgeInsets.only(left: 5, top: 2, bottom: 2),
+              color: scheme.outlineVariant,
+            ),
+            _buildLeg(
+              label: '到达',
+              controller: _toNameCtrl,
+              hint: '到达地名称',
+              dotColor: scheme.primary,
+            ),
+          ],
+          Divider(
+              height: Spacing.xl + Spacing.sm,
+              color: scheme.outlineVariant.withValues(alpha: 0.85)),
+          // 什么时候
+          _sectionLabel('什么时候'),
+          const SizedBox(height: Spacing.sm),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: _trip == null ? null : _pickDay,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: Spacing.md, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    borderRadius: AppRadius.capsule,
+                  ),
+                  child: Text(
+                    _dateEpochDay == null || _trip == null
+                        ? '选择日期'
+                        : 'Day ${_dateEpochDay! - _trip!.startEpochDay + 1} · ${fmtMonthDayOfEpoch(_dateEpochDay!)}',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (_trip != null)
+                GestureDetector(
+                  onTap: _pickDay,
+                  child: Text('换一天',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary)),
+                ),
+            ],
+          ),
+          const SizedBox(height: Spacing.md),
+          // 实时时间摘要：点击左侧时间进系统时间选择器
+          GestureDetector(
+            onTap: _pickTime,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  _startTimeMin == null ? '选择开始时间' : hhmm(_startTimeMin!),
+                  style: TextStyle(
+                    fontSize: _startTimeMin == null ? 19 : 23,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: _startTimeMin == null
+                        ? scheme.onSurfaceVariant.withValues(alpha: 0.6)
+                        : scheme.onSurface,
+                    fontFeatures: AppTextStyles.tabularFigures,
+                  ),
+                ),
+                if (_startTimeMin != null) ...[
+                  Text('  →  ',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurfaceVariant)),
+                  Text(
+                    hhmm((_startTimeMin! + (_durationMin ?? 0)) % 1440),
+                    style: const TextStyle(
+                      fontSize: 23,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                      fontFeatures: AppTextStyles.tabularFigures,
+                    ),
+                  ),
+                  if ((_durationMin ?? 0) > 0)
+                    Text(
+                      '  · 共 ${_durLabel(_durationMin!)}',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: Spacing.md),
+          // 时长快捷 chips（原 MiniStepper 每次 ±15，设 2 小时要点 8 次）
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (final m in _quickDurations)
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _durationMin = m);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: Spacing.md, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _durationMin == m
+                          ? scheme.primaryContainer
+                          : scheme.surfaceContainerLow,
+                      borderRadius: AppRadius.capsule,
+                      border: Border.all(
+                          color: _durationMin == m
+                              ? scheme.primary.withValues(alpha: 0.35)
+                              : Colors.transparent),
+                    ),
+                    child: Text(
+                      _durLabel(m),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: _durationMin == m
+                            ? scheme.onPrimaryContainer
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: Spacing.sm),
+          // 精细微调（保留 ±15 步进，供非整档时长使用）
+          MiniStepper(
+            valueText:
+                _durationMin != null ? '${_durationMin}分钟' : '未设时长',
+            onMinus: () => setState(() {
+              _durationMin = (_durationMin ?? 0) - 15;
+              if (_durationMin! < 0) _durationMin = 0;
+            }),
+            onPlus: () => setState(() => _durationMin = (_durationMin ?? 0) + 15),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // Cost
-            SectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LabeledField(
-                    label: '费用',
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _costCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(hintText: '金额 (元)'),
-                          ),
+  String _durLabel(int minutes) {
+    if (minutes < 60) return '$minutes分';
+    final h = minutes / 60;
+    return h == h.roundToDouble()
+        ? '${h.round()}时'
+        : '${h.toStringAsFixed(1)}时';
+  }
+
+  Widget _buildLeg({
+    required String label,
+    required TextEditingController controller,
+    required String hint,
+    required Color dotColor,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 7),
+          child: Container(
+            width: 11,
+            height: 11,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+        ),
+        const SizedBox(width: Spacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              _bareField(
+                controller: controller,
+                hint: hint,
+                fontSize: 14.5,
+                weight: FontWeight.w700,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 航班 / 车次：独立成卡，查询结果以浅绿底呈现。
+  Widget _buildFlightCard() {
+    final scheme = Theme.of(context).colorScheme;
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionLabel('航班 / 车次', hint: '选填'),
+          const SizedBox(height: Spacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: _bareField(
+                  controller: _flightCtrl,
+                  hint: '例如 MU5137',
+                  fontSize: 16,
+                  weight: FontWeight.w800,
+                  action: TextInputAction.search,
+                ),
+              ),
+              const SizedBox(width: Spacing.sm),
+              GestureDetector(
+                onTap: _flightLoading ? null : _lookupFlight,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: Spacing.md + 1, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    borderRadius: AppRadius.capsule,
+                  ),
+                  child: _flightLoading
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text(
+                          '查询',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white),
                         ),
-                        const SizedBox(width: Spacing.sm),
-                        // Currency chip selector
-                        GestureDetector(
-                          onTap: () => _showCurrencySheet(),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: Spacing.sm),
-                            decoration: BoxDecoration(color: scheme.primaryContainer, borderRadius: AppRadius.capsule),
-                            child: Text('${_currency}', style: TextStyle(fontWeight: FontWeight.w700, color: scheme.onPrimaryContainer)),
-                          ),
+                ),
+              ),
+            ],
+          ),
+          if (_flightInfo != null) ...[
+            const SizedBox(height: Spacing.md),
+            Container(
+              padding: const EdgeInsets.all(Spacing.md),
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer.withValues(alpha: 0.42),
+                borderRadius: AppRadius.input,
+              ),
+              child: Row(
+                children: [
+                  const Text('✈️', style: TextStyle(fontSize: 17)),
+                  const SizedBox(width: Spacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_flightInfo!.airlineName,
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 1),
+                        Text(
+                          '${_flightInfo!.fromAirport} → ${_flightInfo!.toAirport}',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: scheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -519,28 +861,203 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: Spacing.lg),
+          ],
+        ],
+      ),
+    );
+  }
 
-            // Note
-            SectionCard(
-              child: LabeledField(
-                label: '备注 (选填)',
-                child: TextField(controller: _noteCtrl, maxLines: 3, minLines: 2, decoration: const InputDecoration(hintText: '添加备注…')),
+  /// 费用：一张卡压成一行（币种符号 + 金额 + 币种胶囊）。
+  Widget _buildCostCard() {
+    final scheme = Theme.of(context).colorScheme;
+    final symbol = findCurrencyOption(_currency)?.symbol ?? '¥';
+    return SectionCard(
+      padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.lg, vertical: Spacing.md),
+      child: Row(
+        children: [
+          Text(
+            symbol,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: TextField(
+              controller: _costCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                fontFeatures: AppTextStyles.tabularFigures,
+              ),
+              decoration: InputDecoration(
+                hintText: '费用金额',
+                isDense: true,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                hintStyle: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurfaceVariant.withValues(alpha: 0.5),
+                ),
               ),
             ),
-            const SizedBox(height: Spacing.xxl),
+          ),
+          const SizedBox(width: Spacing.sm),
+          GestureDetector(
+            onTap: _showCurrencySheet,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.md, vertical: 6),
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer,
+                borderRadius: AppRadius.capsule,
+              ),
+              child: Text(
+                '$_currency ▾',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: scheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            PrimaryButton(
+  /// 备注：默认折叠（与原「备注（选填）」卡内容一致，仅收起来）。
+  Widget _buildNoteCard() {
+    final scheme = Theme.of(context).colorScheme;
+    return SectionCard(
+      padding: EdgeInsets.fromLTRB(Spacing.lg, Spacing.sm, Spacing.lg,
+          _noteOpen ? Spacing.lg : Spacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            borderRadius: AppRadius.input,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _noteOpen = !_noteOpen);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+              child: Row(
+                children: [
+                  const Text('备注',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  Text('选填',
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption,
+                          color: scheme.onSurfaceVariant)),
+                  const SizedBox(width: Spacing.sm),
+                  AnimatedRotation(
+                    turns: _noteOpen ? 0.25 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(Icons.chevron_right_rounded,
+                        size: 18, color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            alignment: Alignment.topCenter,
+            child: _noteOpen
+                ? Padding(
+                    padding: const EdgeInsets.only(top: Spacing.sm),
+                    child: TextField(
+                      controller: _noteCtrl,
+                      maxLines: 3,
+                      minLines: 2,
+                      decoration: const InputDecoration(hintText: '添加备注…'),
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 停靠的提交区：避让底部悬浮胶囊栏；编辑模式左侧给「删除」。
+  Widget _buildDockSave() {
+    final scheme = Theme.of(context).colorScheme;
+    final bottomPad = isDesktopWeb(context)
+        ? Spacing.md
+        : Spacing.sm +
+            AppBottomLayout.withSafeArea(context, AppBottomLayout.navBarHeight);
+    return Container(
+      padding: EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, bottomPad),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (_editId != null) ...[
+            Tooltip(
+              message: '删除这条安排',
+              child: InkWell(
+                borderRadius: AppRadius.input,
+                onTap: _delete,
+                child: Container(
+                  width: 46,
+                  height: 46,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: scheme.errorContainer.withValues(alpha: 0.5),
+                    borderRadius: AppRadius.input,
+                  ),
+                  child: Icon(Icons.delete_outline_rounded,
+                      size: 20, color: scheme.error),
+                ),
+              ),
+            ),
+            const SizedBox(width: Spacing.md),
+          ],
+          Expanded(
+            child: PrimaryButton(
               label: _editId == null ? '保存安排' : '更新安排',
               loading: _saving,
               expanded: true,
               onPressed: _save,
             ),
-            const SizedBox(height: Spacing.huge),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  /// 删除当前安排（编辑模式）。危险确认必须带影响数量（强确认口径）。
+  Future<void> _delete() async {
+    final id = _editId;
+    if (id == null) return;
+    HapticFeedback.mediumImpact();
+    final ok = await showDangerConfirm(
+      context: context,
+      title: '删除这条安排？',
+      body: '将从行程中永久移除 1 条安排，相关账单关联也会一并解除，且无法恢复。',
+      icon: Icons.delete_outline_rounded,
+    );
+    if (!ok || !mounted) return;
+    await ref.read(tripsRepoProvider).deleteItem(id);
+    if (!mounted) return;
+    context.pop(true);
   }
 
   Future<void> _pickDay() async {

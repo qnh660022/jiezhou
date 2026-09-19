@@ -1,5 +1,9 @@
-// ✏️ 新建 / 编辑行程：名称目的地 + 10 emoji + 6 渐变封面 + 中文日期区间选择
-// 数据访问集中区 —— 按 t2 命名假设编写：
+// ✏️ 新建 / 编辑行程（V2.8.3.5 方案 A · 预览驱动重排）。
+//
+// 布局自上而下：实时预览卡（封面渐变 + 徽章 + 名称 + 目的地 + 日期区间）
+// → 名称/目的地行内无框输入 → 外观（封面横滑 + 徽章）→ 日期（快捷 chip +
+// 区间 + 天数）→ 装配节奏 → 备注（折叠）→ 底部停靠的提交按钮。
+// 字段、保存逻辑与 schema 与旧版完全一致，仅重排视觉与交互。
 import 'package:flutter/material.dart';
 import '../../../core/date_utils.dart';
 import 'package:flutter/services.dart';
@@ -47,6 +51,8 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
   int? _endDay;
   // V2.7.2 S7：行程级装配节奏（relaxed/standard/tight）。
   String _pace = 'standard';
+  // V2.8.3.5 方案 A：备注默认折叠成一行，展开才出现输入框。
+  bool _noteOpen = false;
 
   String? _editId;
   bool _loaded = false;
@@ -197,69 +203,178 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
       if (_editId == null) _loaded = true;
     }
     return Scaffold(
-      appBar: GlassAppBar(title: _editId == null ? '新建行程' : '编辑行程'),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(Spacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildBasicsCard(),
-            const SizedBox(height: Spacing.lg),
-            _buildEmojiCard(),
-            const SizedBox(height: Spacing.lg),
-            _buildCoverCard(),
-            const SizedBox(height: Spacing.lg),
-            _buildDateCard(),
-            const SizedBox(height: Spacing.lg),
-            _buildPaceCard(),
-            const SizedBox(height: Spacing.lg),
-            _buildNoteCard(),
-            const SizedBox(height: Spacing.xxl),
-            PrimaryButton(
-              label: _editId == null ? '创建行程' : '保存修改',
-              loading: _saving,
-              expanded: true,
-              onPressed: _save,
+      appBar: GlassAppBar(
+        title: _editId == null ? '新建行程' : '编辑行程',
+        actions: [
+          TextButton(
+            onPressed: () => context.pop(false),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+              minimumSize: const Size(48, 36),
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
             ),
-            const SizedBox(height: Spacing.huge),
-          ],
-        ),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                  Spacing.xl, Spacing.md, Spacing.xl, Spacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // V2.8.3.5 方案 A：顶部实时预览（所见即所得）
+                  _buildHeroPreview(context),
+                  const SizedBox(height: Spacing.md),
+                  _buildInlineFields(context),
+                  const SizedBox(height: Spacing.md),
+                  _buildAppearanceCard(),
+                  const SizedBox(height: Spacing.md),
+                  _buildDateCard(),
+                  const SizedBox(height: Spacing.md),
+                  _buildPaceCard(),
+                  const SizedBox(height: Spacing.md),
+                  _buildNoteCard(),
+                ],
+              ),
+            ),
+          ),
+          // V2.8.3.5：提交动作从滚动末尾移到停靠区，滚多远都在
+          _buildDockSave(context),
+        ],
       ),
     );
   }
 
-  // ============ 区块：基础信息 / emoji / 封面 ============
+  /// 停靠的提交区：避让底部悬浮胶囊栏（桌面 Dialog 复用时不避让）。
+  Widget _buildDockSave(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final bottomPad = isDesktopWeb(context)
+        ? Spacing.md
+        : Spacing.sm +
+            AppBottomLayout.withSafeArea(context, AppBottomLayout.navBarHeight);
+    return Container(
+      padding: EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, bottomPad),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+        ),
+      ),
+      child: PrimaryButton(
+        label: _editId == null ? '创建行程' : '保存修改',
+        loading: _saving,
+        expanded: true,
+        onPressed: _save,
+      ),
+    );
+  }
 
-  Widget _buildBasicsCard() {
-    return SectionCard(
-      child: Column(
-        children: [
-          LabeledField(
-            label: '行程名称',
-            child: TextField(
-              controller: _nameCtrl,
-              textInputAction: TextInputAction.next,
-              maxLength: 20,
-              decoration:
-                  const InputDecoration(hintText: '例如：东京五日游', counterText: ''),
-            ),
+  // ============ 区块：实时预览 / 行内输入 / 外观 ============
+
+  /// 顶部实时预览卡：封面渐变 + 徽章 + 名称 + 目的地 + 日期区间。
+  ///
+  /// 名称与目的地走 [ValueListenableBuilder]，输入即刷新，不必 setState；
+  /// 封面与日期随 setState 重建。整卡即行程列表里那张卡的缩影。
+  Widget _buildHeroPreview(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 150,
+      decoration: BoxDecoration(
+        gradient: CoverGradients.gradientFor(_coverKey),
+        borderRadius: AppRadius.card,
+        boxShadow: [
+          BoxShadow(
+            color: scheme.shadow.withValues(alpha: 0.16),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
-          const SizedBox(height: Spacing.lg),
-          LabeledField(
-            label: '目的地',
-            child: TextField(
-              controller: _destCtrl,
-              textInputAction: TextInputAction.done,
-              maxLength: 60,
-              decoration: InputDecoration(
-                hintText: '例如：成都-稻城，或点图标选择城市',
-                counterText: '',
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.location_on_outlined),
-                  tooltip: '选择目的地',
-                  onPressed: _pickDestination,
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          Positioned(
+            left: Spacing.lg,
+            top: Spacing.md,
+            child: Text(_emoji, style: const TextStyle(fontSize: 30)),
+          ),
+          Positioned(
+            left: Spacing.lg,
+            right: Spacing.lg,
+            bottom: Spacing.md,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _nameCtrl,
+                  builder: (context, v, _) {
+                    final t = v.text.trim();
+                    return Text(
+                      t.isEmpty ? '未命名行程' : t,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                        color: CoverGradients.onCover
+                            .withValues(alpha: t.isEmpty ? 0.72 : 1.0),
+                        shadows: const [
+                          Shadow(
+                              color: Color(0x40000000),
+                              blurRadius: 10,
+                              offset: Offset(0, 2)),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-              ),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _destCtrl,
+                  builder: (context, v, _) {
+                    final t = v.text.trim();
+                    if (t.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        t,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppFontSizes.caption,
+                          color: CoverGradients.onCover.withValues(alpha: 0.92),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                if (_startDay != null && _endDay != null) ...[
+                  const SizedBox(height: 9),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 11, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.24),
+                      borderRadius: AppRadius.capsule,
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      '🗓 ${cnDateRange(_startDay!, _endDay!)} · 共 ${tripTotalDays(_startDay!, _endDay!)} 天',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: CoverGradients.onCover,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -267,120 +382,263 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
     );
   }
 
-  Widget _buildEmojiCard() {
+  /// 名称 / 目的地：无框行内输入（去掉 TextField 描边，保留 34px 图标底片）。
+  Widget _buildInlineFields(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SectionCard(
-      child: LabeledField(
-        label: '行程徽章',
-        child: SizedBox(
-          height: 64,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: kTripEmojis.length,
-            separatorBuilder: (_, __) => const SizedBox(width: Spacing.md),
-            itemBuilder: (context, i) {
-              final e = kTripEmojis[i];
-              final selected = e == _emoji;
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _emoji = e);
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutBack,
-                  width: 56,
-                  height: 56,
-                  alignment: Alignment.center,
-                  transformAlignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? scheme.primaryContainer
-                        : scheme.surfaceContainerLow,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: selected ? scheme.primary : Colors.transparent,
-                      width: 2,
+
+    Widget row({
+      required IconData icon,
+      required String label,
+      required TextEditingController controller,
+      required String hint,
+      required int maxLength,
+      bool big = false,
+      Widget? trailing,
+    }) {
+      final textSize = big ? 17.0 : AppFontSizes.body;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, size: 18, color: scheme.primary),
+            ),
+            const SizedBox(width: Spacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
-                  transform: Matrix4.diagonal3Values(
-                      selected ? 1.12 : 1.0, selected ? 1.12 : 1.0, 1),
-                  child: Text(e, style: const TextStyle(fontSize: 26)),
-                ),
-              );
-            },
-          ),
+                  TextField(
+                    controller: controller,
+                    maxLength: maxLength,
+                    textInputAction: TextInputAction.next,
+                    style: TextStyle(
+                      fontSize: textSize,
+                      fontWeight: big ? FontWeight.w700 : FontWeight.w600,
+                      color: scheme.onSurface,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: hint,
+                      counterText: '',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      hintStyle: TextStyle(
+                        fontSize: textSize,
+                        fontWeight: FontWeight.w500,
+                        color:
+                            scheme.onSurfaceVariant.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (trailing != null) trailing,
+          ],
         ),
+      );
+    }
+
+    return SectionCard(
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.lg, vertical: 4),
+      child: Column(
+        children: [
+          row(
+            icon: Icons.sell_rounded,
+            label: '行程名称',
+            controller: _nameCtrl,
+            hint: '例如：东京五日游',
+            maxLength: 20,
+            big: true,
+          ),
+          Divider(
+              height: 1,
+              color: scheme.outlineVariant.withValues(alpha: 0.8)),
+          row(
+            icon: Icons.place_rounded,
+            label: '目的地',
+            controller: _destCtrl,
+            hint: '例如：成都-稻城',
+            maxLength: 60,
+            trailing: TextButton(
+              onPressed: _pickDestination,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: Spacing.sm),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: scheme.primary,
+              ),
+              child: const Text('选城市',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildCoverCard() {
+  /// 外观卡：封面由 3×2 方格改横滑 snap，徽章独立一行；两张卡并成一张。
+  Widget _buildAppearanceCard() {
     final scheme = Theme.of(context).colorScheme;
+    final labelStyle = TextStyle(
+      fontSize: AppFontSizes.caption,
+      fontWeight: FontWeight.w600,
+      color: scheme.onSurfaceVariant,
+      letterSpacing: 0.2,
+    );
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('封面渐变',
-              style: TextStyle(
-                  fontSize: AppFontSizes.caption,
-                  fontWeight: FontWeight.w600,
-                  color: scheme.onSurfaceVariant,
-                  letterSpacing: 0.2)),
+          Row(children: [
+            Text('封面', style: labelStyle),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: Text('左右滑动',
+                  style: TextStyle(
+                      fontSize: AppFontSizes.caption - 1,
+                      color: scheme.onSurfaceVariant)),
+            ),
+          ]),
           const SizedBox(height: Spacing.md),
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: Spacing.md,
-            crossAxisSpacing: Spacing.md,
-            childAspectRatio: 1.6,
-            children: [
-              for (final key in CoverGradients.keys)
-                GestureDetector(
+          SizedBox(
+            height: 44,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: CoverGradients.keys.length,
+              separatorBuilder: (_, __) => const SizedBox(width: Spacing.sm),
+              itemBuilder: (context, i) {
+                final key = CoverGradients.keys[i];
+                final selected = key == _coverKey;
+                return GestureDetector(
                   onTap: () {
                     HapticFeedback.selectionClick();
                     setState(() => _coverKey = key);
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
+                    width: 62,
                     decoration: BoxDecoration(
                       gradient: CoverGradients.gradientFor(key),
-                      borderRadius: AppRadius.input,
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: _coverKey == key
-                            ? scheme.onSurface
-                            : Colors.transparent,
+                        color:
+                            selected ? scheme.onSurface : Colors.transparent,
                         width: 2.5,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: scheme.shadow.withValues(alpha: 0.12),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
                     ),
-                    child: Center(
-                      child: Icon(
-                        _coverKey == key
-                            ? Icons.check_rounded
-                            : Icons.auto_awesome_rounded,
-                        size: 20,
-                        color: CoverGradients.onCover.withValues(alpha: 0.9),
+                    child: selected
+                        ? const Icon(Icons.check_rounded,
+                            size: 16, color: Colors.white)
+                        : null,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: Spacing.lg),
+          Text('徽章', style: labelStyle),
+          const SizedBox(height: Spacing.md),
+          SizedBox(
+            height: 44,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: kTripEmojis.length,
+              separatorBuilder: (_, __) => const SizedBox(width: Spacing.sm),
+              itemBuilder: (context, i) {
+                final e = kTripEmojis[i];
+                final selected = e == _emoji;
+                return GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _emoji = e);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutBack,
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    transformAlignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? scheme.primaryContainer
+                          : scheme.surfaceContainerLow,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color:
+                            selected ? scheme.primary : Colors.transparent,
+                        width: 2,
                       ),
                     ),
+                    transform: Matrix4.diagonal3Values(
+                        selected ? 1.08 : 1.0, selected ? 1.08 : 1.0, 1),
+                    child: Text(e, style: const TextStyle(fontSize: 20)),
                   ),
-                ),
-            ],
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-
   // ============ 区块：日期区间 / 备注 ============
+
+  /// 快捷预设是否有命中（用于 chip 高亮）：要求起点 = 今天。
+  bool _isQuickRange(int days) {
+    if (_startDay == null || _endDay == null) return false;
+    final today = todayEpochDay();
+    return _startDay == today && _endDay == today + days - 1;
+  }
+
+  /// 快捷区间：起点今天，长度 days 天。
+  void _applyQuickRange(int days) {
+    HapticFeedback.selectionClick();
+    final start = todayEpochDay();
+    setState(() {
+      _startDay = start;
+      _endDay = start + days - 1;
+    });
+  }
+
+  /// 「本周末」：下一个周六 → 周日（今天即周六则从今天起）。
+  void _applyThisWeekend() {
+    HapticFeedback.selectionClick();
+    final untilSat =
+        (DateTime.saturday - DateTime.now().weekday + 7) % 7;
+    final sat = todayEpochDay() + untilSat;
+    setState(() {
+      _startDay = sat;
+      _endDay = sat + 1;
+    });
+  }
+
+  bool _isThisWeekend() {
+    if (_startDay == null || _endDay == null) return false;
+    final untilSat =
+        (DateTime.saturday - DateTime.now().weekday + 7) % 7;
+    final sat = todayEpochDay() + untilSat;
+    return _startDay == sat && _endDay == sat + 1;
+  }
 
   Widget _buildDateCard() {
     final scheme = Theme.of(context).colorScheme;
@@ -399,7 +657,8 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
             decoration: BoxDecoration(
               color: scheme.surfaceContainerLow,
               borderRadius: AppRadius.input,
-              border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+              border:
+                  Border.all(color: scheme.outlineVariant.withValues(alpha: 0.6)),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -426,10 +685,57 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
       );
     }
 
+    Widget quick(String label, bool selected, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? scheme.primaryContainer
+                : scheme.surfaceContainerLow,
+            borderRadius: AppRadius.capsule,
+            border: Border.all(
+                color: selected
+                    ? scheme.primary.withValues(alpha: 0.35)
+                    : Colors.transparent),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text('日期',
+              style: TextStyle(
+                  fontSize: AppFontSizes.caption,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurfaceVariant,
+                  letterSpacing: 0.2)),
+          const SizedBox(height: Spacing.md),
+          // V2.8.3.5：四个快捷预设，一键补齐区间（仍可点开自绘日历微调）
+          Wrap(
+            spacing: Spacing.sm,
+            runSpacing: Spacing.sm,
+            children: [
+              quick('本周末', _isThisWeekend(), _applyThisWeekend),
+              quick('3 天', _isQuickRange(3), () => _applyQuickRange(3)),
+              quick('5 天', _isQuickRange(5), () => _applyQuickRange(5)),
+              quick('一周', _isQuickRange(7), () => _applyQuickRange(7)),
+            ],
+          ),
+          const SizedBox(height: Spacing.md),
           LabeledField(
             label: '行程日期',
             child: Row(
@@ -447,8 +753,8 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
           if (_startDay != null && _endDay != null) ...[
             const SizedBox(height: Spacing.md),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: Spacing.md, vertical: Spacing.sm),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.md, vertical: Spacing.sm),
               decoration: BoxDecoration(
                 color: scheme.primaryContainer.withValues(alpha: 0.55),
                 borderRadius: AppRadius.capsule,
@@ -483,7 +789,10 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
       return Expanded(
         child: InkWell(
           borderRadius: AppRadius.input,
-          onTap: () => setState(() => _pace = pace.name),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => _pace = pace.name);
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(
                 vertical: Spacing.md, horizontal: Spacing.xs),
@@ -547,16 +856,59 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
     );
   }
 
+  /// 备注：默认折叠成一行，展开才出现输入框（方案 A 的第 6 条）。
   Widget _buildNoteCard() {
+    final scheme = Theme.of(context).colorScheme;
     return SectionCard(
-      child: LabeledField(
-        label: '备注（选填）',
-        child: TextField(
-          controller: _noteCtrl,
-          maxLines: 4,
-          minLines: 2,
-          decoration: const InputDecoration(hintText: '签证、预订、注意事项…'),
-        ),
+      padding: EdgeInsets.fromLTRB(Spacing.lg, Spacing.sm, Spacing.lg,
+          _noteOpen ? Spacing.lg : Spacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            borderRadius: AppRadius.input,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _noteOpen = !_noteOpen);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+              child: Row(
+                children: [
+                  const Text('备注', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  Text('选填',
+                      style: TextStyle(
+                          fontSize: AppFontSizes.caption,
+                          color: scheme.onSurfaceVariant)),
+                  const SizedBox(width: Spacing.sm),
+                  AnimatedRotation(
+                    turns: _noteOpen ? 0.25 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(Icons.chevron_right_rounded,
+                        size: 18, color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            alignment: Alignment.topCenter,
+            child: _noteOpen
+                ? Padding(
+                    padding: const EdgeInsets.only(top: Spacing.sm),
+                    child: TextField(
+                      controller: _noteCtrl,
+                      maxLines: 4,
+                      minLines: 2,
+                      decoration:
+                          const InputDecoration(hintText: '签证、预订、注意事项…'),
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ],
       ),
     );
   }

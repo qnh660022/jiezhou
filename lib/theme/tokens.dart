@@ -47,12 +47,22 @@ abstract final class AppBottomLayout {
   /// 内容底部预留：清掉下方悬浮控件（合计栏 + FAB）的总占用，结算后词典项不被遮挡。
   static const double contentTail = totalBarOffset + actionButtonOffset;
 
+  /// 底部悬浮胶囊导航栏自身的占位高度（V2.8.3.5）——**不含**安全区。
+  ///
+  /// 严格等于 [FloatingCapsuleNavBar] 的内部尺寸：
+  /// `Padding.top(Spacing.xs=4) + Container(66) + Padding.bottom(Spacing.sm=8)`
+  /// = 78。停靠类页面（行程详情的时间线 / 攻略双段）用它与胶囊栏顶边
+  /// 严格接合；**不要**复用 [actionButtonOffset]（那是 80，为 FAB 让位用，
+  /// 且被账本域十余处共用，改动会连带挪动所有页面的悬浮控件）。
+  static const double navBarHeight = 78;
+
   /// 底部停靠双段（行程详情的「时间线 / 攻略」）的占位高度（V2.8.3.4）。
   ///
-  /// = 胶囊高度 44 + 上下内边距 + 与全局胶囊底栏之间的间隙。带该停靠段的页面
-  /// （行程详情的时间线与攻略两个视图）末尾留白一律用
-  /// [dockedContentTail]，保证滚动到底时最后一条不被悬浮控件压住。
-  static const double segmentDockHeight = 62;
+  /// 按 `_DetailDock` 实测高重算（V2.8.3.5）：`Padding 5×2 + 段内 9×2 +
+  /// 文字行高 ≈ 46`，再留 10 与内容分隔 → 56。带该停靠段的页面（行程详情
+  /// 的时间线与攻略两个视图）末尾留白一律用 [dockedContentTail]，保证滚动
+  /// 到底时最后一条不被悬浮控件压住。
+  static const double segmentDockHeight = 56;
 
   /// 带底部停靠双段的页面：内容末尾留白总量。
   static const double dockedContentTail = contentTail + segmentDockHeight;

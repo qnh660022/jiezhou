@@ -5,7 +5,9 @@
 ///   （calendar，仅种子含该栏之城渲染）；
 /// - prep 转清单：`ChecklistItems(scope='trip', category='other',
 ///   label=prep.title)`；同 trip 同 label 全等去重（跳过 toast「已在清单中」）；
-/// - 无命中城 → 页签仍显示，空态卡「该目的地暂无锦囊」（O9：不隐藏入口）；
+/// - 无命中城 / 命中但四栏全空 / 种子读取失败 → 回落**城市攻略摘要**
+///   （V2.8.3.5：城名 + 统计 + 六栏宫格 + 进完整攻略），页签仍显示
+///   （O9：不隐藏入口），用户不再遇到「该目的地暂无锦囊」的死路；
 /// - viewer 只读（无「加入清单」）。
 /// - 数据走既有攻略取数链（getSeed：AI 导入 > 官网整包 > 内置种子）。
 library;
@@ -15,8 +17,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/guide/guide_providers.dart';
 import '../../../data/providers.dart';
 import '../../../domain/guide_match.dart';
+import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../theme/app_icons.dart';
 import '../../../theme/tokens.dart';
+import '../guide_widgets.dart' show GuideSectionGrid, GuideStatChip;
+import '../screens/trip_guide_screen.dart' show TripGuideScreenBuilder;
 
 class KitPanel extends ConsumerWidget {
   const KitPanel({
@@ -45,14 +51,36 @@ class KitPanel extends ConsumerWidget {
     final nameMap =
         ref.watch(guideCityKeyByNameProvider).valueOrNull ?? const {};
     final cityKey = matchCityKey(destination, nameMap);
+    // V2.8.3.5：锦囊不可用不再留死路 —— 未命中种子城时回落「城市攻略摘要」。
     if (cityKey == null) {
-      return const _KitEmpty();
+      return _CityGuideFallback(
+        tripId: tripId,
+        destination: destination,
+        bottomInset: bottomInset,
+      );
     }
     final seedAsync = ref.watch(kitSeedProvider(cityKey));
     final seed = seedAsync.valueOrNull;
     if (seed == null) {
-      if (seedAsync.hasError) return const _KitEmpty();
+      if (seedAsync.hasError) {
+        return _CityGuideFallback(
+          tripId: tripId,
+          destination: destination,
+          bottomInset: bottomInset,
+        );
+      }
       return const Center(child: CircularProgressIndicator());
+    }
+    // V2.8.3.5：命中城但四栏全空（种子存在却无内容）→ 同样回落，避免空白页签。
+    if (seed.prep.isEmpty &&
+        seed.tips.isEmpty &&
+        seed.budget.isEmpty &&
+        seed.calendar.isEmpty) {
+      return _CityGuideFallback(
+        tripId: tripId,
+        destination: destination,
+        bottomInset: bottomInset,
+      );
     }
     return RefreshIndicator(
       onRefresh: () async =>
@@ -124,16 +152,156 @@ class KitPanel extends ConsumerWidget {
   }
 }
 
-class _KitEmpty extends StatelessWidget {
-  const _KitEmpty();
+/// V2.8.3.5：锦囊不可用时的**回落**——渲染城市攻略摘要，绝不留死路。
+///
+/// 触发条件：行程目的地未命中种子城，或命中但四栏（prep / tips / budget /
+/// calendar）全空，或种子读取失败。
+///
+/// 数据走既有 [guideByTripProvider]（离线种子优先，零网络依赖），六栏宫格
+/// 复用攻略页的 [GuideSectionGrid]，点任意格 / 底部按钮进完整攻略页 —— 与
+/// 「该目的地暂无锦囊」的旧空态相比，用户在这里始终拿得到东西。
+class _CityGuideFallback extends ConsumerWidget {
+  const _CityGuideFallback({
+    required this.tripId,
+    required this.destination,
+    this.bottomInset,
+  });
+
+  final String tripId;
+  final String destination;
+  final double? bottomInset;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final async = ref.watch(guideByTripProvider(tripId));
+    final result = async.valueOrNull;
+    if (result == null) {
+      if (async.hasError) return _KitUnavailable(destination: destination);
+      return const Center(child: CircularProgressIndicator());
+    }
+    final cityName = result.location?.name ?? destination;
+    final spotCount = (result.sections['spots'] ?? const []).length +
+        (result.sections['food'] ?? const []).length;
+    final sourceLabel = result.isAiImported
+        ? copy('guide.sourceAi')
+        : result.hasCrawledGuide
+            ? copy('guide.sourceNetwork')
+            : copy('guide.sourceBuiltin');
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.only(
+        top: Spacing.md,
+        bottom: bottomInset ?? Spacing.huge,
+      ),
+      children: [
+        // 说明条：解释为什么这里不是锦囊
+        Padding(
+          padding:
+              const EdgeInsets.fromLTRB(Spacing.xl, 0, Spacing.xl, Spacing.md),
+          child: Container(
+            padding: const EdgeInsets.all(Spacing.md),
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer.withValues(alpha: 0.35),
+              borderRadius: AppRadius.input,
+            ),
+            child: Row(children: [
+              Icon(Icons.info_outline_rounded, size: 17, color: scheme.primary),
+              const SizedBox(width: Spacing.sm),
+              Expanded(
+                child: Text(
+                  '该目的地暂无城市锦囊，先看这份城市攻略',
+                  style: TextStyle(
+                      fontSize: AppFontSizes.caption, color: scheme.onSurface),
+                ),
+              ),
+            ]),
+          ),
+        ),
+        // 城市头摘要：城名 + 统计胶囊
+        Padding(
+          padding:
+              const EdgeInsets.fromLTRB(Spacing.xl, 0, Spacing.xl, Spacing.lg),
+          child: Container(
+            padding: const EdgeInsets.all(Spacing.lg),
+            decoration: BoxDecoration(
+              borderRadius: AppRadius.card,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  scheme.primaryContainer.withValues(alpha: 0.85),
+                  scheme.surfaceContainerLowest,
+                ],
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(cityName,
+                    style: AppTextStyles.headline(scheme)
+                        .copyWith(fontSize: 26)),
+                const SizedBox(height: Spacing.md),
+                Wrap(
+                  spacing: Spacing.sm,
+                  runSpacing: Spacing.sm,
+                  children: [
+                    GuideStatChip(
+                        icon: AppIcons.compass, text: '$spotCount 个景点/美食'),
+                    GuideStatChip(
+                        icon: AppIcons.clock,
+                        text: '约 ${result.readingMinutes} 分钟读完'),
+                    GuideStatChip(icon: AppIcons.check, text: sourceLabel),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        // 六栏宫格（自带横向 Spacing.xl 内边距）
+        GuideSectionGrid(
+          sections: result.sections,
+          onTap: (_) => _openFullGuide(context),
+        ),
+        const SizedBox(height: Spacing.lg),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+          child: OutlinedButton.icon(
+            onPressed: () => _openFullGuide(context),
+            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+            label: const Text('查看完整城市攻略'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(46),
+              shape:
+                  const RoundedRectangleBorder(borderRadius: AppRadius.button),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openFullGuide(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => TripGuideScreenBuilder(tripId: tripId),
+    ));
+  }
+}
+
+/// 城市攻略也取不到时的最坏空态（原「该目的地暂无锦囊」的收窄版）。
+class _KitUnavailable extends StatelessWidget {
+  const _KitUnavailable({required this.destination});
+
+  final String destination;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: EmptyState(
         icon: Icons.backpack_rounded,
-        title: '该目的地暂无锦囊',
-        message: '攻略还在持续扩容，可以先看看目的地攻略页',
+        title: '攻略暂时取不到',
+        message: '「$destination」的攻略数据暂不可用，稍后再试',
       ),
     );
   }

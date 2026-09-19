@@ -191,6 +191,49 @@ void main() {
           isTrue,
           reason: 'V2.8.3.4：时间线/攻略停靠段应与底栏同宽并紧贴其上');
     });
+
+    // -------------------------------------------------------------------
+    // V2.8.3.5：停靠条「贴紧」底部胶囊栏（消除 2px 缝 + 视觉连体）
+    // -------------------------------------------------------------------
+    test('16. navBarHeight 是胶囊栏占位的单一真值，且停靠条用它定位', () {
+      expect(AppBottomLayout.navBarHeight, 78,
+          reason: '= FloatingCapsuleNavBar 的 4 + 66 + 8，不含安全区');
+      final src = detail();
+      expect(src.contains('AppBottomLayout.navBarHeight'), isTrue);
+      expect(
+          RegExp(r'bottom: AppBottomLayout\.withSafeArea\(\s*context,\s*'
+                  r'AppBottomLayout\.navBarHeight,\s*\)')
+              .hasMatch(src),
+          isTrue,
+          reason: '停靠双段不再复用 FAB 的 actionButtonOffset(80)，否则留 2px 缝');
+    });
+
+    test('17. 停靠条下两角归零、只留上左右三边描边（与胶囊栏连体）', () {
+      final src = detail();
+      expect(src.contains('BorderRadius.vertical(top: Radius.circular(18))'),
+          isTrue,
+          reason: 'V2.8.3.5：下两角归零才能与胶囊栏顶边接合');
+      expect(
+          RegExp(r'Border\(\s*top: BorderSide\(color: lineColor\),\s*'
+                  r'left: BorderSide\(color: lineColor\),\s*'
+                  r'right: BorderSide\(color: lineColor\),\s*\)')
+              .hasMatch(src),
+          isTrue,
+          reason: '去下描边，保留上/左/右');
+      expect(AppBottomLayout.segmentDockHeight, 56,
+          reason: '按 _DetailDock 实测高（≈46）重算，留 10 与内容分隔');
+    });
+
+    test('18. 批量操作条不再用魔法数 62', () {
+      final src = detail();
+      expect(src.contains('AppBottomLayout.actionButtonOffset + 62'), isFalse,
+          reason: 'V2.8.3.5：改走 navBarHeight + segmentDockHeight 同口径');
+      expect(
+          RegExp(r'AppBottomLayout\.navBarHeight \+\s*'
+                  r'AppBottomLayout\.segmentDockHeight,')
+              .hasMatch(src),
+          isTrue);
+    });
   });
 
   // ---------------------------------------------------------------------

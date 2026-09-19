@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:travel_assistant/features/today/widgets/money_hero_text.dart';
+import 'package:travel_assistant/shared/app_meta.dart' show kAppVersionLabel;
 import 'package:travel_assistant/shared/widgets/money_text.dart'
     show MoneyFormat;
 import 'package:travel_assistant/features/trips/screens/trip_detail_screen.dart';
@@ -17,12 +18,26 @@ import 'package:travel_assistant/theme/tokens.dart';
 Widget _host(Widget child) => MaterialApp(home: Scaffold(body: Center(child: child)));
 
 void main() {
-  group('S7-1 版本号（2.8.3.1 → pubspec 2.8.3+2831，.1 由 build 承载）', () {
-    test('pubspec version 已升版', () {
+  // V2.8.3.5：本组原先硬编码 '2.8.3+2831'，导致每次升版都要改测试（V2.8.3.2/3/4
+  // 一路漏改）。改为**同源校验**：pubspec 语义版本与 kAppVersionLabel 必须对齐，
+  // 且构建号不得回退 —— 既守住「升版」意图，又不再逐版维护。
+  group('S7-1 版本号（pubspec ↔ app_meta 同源，构建号不回退）', () {
+    test('pubspec version 与 kAppVersionLabel 对齐且未回退', () {
       final src = File('pubspec.yaml').readAsStringSync();
       final match = RegExp(r'version:\s*(\S+)').firstMatch(src);
       expect(match, isNotNull);
-      expect(match!.group(1), '2.8.3+2831');
+      final full = match!.group(1)!;
+      expect(full.contains('+'), isTrue, reason: '必须带构建号（x.y.z+build）');
+
+      final semver = full.split('+').first; // 2.8.3
+      final build = int.parse(full.split('+').last); // 2835
+      expect(build >= 2835, isTrue, reason: '构建号不得回退（V2.8.3.4 = 2834）');
+
+      expect(kAppVersionLabel, startsWith('v$semver'),
+          reason: '标签须以 pubspec 语义版本开头，实得 $kAppVersionLabel');
+      final tail = kAppVersionLabel.split('.').last; // v2.8.3.5 → 5
+      expect('$build'.endsWith(tail), isTrue,
+          reason: '构建号 $build 应与标签 $kAppVersionLabel 的末段对齐');
     });
   });
 

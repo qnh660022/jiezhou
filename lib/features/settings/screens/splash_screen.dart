@@ -5,65 +5,15 @@ import 'package:go_router/go_router.dart';
 import '../../../platform/app_lock.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../shared/copy_tokens.dart';
-import '../../../theme/app_icons.dart';
 import '../../../shared/widgets/brand_waves.dart';
 import '../../../theme/tokens.dart';
 
-/// 开屏页：渐变圆 Logo 分层入场，短暂停留后自动进入行程 Tab。
+/// 开屏页：青山 Logo 分层入场，短暂停留后自动进入行程 Tab。
 ///
 /// 路由位于 `/`（顶层，不在底部导航壳内），到时 context.go('/trips')
 /// 以替换语义离开，返回键不会回到本页。
-/// V2.8.2 S2：舟身描边生长画笔（路径度量等效 stroke-dashoffset）。
-class _BoatStroke extends StatelessWidget {
-  const _BoatStroke({required this.progress});
-
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 56,
-      height: 56,
-      child: CustomPaint(
-        painter: _BoatStrokePainter(
-            color: scheme.onPrimary, progress: progress.clamp(0.0, 1.0)),
-        child: const Center(child: Icon(AppIcons.boat, size: 44)),
-      ),
-    );
-  }
-}
-
-class _BoatStrokePainter extends CustomPainter {
-  const _BoatStrokePainter({required this.color, required this.progress});
-
-  final Color color;
-  final double progress;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(size.width * 0.1, size.height * 0.3)
-      ..lineTo(size.width * 0.9, size.height * 0.3)
-      ..lineTo(size.width * 0.75, size.height * 0.7)
-      ..lineTo(size.width * 0.25, size.height * 0.7)
-      ..close();
-    final metric = path.computeMetrics().first;
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = color.withValues(alpha: 0.6)
-      ..strokeCap = StrokeCap.round;
-    final extracted =
-        metric.extractPath(0, metric.length * progress.clamp(0.0, 1.0));
-    canvas.drawPath(extracted, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _BoatStrokePainter old) =>
-      old.progress != progress || old.color != color;
-}
-
+/// V2.8.3.5：品牌图形由代码绘制的舟形（_BoatStroke）改为用户提供的青山
+/// Logo 资源图 `assets/img/logo.png`；入场节奏、光环扩散、双波纹母题不变。
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -208,35 +158,32 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       ),
                     ),
                   ),
+                  // V2.8.3.5：青山 Logo（用户提供，透明底圆角方形）；光环扩散保留
                   FadeTransition(
                     opacity: _logoFade,
                     child: ScaleTransition(
                       scale: _logoScale,
                       child: Container(
-                        width: 120,
-                        height: 120,
+                        width: 96,
+                        height: 96,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [scheme.primary, scheme.tertiary],
-                          ),
+                          borderRadius: BorderRadius.circular(26),
                           boxShadow: [
                             BoxShadow(
-                              color: scheme.primary.withValues(alpha: 0.32),
-                              blurRadius: 32,
-                              offset: const Offset(0, 10),
+                              color: scheme.shadow.withValues(alpha: 0.22),
+                              blurRadius: 30,
+                              offset: const Offset(0, 12),
                             ),
                           ],
                         ),
-                        // V2.8.2 S1+S2：品牌舟形 + 描边生长（900ms easeOutCubic）
-                        child: Center(
-                          child: AnimatedBuilder(
-                            animation: _controller,
-                            builder: (context, _) => _BoatStroke(
-                                progress: Curves.easeOutCubic
-                                    .transform(_controller.value)),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(26),
+                          child: Image.asset(
+                            'assets/img/logo.png',
+                            width: 96,
+                            height: 96,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
                           ),
                         ),
                       ),

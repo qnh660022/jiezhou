@@ -8,7 +8,7 @@ const String kAppName = '芥舟';
 ///
 /// V2.8.3.4：此前长期停留在 `v2.7.1` ——「检查更新」「关于」向用户展示的版本
 /// 与安装包相差三个版本，属对外可见的不一致，本轮一并校正。
-const String kAppVersionLabel = 'v2.8.3.4';
+const String kAppVersionLabel = 'v2.8.3.5';
 
 /// 芥舟官网：发布页 / 最新版本下载入口。
 const String kOfficialWebsite = 'https://jiezhou.22006.dpdns.org/';

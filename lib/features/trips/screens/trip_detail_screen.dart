@@ -258,14 +258,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
           ),
           // 底部停靠双段：时间线 / 攻略（原大纲/装配/锦囊页签收编：大纲入
           // 「更多」抽屉、装配改半屏抽屉、锦囊并入攻略）
-          // V2.8.3.4：横向 inset 与全局胶囊底栏对齐（Spacing.lg），并紧贴其上方
-          // （= actionButtonOffset，胶囊底栏总高 78+safe），两段视觉上连成一体。
+          // V2.8.3.5：bottom 改用 navBarHeight（=胶囊栏自身占位 78），与胶囊栏
+          // 顶边严格接合、消除此前用 actionButtonOffset(80) 留下的 2px 缝；
+          // 配合 _DetailDock 的下两角改 0、去下描边，两段视觉上连成一体。
           Positioned(
             left: Spacing.lg,
             right: Spacing.lg,
             bottom: AppBottomLayout.withSafeArea(
               context,
-              AppBottomLayout.actionButtonOffset,
+              AppBottomLayout.navBarHeight,
             ),
             child: _DetailDock(
               index: _viewIndex,
@@ -956,10 +957,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       if (!widget.multiSelect)
       Positioned(
           right: Spacing.xl,
-          // V2.8.3.4：FAB 停在底部停靠双段（时间线/攻略）之上
+          // V2.8.3.5：FAB 停在底部停靠双段（时间线/攻略）之上；口径与停靠条
+          // 统一为 navBarHeight（不再复用 FAB 用的 actionButtonOffset）。
           bottom: AppBottomLayout.withSafeArea(
             context,
-            AppBottomLayout.actionButtonOffset +
+            AppBottomLayout.navBarHeight +
                 AppBottomLayout.segmentDockHeight + Spacing.md,
           ),
           child: FloatingActionButton.extended(
@@ -976,9 +978,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           Positioned(
             left: Spacing.xl,
             right: Spacing.xl,
+            // V2.8.3.5：批量条同口径停在停靠双段之上（原为魔法数 62）
             bottom: AppBottomLayout.withSafeArea(
               context,
-              AppBottomLayout.actionButtonOffset + 62,
+              AppBottomLayout.navBarHeight +
+                  AppBottomLayout.segmentDockHeight,
             ),
             child: _MultiSelectBar(
               count: widget.selectedIds.length,
@@ -2385,44 +2389,56 @@ class _DetailDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.35)),
+    final lineColor = scheme.outlineVariant.withValues(alpha: 0.35);
+    // V2.8.3.5：贴紧底部胶囊栏 —— 下两角改 0、只留上/左/右三边描边，
+    // 与胶囊栏在视觉上拼成一个「上方分段 + 下方导航」的双段整体。
+    // 外层 Container 负责装饰，内层 Material(transparency) 只为 InkWell
+    // 提供 Material 祖先（水波纹仍正常）。
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+        border: Border(
+          top: BorderSide(color: lineColor),
+          left: BorderSide(color: lineColor),
+          right: BorderSide(color: lineColor),
+        ),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(5),
-        child: Row(
-          children: [
-            for (var i = 0; i < 2; i++)
-              Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => onChanged(i),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    decoration: BoxDecoration(
-                      color: index == i ? scheme.primary : Colors.transparent,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      i == 0 ? '时间线' : '攻略',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight:
-                            index == i ? FontWeight.w800 : FontWeight.w600,
-                        color: index == i
-                            ? scheme.onPrimary
-                            : scheme.onSurfaceVariant,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: Row(
+            children: [
+              for (var i = 0; i < 2; i++)
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => onChanged(i),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        color: index == i ? scheme.primary : Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        i == 0 ? '时间线' : '攻略',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight:
+                              index == i ? FontWeight.w800 : FontWeight.w600,
+                          color: index == i
+                              ? scheme.onPrimary
+                              : scheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

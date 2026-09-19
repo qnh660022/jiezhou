@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#B9C0CD</color>
+    <!-- V2.8.3.5：随青山 Logo 换装 —— 取 Logo 自身的浅底色 #E9EEF2，
+         与前景（白色圆角方形本体）无缝衔接；旧值 #B9C0CD 是上一版图标的灰蓝底。 -->
+    <color name="ic_launcher_background">#E9EEF2</color>
 </resources>

@@ -41,18 +41,27 @@ class AboutScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(Spacing.xl),
                 child: Column(
                   children: [
-                    // 应用 Logo：芥舟软件图标（圆形容器裁切展示）
+                    // V2.8.3.5：青山 Logo（用户提供，透明底圆角方形）。
+                    // 这里刻意**不用**圆形裁切：Logo 的山脉延伸到左右边缘，
+                    // 圆形会把它切断；改圆角方形展示以保留完整构图。
                     Container(
-                      width: 84,
-                      height: 84,
+                      width: 88,
+                      height: 88,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: scheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: scheme.shadow.withValues(alpha: 0.16),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: const Image(
                         image: AssetImage('assets/img/logo.png'),
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
                       ),
                     ),
                     const SizedBox(height: Spacing.md),

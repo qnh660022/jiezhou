@@ -7,10 +7,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:travel_assistant/data/db/database.dart';
 import 'package:travel_assistant/data/guide/guide_normalize.dart';
 import 'package:travel_assistant/data/guide/guide_providers.dart';
+import 'package:travel_assistant/data/guide/guide_service.dart'
+    show GuideResult;
 import 'package:travel_assistant/data/providers.dart';
 import 'package:travel_assistant/data/repo/checklist_repo.dart';
 import 'package:travel_assistant/domain/guide_match.dart';
 import 'package:travel_assistant/features/trips/widgets/kit_panel.dart';
+
+/// V2.8.3.5：未命中城时会回落到「城市攻略摘要」，该块读 [guideByTripProvider]。
+/// 这里给一个纯本地替身，避免用例打真实取数链（种子 + 网络层）。
+final _fallbackGuide = GuideResult(
+  location: const GuideLocation('nanjing', '南京'),
+  sections: const {
+    'spots': <Map<String, dynamic>>[],
+    'food': <Map<String, dynamic>>[],
+  },
+  articles: const <Map<String, dynamic>>[],
+  layersUsed: const ['seed'],
+);
 
 KitSeed _seed({
   List<Map<String, dynamic>> calendar = const [],
@@ -45,6 +59,7 @@ Future<void> _pump(WidgetTester tester,
         guideCityKeyByNameProvider.overrideWith((ref) async =>
             cityKey == null ? <String, String>{} : {'杭州': cityKey, '苏州': 'suzhou'}),
         kitSeedProvider.overrideWith((ref, key) async => seed),
+        guideByTripProvider.overrideWith((ref, tripId) async => _fallbackGuide),
       ],
       child: MaterialApp(
         home: Scaffold(
@@ -103,9 +118,14 @@ void main() {
     expect(find.text('1-2 月 · 水仙花季'), findsOneWidget);
   });
 
-  testWidgets('3. 目的地未命中城 → 空态卡', (tester) async {
+  testWidgets('3. 目的地未命中城 → 回落城市攻略摘要（V2.8.3.5 不再留死路）',
+      (tester) async {
     await _pump(tester, db: db, destination: '南京', cityKey: null, seed: null);
-    expect(find.text('该目的地暂无锦囊'), findsOneWidget);
+    expect(find.text('该目的地暂无城市锦囊，先看这份城市攻略'), findsOneWidget,
+        reason: '回落块首屏给出说明条');
+    expect(find.text('查看完整城市攻略'), findsOneWidget);
+    expect(find.text('该目的地暂无锦囊'), findsNothing,
+        reason: '旧死路空态已下线');
   });
 
   testWidgets('4. prep 加入清单：成功 toast；重复去重 toast「已在清单中」',

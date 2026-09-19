@@ -104,8 +104,8 @@ void main() {
     });
   });
 
-  group('S1 开屏品牌舟形', () {
-    testWidgets('开屏渲染 AppIcons.boat + 品牌标题，停留后进入行程', (tester) async {
+  group('S1 开屏品牌 Logo', () {
+    testWidgets('开屏渲染青山 Logo 图片 + 品牌标题，停留后进入行程', (tester) async {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final router = GoRouter(initialLocation: '/', routes: [
@@ -119,7 +119,11 @@ void main() {
         child: MaterialApp.router(routerConfig: router),
       ));
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.byIcon(AppIcons.boat), findsOneWidget);
+      // V2.8.3.5：品牌图形由代码绘制的 AppIcons.boat 换成 assets/img/logo.png
+      expect(find.byType(Image), findsWidgets,
+          reason: '开屏改为青山 Logo 资源图');
+      expect(find.byIcon(AppIcons.boat), findsNothing,
+          reason: '舟形笔触已下线');
       expect(find.text('芥舟'), findsOneWidget);
       await tester.pumpAndSettle();
       expect(find.text('TRIPS-HOME'), findsOneWidget,
