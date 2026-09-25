@@ -9,6 +9,7 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
@@ -65,6 +66,8 @@ class FundScreen extends ConsumerWidget {
     final fund = open;
     final summaryAsync = ref.watch(fundSummaryProvider(fund.id));
     final summary = summaryAsync.value;
+    // V2.9.0:余额加载态用骨架占位 —— 不再先渲染「余额¥0.00」被当真。
+    final summaryLoading = summaryAsync.isLoading;
     final expensesAsync = ref.watch(fundExpensesProvider(fund.id));
     final expenses = expensesAsync.value ?? const <ExpenseRecord>[];
     final manager = _nameOf(members, fund.managerMemberId);
@@ -93,22 +96,33 @@ class FundScreen extends ConsumerWidget {
                 children: [
                   Text('余额', style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant)),
                   const SizedBox(width: Spacing.sm),
-                  MoneyText(summary?.balanceCents ?? 0,
-                      fontSize: 30, fontWeight: FontWeight.w800),
+                  // V2.9.0:加载态骨架占位,避免「余额¥0.00」误导。
+                  if (summaryLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 5),
+                      child: SkeletonBox(width: 132, height: 32, radius: 8),
+                    )
+                  else
+                    MoneyText(summary?.balanceCents ?? 0,
+                        fontSize: 30, fontWeight: FontWeight.w800),
                 ],
               ),
               const SizedBox(height: Spacing.sm),
-              Wrap(
-                spacing: Spacing.lg,
-                runSpacing: Spacing.xs,
-                children: [
-                  _Meta(label: '已收', cents: summary?.contributedCents ?? 0),
-                  if (fund.targetCents != null)
-                    _Meta(label: '计划收', cents: fund.targetCents!),
-                  _Meta(label: '已支出', cents: summary?.spentCents ?? 0),
-                  _Meta(label: '参与人数', plain: '${summary?.contributorCount ?? 0} 人'),
-                ],
-              ),
+              // V2.9.0:汇总指标加载态同样骨架占位。
+              if (summaryLoading)
+                const SkeletonBox(width: 220, height: 16, radius: 4)
+              else
+                Wrap(
+                  spacing: Spacing.lg,
+                  runSpacing: Spacing.xs,
+                  children: [
+                    _Meta(label: '已收', cents: summary?.contributedCents ?? 0),
+                    if (fund.targetCents != null)
+                      _Meta(label: '计划收', cents: fund.targetCents!),
+                    _Meta(label: '已支出', cents: summary?.spentCents ?? 0),
+                    _Meta(label: '参与人数', plain: '${summary?.contributorCount ?? 0} 人'),
+                  ],
+                ),
               const SizedBox(height: Spacing.xs),
               Text('管理人：$manager',
                   style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant)),
@@ -196,28 +210,30 @@ class FundScreen extends ConsumerWidget {
 
   Future<void> _transferManager(BuildContext context, WidgetRef ref,
       FundView fund, List<LedgerMemberView> members) async {
-    final target = await showModalBottomSheet<LedgerMemberView>(
+    // V2.9.0:裸 showModalBottomSheet 在透明主题下内容重叠,统一收口 showDraggableSheet。
+    final target = await showDraggableSheet<LedgerMemberView>(
       context: context,
-      builder: (_) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(Spacing.lg),
-              child: Text('选择新的管理人', style: Theme.of(context).textTheme.titleMedium),
+      initialChildSize: 0.45,
+      minChildSize: 0.3,
+      builder: (sheetContext, scrollController) => ListView(
+        controller: scrollController,
+        shrinkWrap: true,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(Spacing.lg),
+            child: Text('选择新的管理人', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          for (final m in members)
+            ListTile(
+              leading: Icon(
+                  m.id == fund.managerMemberId
+                      ? Icons.check_circle_rounded
+                      : Icons.person_outline_rounded),
+              title: Text(m.name),
+              enabled: m.id != fund.managerMemberId,
+              onTap: () => Navigator.of(sheetContext).pop(m),
             ),
-            for (final m in members)
-              ListTile(
-                leading: Icon(
-                    m.id == fund.managerMemberId
-                        ? Icons.check_circle_rounded
-                        : Icons.person_outline_rounded),
-                title: Text(m.name),
-                enabled: m.id != fund.managerMemberId,
-                onTap: () => Navigator.of(context).pop(m),
-              ),
-          ],
-        ),
+        ],
       ),
     );
     if (target == null) return;
@@ -226,26 +242,39 @@ class FundScreen extends ConsumerWidget {
       if (context.mounted) {
         showAppSnackBar(context, '管理人已移交给 ${target.name}；历史账单不变');
       }
-    } catch (e) {
+    } catch (e, s) {
+      // V2.9.0:原始异常只进调试日志,不进 UI 文案。
+      debugPrint('transfer fund manager failed: $e\n$s');
       if (context.mounted) {
-        showAppSnackBar(context, '转移失败：${e.toString()}', tone: SnackTone.destructive);
+        showAppSnackBar(context, '转移失败，请稍后重试', tone: SnackTone.destructive);
       }
     }
   }
 
   Future<void> _closeFund(BuildContext context, WidgetRef ref, FundView fund) async {
-    final confirm = await showConfirmSheet(
+    // V2.9.0:关闭公款池是不可逆只读化 —— 改 L2 危险确认,body 含影响记录数;
+    // 按钮用语收敛为「确认/取消」。
+    final billCount = ref.read(fundExpensesProvider(fund.id)).value?.length ?? 0;
+    final confirm = await showDangerConfirm(
       context: context,
       title: '关闭公费池？',
-      body: '建议先去结算页跑一轮结算（退款由结算引擎产出），再关闭。'
-          '关闭后不能再记入金或出金，池变为只读。',
-      confirmLabel: '确认关闭',
-      cancelLabel: '再想想',
+      body: '关闭后不能再记入金或出金，池变为只读，此操作不可恢复；'
+          '池内现有 $billCount 笔入金/出金记录将保留（建议先去结算页跑一轮结算，退款由结算引擎产出）。',
+      confirmLabel: '确认',
+      cancelLabel: '取消',
+      icon: Icons.lock_outline_rounded,
     );
     if (!confirm) return;
-    await closeFund(ref, fund.id);
-    if (context.mounted) {
-      showAppSnackBar(context, '公费池已关闭（只读）');
+    try {
+      await closeFund(ref, fund.id);
+      if (context.mounted) {
+        showAppSnackBar(context, '公费池已关闭（只读）');
+      }
+    } catch (e, s) {
+      debugPrint('close fund failed: $e\n$s');
+      if (context.mounted) {
+        showAppSnackBar(context, '关闭失败，请稍后重试', tone: SnackTone.destructive);
+      }
     }
   }
 }
@@ -410,9 +439,11 @@ class _CreateFundFormState extends ConsumerState<_CreateFundForm> {
               if (context.mounted) {
                 showAppSnackBar(context, '公费池已创建 ✅');
               }
-            } catch (e) {
+            } catch (e, s) {
+              // V2.9.0:原始异常只进调试日志,不进 UI 文案。
+              debugPrint('create fund failed: $e\n$s');
               if (context.mounted) {
-                showAppSnackBar(context, '创建失败：${e.toString()}', tone: SnackTone.destructive);
+                showAppSnackBar(context, '创建失败，请稍后重试', tone: SnackTone.destructive);
               }
             }
           },

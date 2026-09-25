@@ -18,10 +18,10 @@ import 'destination_picker_sheet.dart';
 import '../../../domain/assemble_engine.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
-import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../widgets/range_calendar_sheet.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
 
 const List<String> kTripEmojis = [
@@ -55,8 +55,10 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
   bool _noteOpen = false;
 
   String? _editId;
-  bool _loaded = false;
   bool _saving = false;
+  // V2.9.0：路由 extra / initialId 只解析一次（didChangeDependencies），
+  // 此前在 build 内反复触发 _loadExisting，迟到的回包会覆盖用户已改的封面/徽章。
+  bool _argResolved = false;
 
   @override
   void dispose() {
@@ -64,6 +66,30 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
     _destCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_argResolved) return;
+    _argResolved = true;
+    // 桌面工作台在 Dialog 内复用时由 widget.initialId 提供编辑目标；
+    // 移动端/整页跳转依旧从路由 extra 读取。
+    if (widget.initialId != null) {
+      _editId = widget.initialId;
+      _loadExisting(_editId!);
+    } else {
+      try {
+        final arg = GoRouterState.of(context).extra;
+        if (arg is String && _editId == null) {
+          _editId = arg;
+          _loadExisting(arg);
+        }
+      } catch (_) {
+        // 桌面工作台以 Dialog 打开（非 go_router 子树）时无 GoRouterState → 按新建处理。
+        _editId = null;
+      }
+    }
   }
 
   /// 目的地选择弹层：全国城市多选 + 海外手动填；确定后以「-」回填。
@@ -91,7 +117,6 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
       _startDay = trip.startEpochDay;
       _endDay = trip.endEpochDay;
       _pace = trip.pace;
-      _loaded = true;
     });
   }
 
@@ -124,15 +149,11 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
       return;
     }
 
-    final result = await showDraggableSheet<_DateRangeResult>(
-      context: context,
-      initialChildSize: 0.72,
-      minChildSize: 0.5,
-      builder: (sheetContext, _) => _RangeCalendarSheet(
-        initialMonth: dateTimeFromEpochDay(initialStart),
-        startDay: _startDay,
-        endDay: _endDay,
-      ),
+    final result = await showRangeCalendarSheet(
+      context,
+      initialMonth: dateTimeFromEpochDay(initialStart),
+      startDay: _startDay,
+      endDay: _endDay,
     );
     if (result != null && mounted) {
       setState(() {
@@ -175,6 +196,16 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
       updatedAt: nowMs,
     );
     await ref.read(tripsRepoProvider).upsertTrip(trip); // ASSUMED(t2): 存在即更新
+    // V2.9.0：编辑模式缩短日期后，越界安排必须夹取回区间内 —— 此前直接
+    // upsertTrip 不裁剪，详情/海报出现 Day 0 / Day -1。走 updateDates 的
+    // 既有夹取逻辑（与仓储层口径一致）。日期未变时无需多跑一遍。
+    if (existing != null &&
+        (existing.startEpochDay != _startDay! ||
+            existing.endEpochDay != _endDay!)) {
+      await ref
+          .read(tripsRepoProvider)
+          .updateDates(id, _startDay!, _endDay!);
+    }
     if (!mounted) return;
     HapticFeedback.mediumImpact();
     context.pop(true);
@@ -182,26 +213,6 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_loaded) {
-      // 桌面工作台在 Dialog 内复用时由 widget.initialId 提供编辑目标；
-      // 移动端/整页跳转依旧从路由 extra 读取。
-      if (widget.initialId != null) {
-        _editId = widget.initialId;
-        _loadExisting(_editId!);
-      } else {
-        try {
-          final arg = GoRouterState.of(context).extra;
-          if (arg is String && _editId == null) {
-            _editId = arg;
-            _loadExisting(arg);
-          }
-        } catch (_) {
-          // 桌面工作台以 Dialog 打开（非 go_router 子树）时无 GoRouterState → 按新建处理。
-          _editId = null;
-        }
-      }
-      if (_editId == null) _loaded = true;
-    }
     return Scaffold(
       appBar: GlassAppBar(
         title: _editId == null ? '新建行程' : '编辑行程',
@@ -914,193 +925,4 @@ class _TripEditScreenState extends ConsumerState<TripEditScreen> {
   }
 }
 
-
-// ============ 中文日期区间选择抽屉（自绘月历，规避未本地化的系统控件） ============
-
-class _DateRangeResult {
-  const _DateRangeResult(this.startDay, this.endDay);
-
-  final int startDay;
-  final int endDay;
-}
-
-class _RangeCalendarSheet extends StatefulWidget {
-  const _RangeCalendarSheet({
-    required this.initialMonth,
-    this.startDay,
-    this.endDay,
-  });
-
-  final DateTime initialMonth;
-  final int? startDay;
-  final int? endDay;
-
-  @override
-  State<_RangeCalendarSheet> createState() => _RangeCalendarSheetState();
-}
-
-class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
-  late DateTime _month =
-      DateTime(widget.initialMonth.year, widget.initialMonth.month);
-  int? _start;
-  int? _end;
-
-  @override
-  void initState() {
-    super.initState();
-    _start = widget.startDay;
-    _end = widget.endDay;
-  }
-
-  static const _weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
-
-  List<int> _daysInMonth() {
-    final first = DateTime(_month.year, _month.month, 1);
-    final daysCount = DateTime(_month.year, _month.month + 1, 0).day;
-    final leading = (first.weekday + 6) % 7; // 周一为第一列
-    return [
-      for (var i = 0; i < leading; i++) -1,
-      for (var d = 1; d <= daysCount; d++) epochDayOf(DateTime(_month.year, _month.month, d)),
-    ];
-  }
-
-  void _tapDay(int day) {
-    HapticFeedback.selectionClick();
-    setState(() {
-      if (_start == null || (_start != null && _end != null)) {
-        _start = day;
-        _end = null;
-      } else if (day < _start!) {
-        _start = day;
-      } else if (day == _start) {
-        _end = day;
-      } else {
-        _end = day;
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final cells = _daysInMonth();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.xs, Spacing.xl, Spacing.xl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${_month.year} 年 ${_month.month} 月',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-              ),
-              IconButton(
-                onPressed: () => setState(() {
-                  _month = DateTime(_month.year, _month.month - 1);
-                }),
-                icon: const Icon(Icons.chevron_left_rounded),
-              ),
-              IconButton(
-                onPressed: () => setState(() {
-                  _month = DateTime(_month.year, _month.month + 1);
-                }),
-                icon: const Icon(Icons.chevron_right_rounded),
-              ),
-            ],
-          ),
-          const SizedBox(height: Spacing.sm),
-          Row(
-            children: [
-              for (final w in _weekdayLabels)
-                Expanded(
-                  child: Center(
-                    child: Text(w,
-                        style: TextStyle(
-                            fontSize: AppFontSizes.caption,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurfaceVariant)),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: Spacing.xs),
-          GridView.count(
-            crossAxisCount: 7,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 1.15,
-            children: [
-              for (final day in cells)
-                if (day < 0)
-                  const SizedBox()
-                else
-                  _buildDayCell(day, scheme),
-            ],
-          ),
-          const SizedBox(height: Spacing.lg),
-          PrimaryButton(
-            label: _start != null && _end != null
-                ? '确定 · ${cnDateRange(_start!, _end!)}'
-                : '请选择日期区间',
-            expanded: true,
-            backgroundColor:
-                _start != null && _end != null ? null : scheme.surfaceContainerHigh,
-            foregroundColor:
-                _start != null && _end != null ? null : scheme.onSurfaceVariant,
-            onPressed:
-                _start != null && _end != null ? _confirm : null,
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirm() {
-    Navigator.of(context).pop(
-      _DateRangeResult(_start!, _end == _start ? _start! : _end!),
-    );
-  }
-
-  Widget _buildDayCell(int day, ColorScheme scheme) {
-    final isStart = day == _start;
-    final isEnd = day == _end && _end != _start || (day == _end && day == _start);
-    final inRange = _start != null &&
-        _end != null &&
-        day > _start! &&
-        day < _end!;
-    final selected = isStart || isEnd;
-    return GestureDetector(
-      onTap: () => _tapDay(day),
-      child: Container(
-        margin: const EdgeInsets.all(2),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected
-              ? scheme.primary
-              : inRange
-                  ? scheme.primaryContainer.withValues(alpha: 0.6)
-                  : Colors.transparent,
-          shape: BoxShape.circle,
-        ),
-        child: Text(
-          '${dateTimeFromEpochDay(day).day}',
-          style: TextStyle(
-            fontSize: AppFontSizes.body,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-            color: selected
-                ? scheme.onPrimary
-                : scheme.onSurface,
-            fontFeatures: AppTextStyles.tabularFigures,
-          ),
-        ),
-      ),
-    );
-  }
-}
 

@@ -1,13 +1,16 @@
-/// 「邀请旅伴」sheet（owner 端，V2.6 §3.13.1）：展示 6 位码 + 链接 + 重新生成。
+/// 「邀请旅伴」sheet（owner 端，V2.6 §3.13.1）：展示 6 位码 + 完整链接 + 复制/分享。
 /// 入口在成员页顶部（成员管理 AppBar 下方）。
 library;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
+import '../../../shared/app_meta.dart';
 import '../../../shared/copy_tokens.dart';
-import '../../../shared/widgets/sheet.dart' show SheetSurface;
+import '../../../shared/widgets/app_snack_bar.dart';
 import '../../../theme/tokens.dart';
 
 class InviteCompanionSheet extends ConsumerStatefulWidget {
@@ -45,7 +48,9 @@ class _InviteCompanionSheetState extends ConsumerState<InviteCompanionSheet> {
         _code = code;
         _busy = false;
       });
-    } catch (_) {
+    } catch (e, s) {
+      // V2.9.0:原始异常只进调试日志。
+      debugPrint('ensureInvite failed: $e\n$s');
       setState(() {
         _busy = false;
         _error = copy('cloud.errGeneric');
@@ -71,12 +76,36 @@ class _InviteCompanionSheetState extends ConsumerState<InviteCompanionSheet> {
     }
   }
 
+  /// V2.9.0:复制邀请链接并给轻提示（不再只展示相对路径）。
+  void _copyLink(String url) {
+    HapticFeedback.selectionClick();
+    Clipboard.setData(ClipboardData(text: url));
+    showAppSnackBar(context, '邀请链接已复制');
+  }
+
+  /// V2.9.0:调起系统分享面板（share_plus），失败只进日志并轻提示。
+  Future<void> _shareLink(String url) async {
+    HapticFeedback.selectionClick();
+    try {
+      await SharePlus.instance.share(ShareParams(
+        title: '来芥舟一起记账',
+        text: '邀请你加入我的账本，邀请码 $_code，链接：$url',
+      ));
+      if (mounted) showAppSnackBar(context, '已调起分享');
+    } catch (e, s) {
+      debugPrint('share invite link failed: $e\n$s');
+      if (mounted) {
+        showAppSnackBar(context, '分享没有调起来，请复制链接发给对方', tone: SnackTone.destructive);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // 全局 bottomSheet 主题为透明背景：必须包不透明面板（否则与底层页面重叠）
-    return SheetSurface(
-      child: SafeArea(
+    // V2.9.0:本组件改由 showDraggableSheet 承载（SheetContainer 自带玻璃底面），
+    // 内层不再包 SheetSurface 防双重面板。
+    return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(Spacing.xl),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -101,12 +130,32 @@ class _InviteCompanionSheetState extends ConsumerState<InviteCompanionSheet> {
                       ?.copyWith(letterSpacing: 8, fontWeight: FontWeight.w700)),
             ),
             const SizedBox(height: Spacing.md),
-            Text('链接：/invite?c=$_code',
+            // V2.9.0:展示完整可点的深链（与分享中心同源 inviteLinkUrl），不再是相对路径。
+            Text('链接：${inviteLinkUrl(_code!)}',
+                textAlign: TextAlign.center,
                 style: TextStyle(
                     color: scheme.onSurfaceVariant, fontSize: AppFontSizes.caption)),
             const SizedBox(height: Spacing.lg),
+            Row(children: [
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: () => _copyLink(inviteLinkUrl(_code!)),
+                  icon: const Icon(Icons.copy_rounded, size: 18),
+                  label: const Text('复制链接'),
+                ),
+              ),
+              const SizedBox(width: Spacing.md),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _shareLink(inviteLinkUrl(_code!)),
+                  icon: const Icon(Icons.ios_share_rounded, size: 18),
+                  label: const Text('分享'),
+                ),
+              ),
+            ]),
+            const SizedBox(height: Spacing.md),
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              FilledButton.tonal(
+              FilledButton(
                   onPressed: () {
                     Navigator.pop(context);
                   },
@@ -118,7 +167,6 @@ class _InviteCompanionSheetState extends ConsumerState<InviteCompanionSheet> {
           if (!_busy && _error != null)
             Text(_error!, style: TextStyle(color: scheme.error, fontSize: AppFontSizes.caption)),
         ]),
-      ),
       ),
     );
   }

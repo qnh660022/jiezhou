@@ -188,15 +188,37 @@ bool matchesPin(String pin, String saltHex, String storedHash,
 /// 冷启动锁门控。
 ///
 /// `GoRouter` 的 redirect 需要**同步**判断，因此这里用静态缓存承载
-/// 「是否锁定」这一位状态；`load()` 由开屏页在启动时调用（异步）。
+/// 「是否锁定」这一位状态。`load()` 在 `main()` 里于 `runApp` 之前调用
+/// （V2.9.0 起唯一就绪时机）——深链冷启动（应用链接 / 浏览器 URL 直落
+/// `/s/:token`、`/invite`）不经过开屏页，若依赖开屏页加载，redirect 会因
+/// `ready == false` 放行，锁被整体绕过。开屏页仍保留一次幂等重读，
+/// 供自愈重启整树 remount 后再武装。
 abstract final class AppLockGate {
   static bool ready = false;
   static bool locked = false;
 
+  /// 被锁拦截前的目的地（深链回跳用；解锁后由锁屏取出）。
+  static String? _pendingLocation;
+
+  /// 记录被锁打断的目的地；只接受应用内路径（`/` 开头且非 `/lock` 自身）。
+  static void capturePendingLocation(String uri) {
+    if (uri.isEmpty || !uri.startsWith('/') || uri.startsWith('/lock')) return;
+    _pendingLocation = uri;
+  }
+
+  /// 取出并清除被锁打断的目的地（null = 没有记录，落回默认首页）。
+  static String? takePendingLocation() {
+    final v = _pendingLocation;
+    _pendingLocation = null;
+    return v;
+  }
+
   /// 读取锁状态；任何平台异常（例如测试环境无插件）一律视为「不锁」。
+  /// 2s 超时兜底：prefs 挂起时不能拖死首帧。
   static Future<bool> load({int? nowMs}) async {
     try {
-      final svc = await AppLockService.cached();
+      final svc =
+          await AppLockService.cached().timeout(const Duration(seconds: 2));
       locked = svc.enabled && !AppLockService.sessionUnlocked;
     } catch (_) {
       locked = false;
@@ -221,6 +243,7 @@ abstract final class AppLockGate {
   static void reset() {
     ready = false;
     locked = false;
+    _pendingLocation = null;
     AppLockService.sessionUnlocked = false;
     AppLockService.resetCache();
   }

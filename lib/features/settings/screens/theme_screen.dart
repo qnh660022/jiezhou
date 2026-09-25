@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../theme/tokens.dart';
 
@@ -60,7 +61,8 @@ class _ThemeScreenState extends ConsumerState<ThemeScreen>
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('主题外观')),
+      // V2.9.0:次级页顶栏统一 GlassAppBar(原裸 AppBar)。
+      appBar: GlassAppBar(title: '主题外观'),
       body: Stack(children: [
         ListView(
           padding: const EdgeInsets.all(Spacing.lg),
@@ -74,16 +76,20 @@ class _ThemeScreenState extends ConsumerState<ThemeScreen>
                 .toList()),
             const SizedBox(height: Spacing.lg),
             _sectionLabel(context, '深色', Icons.dark_mode_rounded),
-            _cardGrid([
-              ...ThemeStyles.darkStyles.map((s) => (
-                    style: s,
-                    selected: _isSelected(family, brightness, s),
-                  )),
-              (
-                style: null,
-                selected: brightness == ThemeBrightnessMode.system,
-              ),
-            ]),
+            // V2.9.0:「跟随系统」从深色栅格里拆出,单独一行置于分组顶部
+            // (原塞在 3 列栅格里,宽度被压缩且语义上不属于「深色」)。
+            _SystemCard(
+              selected: brightness == ThemeBrightnessMode.system,
+              onTap: () =>
+                  _select(ref.read(themeFamilyProvider), ThemeBrightnessMode.system),
+            ),
+            const SizedBox(height: Spacing.md),
+            _cardGrid(ThemeStyles.darkStyles
+                .map((s) => (
+                      style: s,
+                      selected: _isSelected(family, brightness, s),
+                    ))
+                .toList()),
             const SizedBox(height: Spacing.lg),
             Text(copy(CopyTokens.themeSubtitle),
                 style: TextStyle(

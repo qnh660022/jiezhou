@@ -96,7 +96,7 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
         _starting = false;
         _mode = '';
       });
-      _toast('启动失败：${e.toString()}');
+      _toast('启动失败，请检查网络后重试');
     }
   }
 
@@ -122,7 +122,7 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _connecting = false);
-      _toast('${e.toString()}');
+      _toast('连接失败，请核对口令与 IP 后重试');
     }
   }
 
@@ -138,7 +138,7 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _peerStatus = '拉取失败');
-      _toast('拉取失败：${e.toString()}');
+      _toast('拉取失败，请稍后重试');
     }
   }
 
@@ -160,7 +160,7 @@ class _LanSyncScreenState extends ConsumerState<LanSyncScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _peerStatus = '推送失败');
-      _toast('推送失败：${e.toString()}');
+      _toast('推送失败，请稍后重试');
     }
   }
 

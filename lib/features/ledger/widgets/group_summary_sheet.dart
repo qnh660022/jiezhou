@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/models.dart';
 import '../../../shared/widgets/sheet.dart';
+import '../../../shared/widgets/money_text.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
@@ -137,8 +138,8 @@ Future<void> showGroupSummarySheet(
   );
 }
 
-String _yuan(int cents) =>
-    '${cents ~/ 100}.${(cents % 100).toString().padLeft(2, '0')}';
+// V2.9.0:金额统一走 MoneyFormat 千分位口径。
+String _yuan(int cents) => MoneyFormat.fenToYuan(cents);
 
 String fmtDateShort(int epochDay) {
   final d = DateTime(1970, 1, 1).add(Duration(days: epochDay));

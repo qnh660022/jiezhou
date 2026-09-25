@@ -434,7 +434,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
       if (chunks.length == 1) tip = '已复制全量同步码，发送给电脑端「口令码」粘贴导入';
       _toast(tip);
     } catch (e) {
-      _toast('导出失败：${e.toString()}');
+      _toast('导出失败，请稍后重试');
     }
   }
 
@@ -455,7 +455,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
       await Clipboard.setData(ClipboardData(text: code));
       _toast('已复制当前团同步码，发送给电脑端「口令码」粘贴导入');
     } catch (e) {
-      _toast('导出失败：${e.toString()}');
+      _toast('导出失败，请稍后重试');
     }
   }
 
@@ -525,7 +525,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
                                   textAlign: TextAlign.center,
                                   maxLines: 6,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4)),
+                                  style: const TextStyle(color: Colors.white, fontSize: AppFontSizes.caption, height: 1.4)),
                               const SizedBox(height: Spacing.xs),
                               TextButton.icon(
                                 onPressed: _resumePreview,
@@ -557,7 +557,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
                   borderRadius: AppRadius.card,
                 ),
                 child: Text('相机不可用，请用下方「拍照 / 相册」识别，或直接粘贴同步码',
-                    style: TextStyle(fontSize: 13, color: scheme.onErrorContainer)),
+                    style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onErrorContainer)),
               ),
             ],
             const SizedBox(height: Spacing.md),
@@ -574,7 +574,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
                   ),
                   const SizedBox(width: Spacing.md),
                   Text('${_rawChunks.length}/$_total 页',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: scheme.primary)),
+                      style: TextStyle(fontSize: AppFontSizes.caption, fontWeight: FontWeight.w700, color: scheme.primary)),
                 ],
               ),
               TextButton(onPressed: _reset, child: const Text('重新开始')),
@@ -589,7 +589,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen> {
                   borderRadius: AppRadius.card,
                 ),
                 child: Text(_status,
-                    style: TextStyle(fontSize: 13, color: scheme.onSecondaryContainer)),
+                    style: TextStyle(fontSize: AppFontSizes.caption, color: scheme.onSecondaryContainer)),
               ),
             ],
             const SizedBox(height: Spacing.lg),

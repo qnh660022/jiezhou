@@ -4,14 +4,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/date_utils.dart';
+import '../../../data/providers.dart';
 import '../../../domain/models.dart';
 import '../../../domain/settle_strategy.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/primary_button.dart';
-import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
@@ -20,6 +22,15 @@ import '../widgets/stagger_in.dart';
 import 'settle_card_sheet.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
 import '../../../theme/app_icons.dart';
+
+/// V2.9.0:全量成员(含软删)姓名表 —— 净额榜/转账行姓名解析走它,
+/// 软删成员不再显示「?」(与 settle_card_sheet 同口径:repo.getMembers 全量)。
+final _allMemberNamesProvider = FutureProvider.autoDispose<Map<String, String>>((ref) async {
+  final gid = ref.watch(activeGroupIdProvider).value;
+  if (gid == null || gid.isEmpty) return const <String, String>{};
+  final members = await ref.watch(ledgerRepoProvider).getMembers(gid);
+  return {for (final m in members) m.id: m.name};
+});
 
 /// ⚖️ AA 结算：净额榜 → 转账方案逐笔确认 → 完成本轮；历史可撤销。
 ///
@@ -43,6 +54,8 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
 
     final loading = activeAsync.isLoading || membersAsync.isLoading;
     final members = membersAsync.value ?? const <LedgerMemberView>[];
+    // V2.9.0:软删成员姓名走全量成员表解析。
+    final allNames = ref.watch(_allMemberNamesProvider).value ?? const <String, String>{};
     final history = (historyAll.value ?? const <SettlementView>[]).where((s) => !s.active).toList();
 
     return Scaffold(
@@ -67,7 +80,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
               : ListView(
                   padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xxxl),
                   children: [
-                    StaggerIn(index: 0, child: _NetBoard(members: members)),
+                    StaggerIn(index: 0, child: _NetBoard(members: members, allNames: allNames)),
                     const SizedBox(height: Spacing.md),
                     // S9：结算策略（切换即时生效，创建本轮时记录到 settlements.strategy）。
                     SegmentedButton<SettleStrategy>(
@@ -87,7 +100,12 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                     const SizedBox(height: Spacing.lg),
                     activeAsync.when(
                       loading: () => const SkeletonBox(height: 160, radius: AppRadius.cardValue),
-                      error: (e, _) => Text('结算加载失败', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                      // V2.9.0:错误态收口 ErrorState,原始异常只进调试日志。
+                      error: (e, s) => ErrorState(
+                        onRetry: () => ref.invalidate(settlementsProvider),
+                        error: e,
+                        stackTrace: s,
+                      ),
                       data: (active) => active == null
                           ? StaggerIn(
                               index: 1,
@@ -107,6 +125,7 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
                           : _ActiveRound(
                               settlement: active,
                               members: members,
+                              allNames: allNames,
                             ),
                     ),
                     if (history.isNotEmpty)
@@ -122,15 +141,33 @@ class _SettleScreenState extends ConsumerState<SettleScreen> {
 // ---------------------------------------------------------------------------
 
 class _NetBoard extends ConsumerWidget {
-  const _NetBoard({required this.members});
+  const _NetBoard({required this.members, this.allNames = const {}});
 
   final List<LedgerMemberView> members;
+
+  /// V2.9.0:全量成员(含软删)姓名表 —— 有未结账目的软删成员也参与净额榜。
+  final Map<String, String> allNames;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final expenses = ref.watch(expensesProvider).value ?? const <ExpenseRecord>[];
-    final balances = netBalanceMap(members, expenses);
+    // V2.9.0:软删成员若仍有未结账目,补入净额榜(姓名走全量表),避免其欠收凭空消失。
+    final activeIds = {for (final m in members) m.id};
+    final merged = [...members];
+    final touchedIds = <String>{
+      for (final e in expenses)
+        if (e.settledRoundId == null) ...[
+          for (final p in e.payers) p.memberId,
+          for (final s in e.shares) s.memberId,
+        ],
+    };
+    for (final entry in allNames.entries) {
+      if (!activeIds.contains(entry.key) && touchedIds.contains(entry.key)) {
+        merged.add(LedgerMemberView(id: entry.key, name: entry.value, colorIndex: 0));
+      }
+    }
+    final balances = netBalanceMap(merged, expenses);
 
     return Material(
       color: scheme.brightness == Brightness.dark
@@ -148,7 +185,7 @@ class _NetBoard extends ConsumerWidget {
               child: Text('每人净额 · 正收负欠',
                   style: Theme.of(context).textTheme.titleSmall),
             ),
-            for (final m in members)
+            for (final m in merged)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: Spacing.xs + 1),
                 child: Row(
@@ -214,17 +251,25 @@ class _StartRoundCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _ActiveRound extends ConsumerWidget {
-  const _ActiveRound({required this.settlement, required this.members});
+  const _ActiveRound({
+    required this.settlement,
+    required this.members,
+    this.allNames = const {},
+  });
 
   final SettlementView settlement;
   final List<LedgerMemberView> members;
 
-  String nameOf(String id) =>
-      members.where((m) => m.id == id).firstOrNull?.name ?? '?';
+  /// V2.9.0:全量成员(含软删)姓名表。
+  final Map<String, String> allNames;
 
-  LedgerMemberView memberOf(String id) =>
-      members.firstWhere((m) => m.id == id,
-          orElse: () => LedgerMemberView(id: id, name: '?', colorIndex: 0));
+  LedgerMemberView memberOf(String id) {
+    final active = members.where((m) => m.id == id).firstOrNull;
+    if (active != null) return active;
+    // V2.9.0:软删成员用全量表姓名补一个视图(头像色取 0 号)。
+    return LedgerMemberView(
+        id: id, name: allNames[id] ?? '?', colorIndex: 0);
+  }
 
   /// 方案中出现的不同账户数（脚注「M 人参与」）。
   Set<String> _participants() {
@@ -468,6 +513,15 @@ class _HistorySection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+    // V2.9.0:引擎只支持撤销最近完成的一轮 —— 只有最新一轮渲染「撤销」,
+    // 更早轮次如实不渲染(此前每行都有撤销、行为却永远撤最近一轮,行号与行为错位)。
+    // settlementsProvider 已按 roundNo 降序排好,取最大轮号即为最近一轮。
+    final latestRoundNo =
+        history.isEmpty ? null : history.map((s) => s.roundNo).reduce((a, b) => a > b ? a : b);
+    // V2.9.0:撤销影响面按「该轮入结的账单数」如实呈现(danger 弹层强确认口径)。
+    final expenses = ref.watch(expensesProvider).value ?? const <ExpenseRecord>[];
+    int affectedBills(SettlementView s) =>
+        expenses.where((e) => e.settledRoundId == s.id).length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -514,12 +568,14 @@ class _HistorySection extends ConsumerWidget {
                             size: 18, color: scheme.onSurfaceVariant),
                         onPressed: () => showSettleCardSheet(context, ref, history[i]),
                       ),
-                      TextButton(
-                        onPressed: () => _confirmUndo(context, ref),
-                        child: Text('撤销',
-                            style: TextStyle(
-                                fontSize: AppFontSizes.caption, color: scheme.error)),
-                      ),
+                      if (history[i].roundNo == latestRoundNo)
+                        TextButton(
+                          onPressed: () =>
+                              _confirmUndo(context, ref, history[i], affectedBills(history[i])),
+                          child: Text('撤销',
+                              style: TextStyle(
+                                  fontSize: AppFontSizes.caption, color: scheme.error)),
+                        ),
                     ],
                   ),
                 ),
@@ -531,52 +587,30 @@ class _HistorySection extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmUndo(BuildContext context, WidgetRef ref) async {
+  /// V2.9.0:撤销确认改走 L2 危险确认(影响账单数入文案),成功/失败给轻提示。
+  Future<void> _confirmUndo(
+      BuildContext context, WidgetRef ref, SettlementView round, int billCount) async {
     HapticFeedback.selectionClick();
-    await showDraggableSheet<void>(
+    final ok = await showDangerConfirm(
       context: context,
-      initialChildSize: 0.32,
-      minChildSize: 0.26,
-      builder: (sheetContext, __) => Padding(
-        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('撤销最近一轮结算？', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: Spacing.sm),
-            Text('该轮涉及的账单会回到「未结」状态，方案作废重来。',
-                style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: Spacing.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('算了'),
-                  ),
-                ),
-                const SizedBox(width: Spacing.md),
-                Expanded(
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.error,
-                        foregroundColor: Theme.of(context).colorScheme.onError),
-                    onPressed: () async {
-                      Navigator.of(sheetContext).pop();
-                      final gid = ref.read(activeGroupIdProvider).value;
-                      if (gid != null) {
-                        await undoLastRound(ref, gid);
-                      }
-                    },
-                    child: const Text('撤销这轮'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      title: '撤销第 ' + round.roundNo.toString() + ' 轮结算？',
+      body: '该轮 ' + billCount.toString() + ' 笔账单会回到「未结」状态，转账方案作废，此操作不可恢复。',
+      confirmLabel: '确认',
+      icon: Icons.undo_rounded,
     );
+    if (!ok || !context.mounted) return;
+    final gid = ref.read(activeGroupIdProvider).value;
+    if (gid == null) return;
+    try {
+      await undoLastRound(ref, gid);
+      if (!context.mounted) return;
+      showAppSnackBar(context,
+          '已撤销第 ' + round.roundNo.toString() + ' 轮结算，' + billCount.toString() + ' 笔账单回到未结');
+    } catch (e, s) {
+      // V2.9.0:原始异常只进调试日志,不进 UI 文案。
+      debugPrint('undoLastRound failed: $e\n$s');
+      if (!context.mounted) return;
+      showAppSnackBar(context, '撤销失败，请稍后重试', tone: SnackTone.destructive);
+    }
   }
 }

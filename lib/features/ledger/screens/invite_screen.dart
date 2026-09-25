@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/glass_app_bar.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../../companions/space_actions.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
@@ -53,7 +55,9 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
         showAppSnackBar(context,
             legacy ? '已加入（旧共享账本已自动升级为旅伴空间）' : copy('share.joinOk'));
         if (spaceId.isNotEmpty) {
-          context.go('/companions/space/$spaceId');
+          // V2.9.0:context.go 清栈后落地页无返回路径 —— 改 pushReplacement,
+          // 保持顶层全屏语义,仅修返回栈(可返回账本首页)。
+          context.pushReplacement('/companions/space/$spaceId');
         } else {
           context.go('/ledger');
         }
@@ -66,10 +70,16 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   }
 
   Future<bool> showLoginGate(BuildContext context) async {
-    final ok = await showModalBottomSheet<bool>(
+    // V2.9.0:裸 showModalBottomSheet 在透明主题下内容重叠,统一收口 showDraggableSheet。
+    final ok = await showDraggableSheet<bool>(
       context: context,
-      isScrollControlled: true,
-      builder: (_) => const _MiniLoginGate(),
+      initialChildSize: 0.42,
+      minChildSize: 0.3,
+      builder: (sheetContext, scrollController) => SingleChildScrollView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
+        child: const _MiniLoginGate(),
+      ),
     );
     return ok == true;
   }
@@ -78,7 +88,8 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(copy('share.joinTitle'))),
+      // V2.9.0:次级页顶栏统一 GlassAppBar。
+      appBar: GlassAppBar(title: copy('share.joinTitle')),
       body: Padding(
         padding: const EdgeInsets.all(Spacing.xl),
         child: Column(children: [
@@ -147,9 +158,9 @@ class _MiniLoginGateState extends ConsumerState<_MiniLoginGate> {
 
   @override
   Widget build(BuildContext context) {
+    // V2.9.0:键盘避让由 SheetContainer 统一处理,内层不再自加 viewInsets。
     return Padding(
-      padding: EdgeInsets.only(
-          left: Spacing.xl, right: Spacing.xl, top: Spacing.xl, bottom: MediaQuery.of(context).viewInsets.bottom + Spacing.xl),
+      padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(copy('share.needLogin'), textAlign: TextAlign.center),
         const SizedBox(height: Spacing.lg),

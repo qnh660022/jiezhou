@@ -1,0 +1,164 @@
+芥舟 V2.9.0 构建日志（用户体验修复轮：锁深链/清单数据/记账收口/一致性/死代码）
+=========================================
+构建时间 : 2026-09-25（本地会话）
+版本     : 2.9.0+2900 (versionName 2.9.0 / versionCode 2900)
+产物     : build\app\outputs\flutter-apk\app-release.apk (33.5 MB / 35,131,380 字节)
+归档     : release\jiezhou-2.9.0+2900-arm64.apk
+           sha1   6175edc859f24c6454ab40fabe14cec716b9e3d9
+           sha256 dbc47c3b28244ed44cd1a4b9654a84a5a54a8fd57192f4c6be5db077bdd20b84
+目标架构 : android-arm64
+
+本轮范围（用户三问三审后裁定）
+-------------------------------------
+* 体检来源：四个并行只读代理（行程域 / 记账域 / 辅助域 / 全局导航与一致性）
+  纯代码走查，产出 70+ 条发现；P0 与高危 P1 由主会话逐条源码复核后呈报摘要，
+  用户裁定「按摘要全修」。
+* 覆盖模块：行程规划 / AA 记账 / 清单+今日+设置(+lock)；desktop_* 与 companions
+  维持冻结登记态。
+* 已知登记债本轮不碰：R-3 装配台触碰即拖、R-4 提示条 20 处直连收口、
+  底栏 withSafeArea 24 处逐个复核、R-1 锁屏黑屏兜底。
+* 收尾政策：只构建归档；git 不提交、官网 / README 不动。
+
+修复清单（分域摘要）
+-------------------------------------
+【全局 / 锁】
+ 1) P0 启动锁深链绕过：AppLockGate.load() 移入 main()（runApp 前，2s 超时兜底）；
+    redirect 在 ready==false 的隐含假设封死，/s/:token、/invite 冷启动不再绕锁。
+ 2) 锁拦截时记录 pendingLocation，解锁后回跳深链目的地（邀请码 / 分享口令不再丢）。
+ 3) 路由表新增 errorBuilder → 统一 404 兜底页（EmptyState + 回行程首页）。
+ 4) 夜航族 + 跟随系统时 isDark 恒真导致「跟随系统」静默失效 —— 已修。
+ 5) 窄窗拦截页区分「手机浏览器」与「桌面窄窗」文案；/lock 加入白名单；
+    拦截页 emoji 图标换矢量。
+
+【数据 / 安全硬伤】
+ 6) P0 清单 scope 失守（仓储层收口）：global 条目强制 tripId=null；
+    deleteTrip / 备份导出 / copyFromTrip 的清单查询补 scope 过滤（删行程不再
+    连带清光全局待办）；copyFromTrip 改 newId 生成主键 + 按 label 去重
+    （二次复制不再撞唯一约束崩溃）；撤销删除回填 done 态。
+ 7) viewer 权限旁路收口（行程域）：增删天、备胎操作、相册增删照片、地图插交通
+    全部补 canWrite 门控（入口隐藏 + 函数兜底双层）；viewer 拖拽改为拖不动。
+ 8) 编辑安排 sortOrder 硬编码 0 导致拖拽排序被重置 —— 透传原值。
+ 9) 结算历史「每行撤销都撤最近一轮」—— 撤销只渲染在新近一轮，L2 危险确认
+    含影响账单数 + 成功 / 失败反馈。
+10) 子预算 / 洞察胶囊把退款按 abs() 算成支出 —— 带符号累加，与统计口径一致。
+11) 编辑行程缩短日期不裁剪安排（Day 0 / Day -1）—— 保存走 updateDates 夹取。
+12) 装配台「换天建议」剩余容量恒错 —— 改传全行程记录计算占用。
+
+【入口与导航】
+13) 首页团卡「预算 N%」跳未注册路径 —— 改 pushNamed('budget')。
+14) 今日驾驶舱三处引导闭环断裂：「记一笔」带行程关联 groupId 参跳记账页
+    （记账页支持 ?groupId= 预选，参数优先且不写回激活组）；「关联账本」引导改跳
+    行程编辑页；「今天还没有安排」空态补「去行程页添加」。
+15) 邀请码弹层补完整 URL + 复制 / 系统分享；受邀落地改 pushReplacement（修返回栈）。
+16) 明细筛选「全部」现在清空全部筛选（时间 / 支付方式不再残留）；批量多选补
+    顶栏「全选」可见入口（一键全选当前筛选结果，viewer 不可见）。
+17) LAN 同步入口三处收敛（行程首页顶栏移除、团管理移除，留账本首页与分享中心）。
+18) CSV 导入收编路由表（/expenses/csv-import），两处裸 MaterialPageRoute 清零。
+19) 行程首页 / 账本首页 / 清单页错误态统一 ErrorState（重试出口，异常不进 UI）。
+
+【一致性收口】
+20) GlassAppBar 统一换装：trip_guide、audit_log、app_lock、theme、sync_center、
+    cloud_account、share_center 等 8+ 处普通 AppBar 清零。
+21) 裸 showModalBottomSheet 收编（settle_card / fund / invite / login_gate /
+    wishlist / assemble / smart_template 等 9 处）；shared_ledger_sections 弹层
+    补 useRootNavigator。
+22) 自绘确认弹层收口 showDangerConfirm（撤销结算 / 移除成员 / 删除分类 / 关闭
+    公款池 / 撤销分享链接×2 / 收件箱移除 / 删除模板 / 团卡删除），按钮用语统一
+    「确认 / 取消 / 删除 / 知道了」。
+23) 草稿拦截弹层三出口语义修正：dismiss=留在本页、「放弃草稿」清稿返回、
+    「离开并保留草稿」存稿返回（原实现文案与行为相反）；编辑态草稿补恢复。
+24) 金额格式化收敛 MoneyFormat（stats / budget / expenses / bill_detail /
+    group_summary / fund_sheets 千分位口径统一，丢分位实现清除）。
+25) 用语统一：「消费」→「账单」、「旅行团」→「账本」、「两清」→「已结清」、
+    切团抽屉 tooltip 同步；隐私页 / 关于页「纯本地离线」口径改为按登录态如实陈述。
+26) 异常文案友好化 15+ 处（lan_sync / qr_scan / csv 导入 / 收件箱 / 公款池等），
+    原始异常只进调试日志。
+27) emoji 功能图标换矢量（expense_edit / expenses）；qr_scan 字号收敛令牌；
+    bill_detail 硬编码色值 → SemanticColors.expense。
+28) 统计分类下钻任何时间档位都换算并透传 from/to（两页数字不再对不上）。
+29) 选天弹层三套收敛为新组件 day_pick_sheet（1 基 D 序号 + 月日 + 星期 +
+    安排数 + 当前天高亮）；日期选择器三处统一自绘中文月历 range_calendar_sheet。
+30) 其余：相册日期筛选生效、攻略 TabBar n+1 越界白屏、添加城市改 AppBar 动作、
+    备份文件名正则（字母 r/n/t 误伤）、模板删除确认、地图出行方式无效菜单移除、
+    地图 provider=none 拦截口径统一、归档行展开态 per-trip、导出 / 分享 / PDF
+    备选卡口径统一、PIN 设置抽屉冷却倒计时、profile 搜索漏网、share_center
+    ref.watch、进行中行程口径、恢复默认补字体 / 圆角、主题页跟随系统卡归位、
+    checklist 底部让位走令牌、分类导入去重对齐、sync_center categories 映射、
+    汇率抽屉副作用、记出金校验、今日计数双计、加成员空名反馈、公款池骨架屏、
+    group_edit 保存错误兜底、装配台空态文案随布局、未估时红色误用等。
+
+【死代码清理（约千行）】
+31) trip_detail 概览卡一族（_WeatherStrip/_ChecklistEntryCard/_PlanActualCard/
+    _OverviewCard/_DayMiniSummary，挂载点 V2.8.3.3 已移除、现版面有替代）、
+    widgets/trip_detail_tabs.dart、widgets/cover_watermark.dart、地图选点死分支、
+    screens/shared_ledger_screen.dart（V2.6.6.2 退役）、shared/widgets/stub_screen.dart、
+    /checklist/item-edit 死路由 + 对应死屏文件。
+
+工具链（scripts/env.local.ps1）
+-------------------------------------
+JAVA_HOME            : D:\AI\env\jdk\jdk-17.0.2（必须 Windows 形式）
+ANDROID_HOME         : D:\AI\env\android-sdk
+GRADLE_USER_HOME     : D:\AI\env\gradle-home
+PUB_HOSTED_URL       : https://pub.flutter-io.cn
+FLUTTER_STORAGE_BASE : https://storage.flutter-io.cn
+Flutter              : 3.47.1 stable / Dart 3.13.1
+AGP build-tools      : 36.0.0
+
+构建门禁（逐项通过）
+-------------------------------------
+1) flutter pub get                                          OK
+2) dart run build_runner build                              OK（793 输出，无 schema 变更）
+3) flutter analyze   （要求 0 error）                       OK：0 error
+4) flutter test      （要求全绿）                           OK：976 全绿（0 失败）
+5) flutter build apk --release --target-platform android-arm64   OK（327.5s）
+
+云端密钥注入（§3.2.2 契约）
+-------------------------------------
+密钥取自 scripts/env.local.ps1（已 gitignore），读入长度校验 URL / KEY=46 ✓
+  --dart-define=SUPABASE_URL=https://yxclvavejcxhkobnldyx.supabase.co
+  --dart-define=SUPABASE_ANON_KEY=sb_publishable_***（不打印本体）
+注入断言（解包 APK 后 grep -a 检索 lib/arm64-v8a/libapp.so）:
+  SUPABASE_URL      片段命中 ×6 ✓
+  SUPABASE_ANON_KEY 前缀（sb_publishable_）命中 ×2 ✓
+
+签名验证（apksigner verify --print-certs）
+-------------------------------------
+Signer #1 certificate DN : CN=Travel Assistant, OU=Dev, O=Travel, L=Shanghai, ST=Shanghai, C=CN
+Signer #1 SHA-256 digest : 4469f25aa6a9402f12aaf0cfa4cd4f9cc9c77cf8be37408b24833e4e0a85ea28
+                           （与 V2.8.2 ~ V2.8.4 交付指纹逐位一致 → 同一密钥库）
+密钥库                   : android/app/release-key.jks（android/key.properties 引用，不入库）
+验证结论                 : ✅ 正式签名有效
+
+测试变更
+-------------------------------------
+* 新增：test/trips/v290_trips_ux_test.dart（文件名清洗 / 选天映射 / 单日月历）；
+        test/data/checklist_scope_test.dart（P0 scope 三层收口 7 例）。
+* 更新断言以对齐本轮有意改动：expense_edit_test（chip 去 emoji、草稿弹层
+  「放弃草稿」更名）、s7_ledger_home_test（切换账本 / 底部「全部」/ 账本管理 /
+  删除账本）、s9_bill_detail_test（已结清用语）、v2834_fixes_test（选天换装
+  day_pick_sheet 后的源码断言）。
+* 随死代码裁剪：v282_s5_trip_tabs_test、v282_s7_regression（删组）、
+  v282_s123_backfill（删组）。
+
+版本号改动
+-------------------------------------
+pubspec.yaml             : 2.8.4+2840 → 2.9.0+2900
+lib/shared/app_meta.dart : kAppVersionLabel 'v2.8.4' → 'v2.9.0'
+（门禁 S7-1 按数字序列对齐规则推演通过：v2.9.0 ↔ 2900）
+
+Git 提交
+-------------------------------------
+按用户指令：本轮**不做 git 提交**（未 add、未 commit、未推送）。
+官网 / README 版本口径未动（沿用 V2.8 对外门面）。
+
+已知遗留（如实登记，未处理）
+-------------------------------------
+1) 历史登记债维持：R-3 装配台触碰即拖、R-4 提示条 20 处直连收口、底栏
+   withSafeArea 24 处逐个复核、R-1 锁屏黑屏兜底、desktop_* 与 companions 冻结域。
+2) 字号硬编码全量换装（trip_detail 46 处等）按裁定登记后续 —— 本轮只做了
+   高危面（金额 / 封面白 / 圆角 / 正在修的行）。
+3) Tab 根页头部四套实现（GlassAppBar largeTitle / LedgerLargeHeader / 自绘 /
+   本地复制）未统一为 TabRootHeader，登记后续。
+4) 「邮箱格式不正确」等新文案暂用本地字面量，未进 copy_tokens（属共享层冻结面）。
+5) 建议真机回归：启动锁（含深链冷启动 → 解锁回跳）、清单全局待办迁移数据、
+   结算撤销、账单筛选与批量多选、悬浮底栏贴合。

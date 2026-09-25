@@ -109,7 +109,9 @@ class TripsRepository {
     // V2.7.2：想去池随行程级联清空（含受邀端镜像行）
     await (db.delete(db.wishlistItems)..where((w)=>w.tripId.equals(id))).go();
     await (db.delete(db.sharedWishlistItems)..where((w)=>w.tripId.equals(id))).go();
-    await (db.delete(db.checklistItems)..where((c)=>c.tripId.equals(id))).go();
+    // V2.9.0:补 scope='trip' 过滤——global 待办曾被误写 tripId,无 scope 过滤时
+    // 删行程会连带清光全局待办。
+    await (db.delete(db.checklistItems)..where((c)=>c.tripId.equals(id)&c.scope.equals("trip"))).go();
     await (db.delete(db.albumPhotos)..where((a)=>a.tripId.equals(id))).go();
     await (db.delete(db.trips)..where((t)=>t.id.equals(id))).go();
     // 关联账单被摘掉 tripId，需重新上行；行程安排逐条发墓碑。
@@ -488,7 +490,8 @@ class TripsRepository {
     if (t == null) throw StateError('行程不存在');
     final items = await getItems(tid);
     final photos = await (db.select(db.albumPhotos)..where((a) => a.tripId.equals(tid))).get();
-    final checklist = await (db.select(db.checklistItems)..where((c) => c.tripId.equals(tid))).get();
+    // V2.9.0:导出只带行程域清单,补 scope='trip' 过滤(与 deleteTrip/copyFromTrip 同口径)。
+    final checklist = await (db.select(db.checklistItems)..where((c) => c.tripId.equals(tid)&c.scope.equals("trip"))).get();
     final wishlist = await (db.select(db.wishlistItems)..where((w) => w.tripId.equals(tid))).get();
     final backup = buildTripBackup(
       trip: t.toJson(),

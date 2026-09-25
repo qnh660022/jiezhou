@@ -6,10 +6,13 @@
 /// * 不提供任何生物识别开关（不引入 local_auth）。
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../platform/app_lock.dart';
+import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
@@ -121,7 +124,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('启动锁'), centerTitle: false),
+      // V2.9.0:次级页顶栏统一 GlassAppBar(原裸 AppBar + centerTitle:false 全库唯一分歧);
+      // 本页为普通 ListView,无依赖 AppBar 高度的布局。
+      appBar: const GlassAppBar(title: '启动锁'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -217,15 +222,59 @@ class _PinSheetState extends State<_PinSheet> {
   final _formKey = GlobalKey<FormState>();
   String _error = '';
 
+  // V2.9.0:冷却期展示——verify 失败后读 AppLockService 的 cooldownRemainingMs,
+  // >0 时提示「尝试过于频繁,请 N 秒后再试」并禁用输入,1s Timer 轮询恢复
+  // (此前冷却期 verify 静默返回 false,输对也提示「当前 PIN 不正确」,无倒计时;
+  // 参照 lib/features/lock/lock_screen.dart 的 _refreshCooldown 写法)。
+  Timer? _ticker;
+  int _cooldownLeftMs = 0;
+
+  bool get _coolingDown => _cooldownLeftMs > 0;
+
   @override
   void dispose() {
+    _ticker?.cancel();
     _currentCtl.dispose();
     _ctl.dispose();
     _ctl2.dispose();
     super.dispose();
   }
 
+  Future<void> _refreshCooldownAfterFail() async {
+    var left = 0;
+    try {
+      final svc = await AppLockService.cached();
+      left = svc.cooldownRemainingMs();
+    } catch (_) {
+      left = 0;
+    }
+    if (!mounted) return;
+    setState(() {
+      _cooldownLeftMs = left;
+      _error = left > 0 ? '' : '当前 PIN 不正确';
+    });
+    if (left <= 0) return;
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) async {
+      var l = 0;
+      try {
+        final svc = await AppLockService.cached();
+        l = svc.cooldownRemainingMs();
+      } catch (_) {
+        l = 0;
+      }
+      if (!mounted) return;
+      setState(() => _cooldownLeftMs = l);
+      if (l <= 0) {
+        _ticker?.cancel();
+        _ticker = null;
+        if (mounted) setState(() => _error = '');
+      }
+    });
+  }
+
   Future<void> _submit() async {
+    if (_coolingDown) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (widget.confirm && _ctl.text != _ctl2.text) {
       setState(() => _error = '两次输入不一致');
@@ -233,7 +282,7 @@ class _PinSheetState extends State<_PinSheet> {
     }
     if (widget.requireCurrent && !await widget.verifyCurrent(_currentCtl.text)) {
       if (!mounted) return;
-      setState(() => _error = '当前 PIN 不正确');
+      await _refreshCooldownAfterFail();
       return;
     }
     if (!mounted) return;
@@ -260,17 +309,20 @@ class _PinSheetState extends State<_PinSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (widget.requireCurrent)
-                _PinField(controller: _currentCtl, label: '当前 PIN'),
-              _PinField(controller: _ctl, label: widget.hint),
+                _PinField(controller: _currentCtl, label: '当前 PIN', enabled: !_coolingDown),
+              _PinField(controller: _ctl, label: widget.hint, enabled: !_coolingDown),
               if (widget.confirm)
-                _PinField(controller: _ctl2, label: '再输一次确认'),
+                _PinField(controller: _ctl2, label: '再输一次确认', enabled: !_coolingDown),
             ],
           ),
         ),
-        if (_error.isNotEmpty) ...[
+        if (_error.isNotEmpty || _coolingDown) ...[
           const SizedBox(height: Spacing.sm),
           Text(
-            _error,
+            // V2.9.0:冷却期优先展示倒计时提示,不再误报「当前 PIN 不正确」。
+            _coolingDown
+                ? '尝试过于频繁，请 ${(_cooldownLeftMs / 1000).ceil()} 秒后再试'
+                : _error,
             style: TextStyle(
               fontSize: AppFontSizes.caption,
               fontWeight: FontWeight.w700,
@@ -290,7 +342,7 @@ class _PinSheetState extends State<_PinSheet> {
             const SizedBox(width: Spacing.sm),
             Expanded(
               child: FilledButton(
-                onPressed: _submit,
+                onPressed: _coolingDown ? null : _submit,
                 child: const Text('确定'),
               ),
             ),
@@ -330,10 +382,13 @@ class _Bullet extends StatelessWidget {
 
 /// 6 位数字输入框（统一键盘类型、长度与校验文案）。
 class _PinField extends StatelessWidget {
-  const _PinField({required this.controller, required this.label});
+  const _PinField({required this.controller, required this.label, this.enabled = true});
 
   final TextEditingController controller;
   final String label;
+
+  /// V2.9.0:冷却期禁用输入。
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -341,6 +396,7 @@ class _PinField extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: Spacing.sm),
       child: TextFormField(
         controller: controller,
+        enabled: enabled,
         obscureText: true,
         keyboardType: TextInputType.number,
         maxLength: kPinLength,

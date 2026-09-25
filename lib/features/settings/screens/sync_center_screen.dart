@@ -17,6 +17,7 @@ import '../../../platform/network_probe.dart' show NetKind;
 import '../../../shared/app_meta.dart' show shareLinkUrl;
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/sync_status_capsule.dart'
     show syncStatusColor;
@@ -60,7 +61,8 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
     final status = ref.watch(syncStatusProvider).value ?? const SyncStatus(kind: SyncStatusKind.unconfigured);
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(copy('sync.center'))),
+      // V2.9.0:次级页顶栏统一 GlassAppBar(原裸 AppBar)。
+      appBar: GlassAppBar(title: copy('sync.center')),
       body: ListView(
         padding: const EdgeInsets.all(Spacing.lg),
         children: [
@@ -449,7 +451,16 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded, size: 20),
               tooltip: '撤销（拿到链接的人立即无法访问）',
+              // V2.9.0:撤销立即失效且不可恢复 → L2 危险确认（body 含影响数量）。
               onPressed: () async {
+                final linkName = (snap.data ?? entityId).trim();
+                final shown = linkName.isEmpty ? '只读链接' : linkName;
+                final ok = await showDangerConfirm(
+                  context: context,
+                  title: '撤销分享链接',
+                  body: '将撤销 1 条分享链接（$shown）。拿到链接的人立即无法访问，撤销后不可恢复。',
+                );
+                if (!ok) return;
                 final svc = ref.read(shareServiceProvider);
                 await svc?.deleteShareLink(token);
                 _reloadLists();
@@ -486,36 +497,53 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
     final collabs = _collabs;
     return Card(
       margin: EdgeInsets.zero,
+      // V2.9.0:空态文案改中性说明(原误用 copy('share.joinInvalid')
+      // 「邀请码无效…」,是加入失败提示,不是空态说明)。
       child: (collabs == null || collabs.isEmpty)
           ? Padding(
               padding: const EdgeInsets.all(Spacing.lg),
-              child: Text(copy('share.joinInvalid'),
+              child: Text('还没有可管理的邀请码：在共享账本里邀请旅伴后生成',
                   style: const TextStyle(fontSize: AppFontSizes.caption)))
           : Column(children: [
               for (final c in collabs)
                 if ((c['inviteCode'] as String?)?.isNotEmpty == true)
-                  ListTile(
-                    title: Text(c['groupId'] as String,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(c['inviteCode'] as String),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.refresh_rounded, size: 20),
-                      tooltip: copy('share.inviteRegen'),
-                      onPressed: () async {
-                        final svc = ref.read(collabServiceProvider);
-                        try {
-                          await svc?.regenerateInviteCode(c['groupId'] as String);
-                          _reloadLists();
-                        } on CloudAccountException {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(copy('share.ownerOnly'))));
-                          }
-                        }
-                      },
-                    ),
-                  ),
+                  // V2.9.0:列表标题由内部 groupId 反查实体名(复用分享链接区的
+                  // _entityName),不再直接展示对人无意义的行 id。
+                  _inviteTile(c),
             ]),
+    );
+  }
+
+  /// 单条邀请码：groupId 反查账本名,展示邀请码本体 + 重新生成。
+  Widget _inviteTile(Map<String, dynamic> c) {
+    final groupId = c['groupId'] as String;
+    final db = ref.watch(dbProvider);
+    return FutureBuilder<String>(
+      future: _entityName(db, false, groupId),
+      builder: (_, snap) {
+        final name = (snap.data ?? groupId).trim();
+        return ListTile(
+          title: Text(name.isEmpty ? '共享账本' : name,
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(c['inviteCode'] as String),
+          trailing: IconButton(
+            icon: const Icon(Icons.refresh_rounded, size: 20),
+            tooltip: copy('share.inviteRegen'),
+            onPressed: () async {
+              final svc = ref.read(collabServiceProvider);
+              try {
+                await svc?.regenerateInviteCode(groupId);
+                _reloadLists();
+              } on CloudAccountException {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(copy('share.ownerOnly'))));
+                }
+              }
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -586,7 +614,9 @@ class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
           'members' => '成员',
           'settlements' => '结算',
           'groups' => '账本',
-          _ => '',
+          // V2.9.0:补 categories 映射;未知实体兜底「其他」,不再展示空括号。
+          'categories' => '分类',
+          _ => '其他',
         };
         return Card(
           margin: EdgeInsets.zero,

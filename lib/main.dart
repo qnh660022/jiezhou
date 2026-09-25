@@ -12,6 +12,7 @@ import 'data/providers.dart';
 import 'features/ai/notification_bridge.dart';
 import 'features/ledger/ledger_providers.dart' show currencyRatesProvider;
 import 'platform/context_menu_guard.dart';
+import 'platform/app_lock.dart' show AppLockGate;
 import 'theme/theme_provider.dart';
 
 Future<void> main() async {
@@ -37,6 +38,12 @@ Future<void> main() async {
   // 平台通道竞态）也会挂起，这里一旦超时立即切换到内存实现，保证 runApp
   // 最迟 4 秒内必然执行 —— 白屏的第二个根因也被封死。
   final prefs = await _loadPrefs();
+
+  // V2.9.0：启动锁门控必须在**任何路由首跳之前**就绪。深链冷启动（应用链接 /
+  // 浏览器 URL 直接落到 /s/:token 或 /invite）不经过开屏页，若仍依赖开屏页
+  // load()，redirect 会因 ready==false 放行 —— 锁被整体绕过。load 自带 2s
+  // 超时兜底（读不到一律视为「不锁」），不会拖死首帧。
+  await AppLockGate.load();
 
   // 云后端接入（V2.6 §3.2.3）：resolve 有效则初始化 Supabase；整个步骤 4s 超时，
   // 超时/异常都继续启动（云功能按未配置处理），绝不让网络 await 挡首帧。

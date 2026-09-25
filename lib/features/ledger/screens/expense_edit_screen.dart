@@ -13,7 +13,6 @@ import '../../../domain/models.dart';
 import '../../../domain/money_expression.dart';
 import '../../../domain/share_splitter.dart' show normalizePercentToBp;
 import '../../../shared/widgets/app_snack_bar.dart';
-import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/glass_surface.dart';
@@ -207,6 +206,10 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   String? _editingId;
   bool _initialized = false;
 
+  /// V2.9.0:跨域契约 —— 支持 `/expenses/edit?groupId=<gid>` 新建预选记账目标。
+  /// 仅影响本页保存目标,不写回全局激活组;参数给出的组不存在时忽略。
+  String? _overrideGroupId;
+
   @override
   void initState() {
     super.initState();
@@ -240,6 +243,9 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
       _categoryKey = 'food';
       // 新建模式支持 query `date`（epochDay）：今日驾驶舱「记一笔」直达当日。
       _applyQueryDate();
+      // V2.9.0:新建模式支持 query `groupId`：今日驾驶舱带参跳转,预选本次
+      // 记账目标组(仅影响保存目标,不切换全局激活组)。
+      _applyQueryGroupId();
       _restoreDraftOrRecent();
       return;
     }    final expenses = ref.read(expensesProvider).value ?? const <ExpenseRecord>[];
@@ -294,6 +300,54 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
         break;
       }
     }
+    // V2.9.0:编辑态也尝试恢复会话草稿(此前 `edit:{id}` 有存无取)。
+    final editDraft = ExpenseDraftStore.take('edit:$editId');
+    if (editDraft != null) {
+      _applyDraft(editDraft, restorePayers: false);
+    }
+  }
+
+  /// V2.9.0:新建模式读路由 query `groupId` 预选记账目标组。
+  ///
+  /// 跨域契约:今日驾驶舱将带参跳转。参数给出的组必须真实存在才生效;
+  /// 只改本页保存目标([_overrideGroupId]),不写回全局激活组。
+  void _applyQueryGroupId() {
+    String? raw;
+    try {
+      raw = GoRouterState.of(context).uri.queryParameters['groupId'];
+    } catch (_) {
+      raw = null; // 桌面工作台以 Dialog 打开，无 GoRouterState
+    }
+    if (raw == null || raw.isEmpty) return;
+    final groups = ref.read(groupsProvider).value ?? const <LedgerGroupView>[];
+    for (final g in groups) {
+      if (g.id == raw) {
+        _overrideGroupId = g.id;
+        return;
+      }
+    }
+    // 组不存在:静默忽略,回退全局激活组。
+  }
+
+  /// 把会话草稿覆盖到表单上。
+  ///
+  /// [restorePayers]=false 时跳过付款人勾选(编辑态草稿未存各付款人金额,
+  /// 恢复勾选会与已回填的金额失衡)。
+  void _applyDraft(ExpenseFormDraft draft, {bool restorePayers = true}) {
+    if (draft.moneyDisplay != null) _money.setText(draft.moneyDisplay!);
+    if (draft.title != null) _titleController.text = draft.title!;
+    if (draft.note != null) _noteController.text = draft.note!;
+    if (draft.categoryKey != null) _categoryKey = draft.categoryKey;
+    if (draft.currencyCode != null) _currencyCode = draft.currencyCode!;
+    if (draft.rate != null) _rate = draft.rate!;
+    if (draft.dateEpochDay != null) _dateEpochDay = draft.dateEpochDay!;
+    if (draft.payMethod != null) _payMethod = draft.payMethod;
+    if (draft.tripId != null) _tripId = draft.tripId;
+    if (draft.tripItemId != null) _tripItemId = draft.tripItemId;
+    if (draft.type == 'refund') _type = ExpenseType.refund;
+    if (draft.type == 'prepay') _type = ExpenseType.prepay;
+    if (draft.type == 'normal') _type = ExpenseType.normal;
+    if (restorePayers && draft.payerIds != null) _payerIds.addAll(draft.payerIds!);
   }
 
   /// 新建模式：读路由 query `date`（epochDay）作为初始记账日期。
@@ -319,20 +373,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   void _restoreDraftOrRecent() {
     final draft = ExpenseDraftStore.take('new');
     if (draft != null) {
-      if (draft.moneyDisplay != null) _money.setText(draft.moneyDisplay!);
-      if (draft.title != null) _titleController.text = draft.title!;
-      if (draft.note != null) _noteController.text = draft.note!;
-      if (draft.categoryKey != null) _categoryKey = draft.categoryKey;
-      if (draft.currencyCode != null) _currencyCode = draft.currencyCode!;
-      if (draft.rate != null) _rate = draft.rate!;
-      if (draft.dateEpochDay != null) _dateEpochDay = draft.dateEpochDay!;
-      if (draft.payMethod != null) _payMethod = draft.payMethod;
-      if (draft.tripId != null) _tripId = draft.tripId;
-      if (draft.tripItemId != null) _tripItemId = draft.tripItemId;
-      if (draft.type == 'refund') _type = ExpenseType.refund;
-      if (draft.type == 'prepay') _type = ExpenseType.prepay;
-      if (draft.type == 'normal') _type = ExpenseType.normal;
-      if (draft.payerIds != null) _payerIds.addAll(draft.payerIds!);
+      _applyDraft(draft);
       return;
     }
     Future(() async {
@@ -381,6 +422,18 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
 
   /// 草稿是否值得拦截（金额/标题/备注任一非空）。
   bool get _hasDirtyDraft => ExpenseDraftStore.isDirty(_captureDraft());
+
+  /// V2.9.0:本次记账目标组 —— groupId 参数给出的组优先,否则全局激活组。
+  /// 只读派生:不写回全局激活组(参数仅影响本页保存目标)。
+  LedgerGroupView? get _effectiveGroup {
+    if (_overrideGroupId != null) {
+      final groups = ref.read(groupsProvider).value ?? const <LedgerGroupView>[];
+      for (final g in groups) {
+        if (g.id == _overrideGroupId) return g;
+      }
+    }
+    return ref.watch(activeGroupProvider).value;
+  }
 
   /// V2.8.1 S5：保存成功后记忆本次口径（编辑模式不覆盖记忆）。
   Future<void> _rememberRecent() async {
@@ -584,11 +637,13 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     final sign = _type == ExpenseType.refund ? -1 : 1;
     // 激活团必须存在：否则落到空 groupId 的「幽灵账单」，任何列表都查不到，
     // 表现为「记账成功却不显示」。宁可拦截保存并提示，也不写脏数据。
-    final gid = ref.read(activeGroupIdProvider).value;
+    // V2.9.0:带 groupId 参数进入时,参数组优先作为本次保存目标(不写回激活组)。
+    final gid = _overrideGroupId ?? ref.read(activeGroupIdProvider).value;
     if (gid == null || gid.isEmpty) {
       HapticFeedback.selectionClick();
       if (mounted) {
-        showAppSnackBar(context, '还没有激活的旅行团，请先在「我的」里新建或切换团',
+        // V2.9.0:指引改为正确入口 —— 建团/切换入口在账本页头部。
+        showAppSnackBar(context, '还没有激活的账本，请先到账本页顶部「新建账本」或切换账本',
             tone: SnackTone.destructive);
       }
       return;
@@ -645,7 +700,8 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     ExpenseDraftStore.remove(_draftKey);
     await _rememberRecent();
     if (!mounted) return;
-    // 今日第 N 笔（用于蒙层彩带）：先读后加
+    // 今日第 N 笔（用于蒙层彩带）：先读后加。
+    // V2.9.0:计数只在保存处 +1(此前 _save 与「再记一笔」各 +1,单笔双计)。
     final now = DateTime.now();
     final dayKey =
         'app.exp.count.${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
@@ -686,8 +742,8 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     final now = DateTime.now();
     final dayKey =
         'app.exp.count.${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final n = (prefs.getInt(dayKey) ?? 0) + 1;
-    await prefs.setInt(dayKey, n);
+    // V2.9.0:只读展示当日已记笔数 —— 计数在 _save 落库处 +1,这里不再重复 +1。
+    final n = prefs.getInt(dayKey) ?? 0;
     if (!mounted) return;
     showAppSnackBar(context, '今日第 $n 笔，继续保持 ✍️');
   }
@@ -699,7 +755,9 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     final amountColor = isRefund ? SemanticColors.income : scheme.onSurface;
     final members = _members;
     // S4：个人账本隐藏付款人/分摊控件（内部固定 equal + owner 单人全额）。
-    _personal = ref.watch(activeGroupProvider).value?.isPersonal ?? false;
+    // V2.9.0:groupId 参数优先 —— 个人账本判定跟随本次保存目标组。
+    final targetGroup = _effectiveGroup;
+    _personal = targetGroup?.isPersonal ?? false;
 
     return PopScope(
       canPop: false,
@@ -814,6 +872,13 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   }
 
   /// V2.8.1 S5：PopScope 草稿拦截 —— 有脏数据 → L2 确认弹层「放弃这笔账？」。
+  ///
+  /// V2.9.0:三出口语义修正 —— 此前 showConfirmSheet 的 bool 契约把「点遮罩/
+  /// 滑关(null)」与「放弃草稿」并为一路,与文案「关闭本弹层 = 留在本页」矛盾。
+  /// 现在:dismiss(null) = 留在本页;「离开并保留草稿」= 存草稿并返回;
+  /// 「放弃草稿」= 清草稿并返回。
+  /// 偏差登记:L2 弹层三出口超出 showConfirmSheet 的 bool 契约,故用
+  /// showDraggableSheet 自绘(沿用确认弹层视觉语言),dismiss 结果不再等同任何按钮。
   Future<void> _handlePop(bool didPop) async {
     if (didPop) return;
     final context = this.context;
@@ -823,22 +888,97 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
     }
     final amountLine = _money.totalFen;
     final amountText = amountLine == null ? '' : '当前金额 ¥${(amountLine / 100).toStringAsFixed(amountLine % 100 == 0 ? 0 : 2)}，';
-    final leave = await showConfirmSheet(
+    final action = await showDraggableSheet<String>(
       context: context,
-      title: '放弃这笔账？',
-      body: '$amountText离开本页会暂存为草稿，再次进入可自动恢复；关闭本弹层 = 留在本页。',
-      confirmLabel: '离开并保留草稿',
-      cancelLabel: '放弃并返回',
+      initialChildSize: 0.38,
+      minChildSize: 0.28,
+      maxChildSize: 0.55,
+      builder: (sheetContext, _) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Column(
+              children: [
+                const SizedBox(height: 4),
+                Container(
+                  width: 56,
+                  height: 56,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Theme.of(sheetContext)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.12),
+                  ),
+                  child: Icon(Icons.edit_note_rounded,
+                      size: 26, color: Theme.of(sheetContext).colorScheme.primary),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '放弃这笔账？',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(sheetContext)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$amountText离开本页会暂存为草稿，再次进入可自动恢复；关闭本弹层 = 留在本页。',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                        height: 1.4,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () =>
+                        Navigator.of(sheetContext).pop('discard'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor:
+                          Theme.of(sheetContext).colorScheme.error,
+                      side: BorderSide(
+                          color: Theme.of(sheetContext)
+                              .colorScheme
+                              .error
+                              .withValues(alpha: 0.6)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('放弃草稿'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(sheetContext).pop('leave'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('离开并保留草稿'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
-    // 「离开并保留草稿」= 写入会话草稿并返回；「放弃并返回」= 清除草稿并返回；
-    // 关闭弹层（dismiss → false→…）与「放弃」同路径，均视为明确放弃。
-    if (leave) {
+    if (action == null) return; // 点遮罩 / 滑关 = 留在本页
+    if (action == 'leave') {
       ExpenseDraftStore.put(_draftKey, _captureDraft());
-      if (context.mounted) Navigator.of(context).pop();
     } else {
       ExpenseDraftStore.remove(_draftKey);
-      if (context.mounted) Navigator.of(context).pop();
     }
+    if (context.mounted) Navigator.of(context).pop();
   }
 
   // ---------------------------------------------------------------------------
@@ -979,25 +1119,29 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          // V2.8.3.2：「支付方式」常驻移出横向栏（高频），此处不再重复
+          // V2.9.0:摘要 chip 的 emoji 功能图标换装 Icons.*_rounded(功能岗位规则)。
           _SummaryChip(
-            label: _type == ExpenseType.normal ? '↩ 退款/预付态' : (_type == ExpenseType.refund ? '↩ 已标退款' : '🛫 已标预付'),
+            icon: Icons.replay_rounded,
+            label: _type == ExpenseType.normal ? '退款/预付态' : (_type == ExpenseType.refund ? '已标退款' : '已标预付'),
             active: _type != ExpenseType.normal,
             onTap: () => _toggleGroup('type'),
           ),
           if (!_personal)
             _SummaryChip(
-              label: '👥 ${payerLabel()}',
+              icon: Icons.group_rounded,
+              label: payerLabel(),
               active: _payerIds.isNotEmpty,
               onTap: () => _toggleGroup('payer'),
             ),
           _SummaryChip(
-            label: _tripId == null ? '🔗 关联行程' : '🔗 行程已关联',
+            icon: Icons.link_rounded,
+            label: _tripId == null ? '关联行程' : '行程已关联',
             active: _tripId != null,
             onTap: () => _toggleGroup('trip'),
           ),
           _SummaryChip(
-            label: '📅 ${fmtFullDateOfEpoch(_dateEpochDay)}',
+            icon: Icons.event_rounded,
+            label: fmtFullDateOfEpoch(_dateEpochDay),
             active: false,
             onTap: () => _toggleGroup('date'),
           ),
@@ -1213,7 +1357,8 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
   Future<void> _openRateSheet(CurrencyView c) async {
     final rates = ref.read(currencyRatesProvider).value ?? const <String, double>{};
     final remembered = rates[c.code];
-    _rate = remembered ?? _rate;
+    // V2.9.0:打开抽屉不再直接套用缓存汇率 —— 只预填输入框;点「用这个汇率」才生效,
+    // 取消/滑关不改变本笔已选汇率。
     final controller = TextEditingController(
         text: (remembered ?? c.defaultRate).toStringAsFixed(4));
     await showDraggableSheet<void>(
@@ -1355,7 +1500,8 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
       children: [
         Expanded(
           child: _TypeToggleCard(
-            emoji: '↩️',
+            // V2.9.0:类型卡的 emoji 功能图标换装 Icons.*_rounded。
+            icon: Icons.replay_rounded,
             title: '退款',
             active: _type == ExpenseType.refund,
             activeColor: scheme.error,
@@ -1370,7 +1516,7 @@ class _ExpenseEditScreenState extends ConsumerState<ExpenseEditScreen> {
         const SizedBox(width: Spacing.md),
         Expanded(
           child: _TypeToggleCard(
-            emoji: '🛫',
+            icon: Icons.flight_takeoff_rounded,
             title: '预付款',
             active: _type == ExpenseType.prepay,
             activeColor: scheme.secondary,
@@ -2022,12 +2168,16 @@ class _SummaryChip extends StatelessWidget {
     required this.active,
     required this.onTap,
     this.tone,
+    this.icon,
   });
 
   final String label;
   final bool active;
   final VoidCallback onTap;
   final Color? tone;
+
+  /// V2.9.0:可选功能图标(替代 emoji 岗位)。
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -2048,13 +2198,24 @@ class _SummaryChip extends StatelessWidget {
               color: active ? color.withValues(alpha: 0.5) : scheme.outlineVariant.withValues(alpha: 0.5),
             ),
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: AppFontSizes.caption,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              color: active ? color : scheme.onSurfaceVariant,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon,
+                    size: 13,
+                    color: active ? color : scheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: AppFontSizes.caption,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  color: active ? color : scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2244,14 +2405,15 @@ class _TextFieldCard extends StatelessWidget {
 /// 退款 / 预付 切换卡
 class _TypeToggleCard extends StatelessWidget {
   const _TypeToggleCard({
-    required this.emoji,
+    // V2.9.0:emoji 参数换装为矢量图标(功能岗位规则)。
+    required this.icon,
     required this.title,
     required this.active,
     required this.activeColor,
     required this.onTap,
   });
 
-  final String emoji;
+  final IconData icon;
   final String title;
   final bool active;
   final Color activeColor;
@@ -2283,7 +2445,9 @@ class _TypeToggleCard extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 16)),
+              Icon(icon,
+                  size: 16,
+                  color: active ? activeColor : scheme.onSurfaceVariant),
               const SizedBox(width: 6),
               Text(title,
                   style: TextStyle(

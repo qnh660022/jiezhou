@@ -7,16 +7,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/copy_tokens.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 
 /// 返回 true = 登录成功（调用方继续执行原操作）。
 Future<bool> showLoginGateSheet(BuildContext context, WidgetRef ref,
     {Future<void> Function()? onSignedInCallback}) async {
-  final ok = await showModalBottomSheet<bool>(
+  // V2.9.0:改走 showDraggableSheet 统一入口——原裸 showModalBottomSheet 未包
+  // 表面(全局透明 bottomSheetTheme → 字与底层页面文字重叠事故形态),且缺
+  // 拖拽把手与键盘避让。
+  final ok = await showDraggableSheet<bool>(
     context: context,
-    isScrollControlled: true,
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+    initialChildSize: 0.55,
+    minChildSize: 0.38,
+    builder: (ctx, scrollController) => SingleChildScrollView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
       child: _LoginGateSheet(onSignedInCallback: onSignedInCallback),
     ),
   );

@@ -56,21 +56,29 @@ class _GroupEditScreenState extends ConsumerState<GroupEditScreen> {
     if (name.isEmpty) return;
     HapticFeedback.lightImpact();
     final editId = GoRouterState.of(context).uri.queryParameters['id'];
-    if (editId != null && editId.isNotEmpty) {
-      await updateGroupInfo(ref, editId, name, _icon);
+    // V2.9.0:保存链路包错误兜底 —— 此前失败直接抛未捕获异常且页面无提示。
+    try {
+      if (editId != null && editId.isNotEmpty) {
+        await updateGroupInfo(ref, editId, name, _icon);
+        if (mounted) {
+          showAppSnackBar(context, '已保存修改');
+          context.pop();
+        }
+        return;
+      }
+      final created = await createGroup(ref, name: name, icon: _icon, kind: _kind);
+      await activateGroup(ref, created.id);
       if (mounted) {
-        showAppSnackBar(context, '已保存修改 ✅');
+        showAppSnackBar(context, _kind == 'personal'
+                ? '「' + name + '」建好啦，记下自己的每一笔 ✍️'
+                : '「' + name + '」建好啦，开始记账吧 🎉');
         context.pop();
       }
-      return;
-    }
-    final created = await createGroup(ref, name: name, icon: _icon, kind: _kind);
-    await activateGroup(ref, created.id);
-    if (mounted) {
-      showAppSnackBar(context, _kind == 'personal'
-              ? '「' + name + '」建好啦，记下自己的每一笔 ✍️'
-              : '「' + name + '」建好啦，开始记账吧 🎉');
-      context.pop();
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, '保存失败，请稍后重试',
+            tone: SnackTone.destructive);
+      }
     }
   }
 

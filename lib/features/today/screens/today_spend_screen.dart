@@ -91,7 +91,9 @@ class _TodaySpendScreenState extends ConsumerState<TodaySpendScreen> {
                   title: '关联账本后可用',
                   message: '把这趟行程挂到一本账本上，今日花销与预算余量自动汇总。',
                   actionLabel: '去关联账本',
-                  onAction: () => context.pushNamed('group-edit'),
+                  // V2.9.0:改跳行程编辑页(extra 传行程 id)——挂接账本在那里完成,
+                  // 只建账本表单无法让本卡变为可用。
+                  onAction: () => context.push('/trips/edit', extra: widget.tripId),
                 )
               : ListView(
                   padding: const EdgeInsets.only(bottom: Spacing.xxxl),

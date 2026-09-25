@@ -15,6 +15,7 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
+import '../trip_access.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
 import '../../../theme/app_icons.dart';
@@ -35,12 +36,21 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
   // 流与 build 解耦（防反复刷新）：tripId 固定，流只建一次
   Stream<List<AlbumPhoto>>? _photosStream;
 
+  /// V2.9.0：viewer 只读判定缓存（build 期写入，回调期同步读取）。
+  bool? _canWriteCache;
+  bool get _canWrite => _canWriteCache ?? true;
+
   void _toast(String message) {
     // V2.8.3.3：收口到全 App 唯一轻提示形态（L1）。
     showAppSnackBar(context, message);
   }
 
   Future<void> _addPhotoFlow() async {
+    // V2.9.0：viewer 兜底拦截（添加入口已按 canWrite 隐藏）。
+    if (!_canWrite) {
+      _toast('你是观察者，只能查看行程');
+      return;
+    }
     HapticFeedback.selectionClick();
     final source = await showDraggableSheet<ImageSource>(
       context: context,
@@ -128,6 +138,11 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
   }
 
   Future<void> _deletePhoto(String id) async {
+    // V2.9.0：viewer 兜底拦截（长按删除入口已按 canWrite 隐藏）。
+    if (!_canWrite) {
+      _toast('你是观察者，只能查看行程');
+      return;
+    }
     HapticFeedback.mediumImpact();
     // V2.8.2 S6：并入统一 L2 危险确认（showDangerConfirm）
     final ok = await showDangerConfirm(
@@ -153,15 +168,20 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
         body: const EmptyState(icon: Icons.image_outlined, title: '未找到行程'),
       );
     }
+    // V2.9.0：viewer 只读 —— 隐藏一切添加/删除入口（隐藏不置灰）。
+    _canWriteCache = ref.watch(tripAccessProvider(tripId)).valueOrNull?.canWrite;
     return Scaffold(
       appBar: GlassAppBar(
         title: '相册',
-        actions: [
-          IconButton(
-            onPressed: _addPhotoFlow,
-            icon: const Icon(Icons.add_a_photo_rounded),
-          ),
-        ],
+        // V2.9.0：viewer 不渲染添加入口
+        actions: _canWrite
+            ? [
+                IconButton(
+                  onPressed: _addPhotoFlow,
+                  icon: const Icon(Icons.add_a_photo_rounded),
+                ),
+              ]
+            : const [],
       ),
       body: Stack(
         children: [
@@ -177,8 +197,9 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
               icon: AppIcons.camera,
               title: '还没有照片',
               message: '旅途中的精彩瞬间等你记录',
-              actionLabel: '添加第一张',
-              onAction: _addPhotoFlow,
+              // V2.9.0：viewer 无添加动作
+              actionLabel: _canWrite ? '添加第一张' : null,
+              onAction: _canWrite ? _addPhotoFlow : null,
             );
           }
           // Collect unique days
@@ -188,6 +209,13 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
             (days[d] ??= []).add(p);
           }
           final sortedDays = days.keys.toList()..sort();
+          // V2.9.0：日期筛选真正作用于网格（此前只改 _filterDay，Grid 未过滤）。
+          final visiblePhotos = _filterDay == null
+              ? photos
+              : photos
+                  .where((p) =>
+                      (p.dayEpochDay ?? p.createdAt ~/ 86400000) == _filterDay)
+                  .toList();
           return Column(
             children: [
               // Day filter chips
@@ -217,19 +245,26 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
                 ),
               // Grid
               Expanded(
-                child: GridView.builder(
+                child: visiblePhotos.isEmpty
+                    ? const EmptyState(
+                        icon: Icons.image_outlined,
+                        title: '该日期暂无照片',
+                        message: '换一天看看，或切回「全部」',
+                      )
+                    : GridView.builder(
                   padding: const EdgeInsets.all(Spacing.lg),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     mainAxisSpacing: 4,
                     crossAxisSpacing: 4,
                   ),
-                  itemCount: photos.length,
+                  itemCount: visiblePhotos.length,
                   itemBuilder: (context, i) {
-                    final p = photos[i];
+                    final p = visiblePhotos[i];
                     return GestureDetector(
                       onTap: () => _previewPhoto(p.uri),
-                      onLongPress: () => _deletePhoto(p.id),
+                      // V2.9.0：viewer 不挂长按删除
+                      onLongPress: _canWrite ? () => _deletePhoto(p.id) : null,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: fileImage(p.uri, fit: BoxFit.cover),
@@ -242,20 +277,22 @@ class _TripAlbumScreenState extends ConsumerState<TripAlbumScreen> {
           );
         },
       ),
-          Positioned(
-            right: Spacing.xl,
-            bottom: AppBottomLayout.withSafeArea(
-              context,
-              AppBottomLayout.actionButtonOffset,
+          // V2.9.0：viewer 不渲染添加 FAB
+          if (_canWrite)
+            Positioned(
+              right: Spacing.xl,
+              bottom: AppBottomLayout.withSafeArea(
+                context,
+                AppBottomLayout.actionButtonOffset,
+              ),
+              child: FloatingActionButton.small(
+                heroTag: 'fab-album-add',
+                onPressed: _addPhotoFlow,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                child: const Icon(Icons.add_rounded),
+              ),
             ),
-            child: FloatingActionButton.small(
-              heroTag: 'fab-album-add',
-              onPressed: _addPhotoFlow,
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-              child: const Icon(Icons.add_rounded),
-            ),
-          ),
         ],
       ),
     );

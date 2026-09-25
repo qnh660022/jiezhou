@@ -7,7 +7,9 @@
 /// - 移动端走底部抽屉（[showDayInsertPicker] / [showDayRemovePicker]）；
 ///   桌面 Workbench 用 [openAsDialog] 打开 [DayInsertPickerPanel] /
 ///   [DayRemovePickerPanel]（对话框形态）。
-/// - 空间 viewer 不渲染入口（隐藏不置灰），由调用方保证。
+/// - 空间 viewer 不渲染入口（隐藏不置灰）。V2.9.0 起责任口径：宿主按
+///   canWrite 隐藏入口，且详情页 `_onInsertDay`/`_onRemoveDay` 函数体内
+///   另有兜底拦截（双层防护，不再仅依赖调用方）。
 library;
 import 'package:flutter/material.dart';
 

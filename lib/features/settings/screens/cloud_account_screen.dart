@@ -12,6 +12,7 @@ import '../../../data/sync/sync_account.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../theme/tokens.dart';
 
@@ -69,7 +70,8 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
     final email = _email.text.trim();
     final pass = _password.text;
     if (!_validEmail(email)) {
-      setState(() => _error = copy('cloud.errGeneric'));
+      // V2.9.0:邮箱格式错误给专用文案(原误用通用「操作失败」，根因被吞)。
+      setState(() => _error = '邮箱格式不正确');
       return;
     }
     // 密码强度仅在注册（设置新密码）时强制；登录不拦，避免老密码（6 位）用户被锁死。
@@ -213,7 +215,8 @@ class _CloudAccountScreenState extends ConsumerState<CloudAccountScreen> {
     final email = ref.watch(currentUserEmailProvider);
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: Text(copy('cloud.title'))),
+      // V2.9.0:次级页顶栏统一 GlassAppBar(原裸 AppBar)。
+      appBar: GlassAppBar(title: copy('cloud.title')),
       body: ListView(
         padding: const EdgeInsets.all(Spacing.lg),
         children: [

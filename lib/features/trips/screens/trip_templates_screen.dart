@@ -7,18 +7,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' show Value;
+import 'package:go_router/go_router.dart';
 
-import '../../../core/date_utils.dart';
 import '../../../core/uid.dart';
 import '../../../data/db/database.dart' show TripItemsCompanion;
 import '../../../data/providers.dart';
 import '../../../data/seed/item_types.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../theme/tokens.dart';
 import '../../ledger/ledger_providers.dart';
 import '../trip_template_store.dart';
+import '../widgets/range_calendar_sheet.dart';
 import '../../../theme/app_icons.dart';
 
 class TripTemplatesScreen extends ConsumerWidget {
@@ -31,7 +35,12 @@ class TripTemplatesScreen extends ConsumerWidget {
       appBar: GlassAppBar(title: '行程模板库'),
       body: templatesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => EmptyState(icon: Icons.error_outline_rounded, title: '模板加载失败'),
+        // V2.9.0：错误态统一 ErrorState（原始异常不进 UI 文案）。
+        error: (e, s) => ErrorState(
+          onRetry: () => ref.invalidate(tripTemplatesProvider),
+          error: e,
+          stackTrace: s,
+        ),
         data: (templates) {
           if (templates.isEmpty) {
             return EmptyState(
@@ -104,11 +113,7 @@ class _TemplateCard extends ConsumerWidget {
                     tooltip: '删除模板',
                     icon: Icon(Icons.delete_outline_rounded,
                         size: 20, color: scheme.onSurfaceVariant),
-                    onPressed: () async {
-                      HapticFeedback.selectionClick();
-                      await deleteTemplate(template.id);
-                      ref.invalidate(tripTemplatesProvider);
-                    },
+                    onPressed: () => _deleteTemplate(context, ref),
                   ),
                 ],
               ),
@@ -126,18 +131,33 @@ class _TemplateCard extends ConsumerWidget {
     );
   }
 
+  /// V2.9.0：删除模板补 L2 危险确认（此前零确认直删）。
+  Future<void> _deleteTemplate(BuildContext context, WidgetRef ref) async {
+    HapticFeedback.selectionClick();
+    final ok = await showDangerConfirm(
+      context: context,
+      title: '删除这个模板？',
+      body:
+          '删除模板「${template.name}」及其 ${template.items.length} 条安排结构，不影响已创建的行程，且不可恢复。',
+    );
+    if (!ok) return;
+    await deleteTemplate(template.id);
+    ref.invalidate(tripTemplatesProvider);
+    if (context.mounted) {
+      showAppSnackBar(context, '已删除模板「${template.name}」');
+    }
+  }
+
   Future<void> _pickStartDate(BuildContext context, WidgetRef ref) async {
     HapticFeedback.lightImpact();
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: now,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 3),
-      helpText: '选择新行程开始日期',
+    // V2.9.0：系统 showDatePicker 未本地化 → 统一走自绘月历（单日=起终同天）。
+    final result = await showRangeCalendarSheet(
+      context,
+      mode: RangeCalendarMode.single,
+      title: '选择新行程开始日期',
     );
-    if (picked == null || !context.mounted) return;
-    final start = dateToEpochDay(picked);
+    if (result == null || !context.mounted) return;
+    final start = result.startDay;
     final end = start + (template.dayCount - 1).clamp(0, 365);
     final now2 = DateTime.now().millisecondsSinceEpoch;
     final tripId = await ref.read(tripsRepoProvider).createTrip(
@@ -169,9 +189,14 @@ class _TemplateCard extends ConsumerWidget {
           ));
     }
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('已创建行程「${template.name}」（${template.items.length} 条安排）'),
-      ));
+      showAppSnackBar(
+        context,
+        '已创建行程「${template.name}」（${template.items.length} 条安排）',
+        tone: SnackTone.success,
+      );
+      // V2.9.0：创建成功后直接进入新行程详情（与行程列表打开详情同路由），
+      // 此前只弹提示停在模板库，用户还要自己去翻列表。
+      context.push('/trips/detail', extra: tripId);
     }
   }
 }

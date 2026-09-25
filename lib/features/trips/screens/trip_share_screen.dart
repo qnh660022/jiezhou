@@ -75,9 +75,12 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
     final scheme = Theme.of(context).colorScheme;
     final totalDays = tripTotalDays(trip.startEpochDay, trip.endEpochDay);
 
+    // V2.9.0：海报与 PDF 生成同口径 —— 备选卡（backupOf != null）不进海报
+    // 摘要与安排计数（此前未过滤，与 PDF 内容不一致）。
+    final formal = items.where((it) => it.backupOf == null).toList();
     // 按天分组行程安排
     final byDay = <int, List<TripItem>>{};
-    for (final it in items) {
+    for (final it in formal) {
       (byDay[it.dateEpochDay] ??= []).add(it);
     }
     final dayKeys = byDay.keys.toList()..sort();
@@ -140,7 +143,7 @@ class _TripShareScreenState extends ConsumerState<TripShareScreen> {
                           children: [
                             _PosterBadge(text: cnDateRange(trip.startEpochDay, trip.endEpochDay)),
                             _PosterBadge(text: '$totalDays 天'),
-                            if (items.isNotEmpty) _PosterBadge(text: '${items.length} 个安排'),
+                            if (formal.isNotEmpty) _PosterBadge(text: '${formal.length} 个安排'),
                           ],
                         ),
                         const SizedBox(height: Spacing.lg),

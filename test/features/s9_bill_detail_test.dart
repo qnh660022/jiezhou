@@ -102,12 +102,12 @@ void main() {
 
   testWidgets('1. 待结清状态胶囊渲染（amber 语义）', (tester) async {
     await pumpDetail(tester);
-    expect(find.text('待结清 · 点此标记两清'), findsOneWidget);
+    expect(find.text('待结清 · 点击标记已结清'), findsOneWidget);
   });
 
-  testWidgets('2. 点状态胶囊 → 标记两清落库', (tester) async {
+  testWidgets('2. 点状态胶囊 → 标记已结清落库(V2.9.0 用语统一)', (tester) async {
     await pumpDetail(tester);
-    await tester.tap(find.text('待结清 · 点此标记两清'));
+    await tester.tap(find.text('待结清 · 点击标记已结清'));
     await tester.pumpAndSettle();
     final rows = await db.select(db.expenses).get();
     expect(rows.first.settledRoundId, isNotNull, reason: '结清标记落库');

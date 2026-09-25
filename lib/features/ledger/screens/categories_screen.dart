@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/models.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
@@ -39,7 +41,12 @@ class CategoriesScreen extends ConsumerWidget {
             )
           : categoriesAsync.when(
               loading: () => const SizedBox.shrink(),
-              error: (e, _) => const EmptyState(icon: Icons.error_outline_rounded, title: '加载失败'),
+              // V2.9.0:错误态收口 ErrorState,提供真实重试入口。
+              error: (e, s) => ErrorState(
+                onRetry: () => ref.invalidate(categoriesProvider),
+                error: e,
+                stackTrace: s,
+              ),
               data: (all) {
                 final builtin = all.where((c) => c.builtin).toList();
                 final custom = all.where((c) => !c.builtin).toList();
@@ -311,57 +318,26 @@ class _CustomSection extends ConsumerWidget {
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref, CategoryView category) async {
     HapticFeedback.selectionClick();
     final n = refCount(category.key);
-    await showDraggableSheet<void>(
+    // V2.9.0:自绘确认弹层收口 L2 危险确认（body 含影响数量）;「算了」→「取消」。
+    final ok = await showDangerConfirm(
       context: context,
-      initialChildSize: 0.32,
-      minChildSize: 0.26,
-      builder: (sheetContext, __) => Padding(
-        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('删除「' + category.name + '」？', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: Spacing.sm),
-            Text(n > 0 ? '它已被 ' + n.toString() + ' 笔账单引用，删除会被拦下。' : '确认后即刻移除。',
-                style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: Spacing.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('算了'),
-                  ),
-                ),
-                const SizedBox(width: Spacing.md),
-                Expanded(
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.error,
-                        foregroundColor: Theme.of(context).colorScheme.onError),
-                    onPressed: () async {
-                      Navigator.of(sheetContext).pop();
-                      try {
-                        await removeCategory(ref, category.key);
-                        if (context.mounted) {
-                          showAppSnackBar(context, '已删除「' + category.name + '」', tone: SnackTone.destructive);
-                        }
-                      } on StateError {
-                        if (context.mounted) {
-                          showAppSnackBar(context, '该分类已被 ' + n.toString() + ' 笔账单引用，不能删除',
-                              tone: SnackTone.destructive);
-                        }
-                      }
-                    },
-                    child: const Text('删除'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      title: '删除「' + category.name + '」？',
+      body: n > 0
+          ? '它已被 ' + n.toString() + ' 笔账单引用，删除会被拦下。'
+          : '将删除 1 个自定义分类，确认后即刻移除。',
+      confirmLabel: '删除',
     );
+    if (!ok || !context.mounted) return;
+    try {
+      await removeCategory(ref, category.key);
+      if (context.mounted) {
+        showAppSnackBar(context, '已删除「' + category.name + '」', tone: SnackTone.destructive);
+      }
+    } on StateError {
+      if (context.mounted) {
+        showAppSnackBar(context, '该分类已被 ' + n.toString() + ' 笔账单引用，不能删除',
+            tone: SnackTone.destructive);
+      }
+    }
   }
 }

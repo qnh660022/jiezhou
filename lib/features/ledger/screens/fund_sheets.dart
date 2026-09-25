@@ -113,9 +113,11 @@ Future<bool> showFundContributionSheet(
                         if (context.mounted) {
                           showAppSnackBar(context, '已记入金 ✅');
                         }
-                      } catch (e) {
+                      } catch (e, s) {
+                        // V2.9.0:原始异常只进调试日志,不进 UI 文案。
+                        debugPrint('addFundContribution failed: $e\n$s');
                         if (context.mounted) {
-                          showAppSnackBar(context, '记入金失败：${e.toString()}', tone: SnackTone.destructive);
+                          showAppSnackBar(context, '记入金失败，请稍后重试', tone: SnackTone.destructive);
                         }
                       }
                     },
@@ -283,12 +285,15 @@ Future<bool> showFundExpenseSheet(
                 ]),
               ),
             const SizedBox(height: Spacing.sm),
+            // V2.9.0:收紧 error 判据 —— percent 归一场景 shares 为空/自动归一时
+            // 不再短暂误报红色;仅在实际出现「有分摊但与总额不一致」时告警。
             Text('合计分摊 ${formatMoney(shares.fold<int>(0, (s, e) => s + e.cents))} / 支出 ${formatMoney(total)}',
                 style: TextStyle(
                     fontSize: AppFontSizes.caption,
-                    color: shares.fold<int>(0, (s, e) => s + e.cents) == total
-                        ? scheme.onSurfaceVariant
-                        : scheme.error)),
+                    color: shares.isNotEmpty &&
+                            shares.fold<int>(0, (s, e) => s + e.cents) != total
+                        ? scheme.error
+                        : scheme.onSurfaceVariant)),
             const SizedBox(height: Spacing.lg),
             PrimaryButton(
               label: '记出金',
@@ -296,15 +301,19 @@ Future<bool> showFundExpenseSheet(
               onPressed: total <= 0
                   ? null
                   : () async {
+                      // V2.9.0:出金标题显式校验 —— 不再静默落默认名「公费支出」。
+                      final title = titleController.text.trim();
+                      if (title.isEmpty) {
+                        showAppSnackBar(ctx, '请先填写这笔钱的用途', tone: SnackTone.destructive);
+                        return;
+                      }
                       Navigator.of(sheetContext).pop(true);
                       HapticFeedback.lightImpact();
                       try {
                         await addFundExpense(
                           ref,
                           fundId: fund.id,
-                          title: titleController.text.trim().isEmpty
-                              ? '公费支出'
-                              : titleController.text.trim(),
+                          title: title,
                           categoryKey: categoryKey,
                           amountCents: total,
                           shareMemberIds: ids,
@@ -314,9 +323,11 @@ Future<bool> showFundExpenseSheet(
                         if (context.mounted) {
                           showAppSnackBar(context, '已记出金 ✅');
                         }
-                      } catch (e) {
+                      } catch (e, s) {
+                        // V2.9.0:原始异常只进调试日志,不进 UI 文案。
+                        debugPrint('addFundExpense failed: $e\n$s');
                         if (context.mounted) {
-                          showAppSnackBar(context, '记出金失败：${e.toString()}', tone: SnackTone.destructive);
+                          showAppSnackBar(context, '记出金失败，请稍后重试', tone: SnackTone.destructive);
                         }
                       }
                     },
@@ -338,4 +349,5 @@ Future<bool> showFundExpenseSheet(
 }
 
 String _yuanText(int cents) =>
-    cents % 100 == 0 ? (cents ~/ 100).toString() : (cents / 100).toStringAsFixed(2);
+    // V2.9.0:金额统一走 MoneyFormat 千分位口径(此前丢分位/千分位)。
+    MoneyFormat.fenToYuan(cents);

@@ -24,6 +24,8 @@ import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/app_meta.dart' show inviteLinkUrl, shareLinkUrl;
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/collab_polling_scope.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/share_link_sheet.dart';
@@ -67,7 +69,9 @@ class _ShareCenterScreenState extends ConsumerState<ShareCenterScreen> {
     if (mounted) setState(() {});
   }
 
-  bool get _signedIn => ref.read(cloudClientProvider) != null;
+  // V2.9.0:改 ref.watch——原 ref.read 在 build 取值,登录返回后整页不重算,
+  // 「未登录」提示与各入口 enabled 状态停在旧值。
+  bool get _signedIn => ref.watch(cloudClientProvider) != null;
 
   void _copy(String text) {
     Clipboard.setData(ClipboardData(text: text));
@@ -85,7 +89,8 @@ class _ShareCenterScreenState extends ConsumerState<ShareCenterScreen> {
   Widget build(BuildContext context) {
     return CollabPollingScope(
       child: Scaffold(
-        appBar: AppBar(title: Text(copy('share.centerTitle'))),
+        // V2.9.0:次级页顶栏统一 GlassAppBar(原裸 AppBar)。
+        appBar: GlassAppBar(title: copy('share.centerTitle')),
         body: ListView(
           padding: const EdgeInsets.only(bottom: Spacing.xxxl),
           children: [
@@ -393,7 +398,16 @@ class _ShareCenterScreenState extends ConsumerState<ShareCenterScreen> {
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, size: 18),
             tooltip: '撤销链接',
+            // V2.9.0:撤销立即失效且不可恢复 → L2 危险确认（body 含影响数量）。
             onPressed: () async {
+              final linkName = (snap.data ?? entityId).trim();
+              final shown = linkName.isEmpty ? '只读链接' : linkName;
+              final ok = await showDangerConfirm(
+                context: context,
+                title: '撤销分享链接',
+                body: '将撤销 1 条分享链接（$shown）。拿到链接的人立即无法访问，撤销后不可恢复。',
+              );
+              if (!ok) return;
               await ref.read(shareServiceProvider)?.deleteShareLink(token);
               _reload();
             },

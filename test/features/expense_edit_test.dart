@@ -183,11 +183,11 @@ void main() {
       await tester.tap(find.textContaining('退款/预付态'));
       await tester.pumpAndSettle();
       expect(find.textContaining('预付款'), findsOneWidget, reason: '退款/预付组展开');
-      await tester.tap(find.text('🔗 关联行程'));
+      await tester.tap(find.text('关联行程'));
       await tester.pumpAndSettle();
       expect(find.text('不关联行程'), findsOneWidget, reason: '切换到行程组');
       expect(find.textContaining('预付款'), findsNothing, reason: '一次只展开一组');
-      await tester.tap(find.text('🔗 关联行程'));
+      await tester.tap(find.text('关联行程'));
       await tester.pumpAndSettle();
       expect(find.text('不关联行程'), findsNothing, reason: '再点收起');
     });
@@ -206,7 +206,9 @@ void main() {
       expect(find.text('放弃这笔账？'), findsOneWidget, reason: 'L2 草稿拦截弹层');
       expect(find.textContaining('¥88'), findsWidgets, reason: '弹层列出当前金额');
       // 「放弃并返回」→ 清除草稿并返回
-      await tester.tap(find.text('放弃并返回'));
+      // V2.9.0:草稿弹层三出口(放弃草稿/离开并保留草稿/关弹层留在本页),
+      // 「放弃并返回」更名「放弃草稿」。
+      await tester.tap(find.text('放弃草稿'));
       await tester.pumpAndSettle();
       // 重新进入 → 草稿已清除（选择的是放弃）
       final router = GoRouter(

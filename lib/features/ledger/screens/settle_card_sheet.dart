@@ -10,6 +10,7 @@ import '../../../export/poster_exporter.dart';
 import '../../../export/settle_card_builder.dart';
 import '../../../shared/widgets/secondary_button.dart';
 import '../../../shared/widgets/share_link_sheet.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../ledger_models.dart';
 import '../ledger_providers.dart';
@@ -40,18 +41,32 @@ Future<void> showSettleCardSheet(
     generatedAt: DateTime.now(),
     strategyLabel: settlement.strategy == 'minParticipants' ? '最少人参与' : '最少转账',
   );
-  await showModalBottomSheet<void>(
+  // V2.9.0:裸 showModalBottomSheet 在全局透明 bottomSheet 主题下内容与底页重叠,
+  // 统一收口 showDraggableSheet(自带 SheetSurface 玻璃底面 + useRootNavigator)。
+  await showDraggableSheet<void>(
     context: context,
-    isScrollControlled: true,
-    builder: (_) => _SettleCardSheet(data: data, settlement: settlement),
+    initialChildSize: 0.72,
+    minChildSize: 0.4,
+    builder: (sheetContext, scrollController) => _SettleCardSheet(
+      data: data,
+      settlement: settlement,
+      scrollController: scrollController,
+    ),
   );
 }
 
 class _SettleCardSheet extends StatefulWidget {
-  const _SettleCardSheet({required this.data, required this.settlement});
+  const _SettleCardSheet({
+    required this.data,
+    required this.settlement,
+    this.scrollController,
+  });
 
   final SettlementCardData data;
   final SettlementView settlement;
+
+  /// V2.9.0:接 showDraggableSheet 的滚动控制器(拖拽把手联动手势)。
+  final ScrollController? scrollController;
 
   @override
   State<_SettleCardSheet> createState() => _SettleCardSheetState();
@@ -85,9 +100,11 @@ class _SettleCardSheetState extends State<_SettleCardSheet> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.lg, Spacing.xl, Spacing.xxl),
+    // V2.9.0:SheetContainer 已处理底部安全区,内层不再包 SafeArea 防双重让位;
+    // SingleChildScrollView 挂上抽屉的 scrollController 支持整体拖拽。
+    return SingleChildScrollView(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xxl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -127,7 +144,6 @@ class _SettleCardSheetState extends State<_SettleCardSheet> {
             ),
           ],
         ),
-      ),
     );
   }
 }

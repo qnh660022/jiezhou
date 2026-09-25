@@ -26,6 +26,7 @@ import '../../../domain/records.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import 'wishlist_panel.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
 
 class AssemblePanel extends ConsumerStatefulWidget {
@@ -172,6 +173,7 @@ class _AssemblePanelState extends ConsumerState<AssemblePanel> {
                                 trip: trip,
                                 day: day,
                                 dayRecords: dayRecords,
+                                formalRecords: formalRecords,
                                 pace: pace,
                                 record: r),
                             padding:
@@ -184,6 +186,8 @@ class _AssemblePanelState extends ConsumerState<AssemblePanel> {
                       records: dayRecords,
                       highlightId: _lastPlacement?.$1,
                       failedId: _failedCandidateId,
+                      // V2.9.0：空态文案随布局方向切换（窄屏池在上、时间轴在下）。
+                      vertical: box.maxWidth < 700,
                     );
                     if (box.maxWidth >= 700) {
                       return Row(
@@ -289,6 +293,8 @@ class _AssemblePanelState extends ConsumerState<AssemblePanel> {
     required Trip trip,
     required int day,
     required List<TripItemRecord> dayRecords,
+    // V2.9.0：换天建议需要全行程的正式卡，而非仅当前天（此前各天容量恒为满）。
+    required List<TripItemRecord> formalRecords,
     required TripPace pace,
     required WishlistRecord record,
   }) async {
@@ -336,7 +342,7 @@ class _AssemblePanelState extends ConsumerState<AssemblePanel> {
       await _showNoRoomActions(
           trip: trip,
           day: day,
-          dayRecords: dayRecords,
+          formalRecords: formalRecords,
           pace: pace,
           candidate: candidate,
           rem: result.rem);
@@ -348,7 +354,7 @@ class _AssemblePanelState extends ConsumerState<AssemblePanel> {
     await _showNoRoomActions(
         trip: trip,
         day: day,
-        dayRecords: dayRecords,
+        formalRecords: formalRecords,
         pace: pace,
         candidate: candidate,
         rem: kDayCapacity[pace]! - usedCapacityOf(dayRecords));
@@ -388,16 +394,18 @@ class _AssemblePanelState extends ConsumerState<AssemblePanel> {
   Future<void> _showNoRoomActions({
     required Trip trip,
     required int day,
-    required List<TripItemRecord> dayRecords,
+    // V2.9.0：全行程正式卡（备胎不计）—— 各天剩余容量按它计算。
+    required List<TripItemRecord> formalRecords,
     required TripPace pace,
     required WishlistRecord candidate,
     required int rem,
   }) async {
-    // 换天建议：排除当前天
+    // 换天建议：排除当前天；各天已占用时长按全行程正式卡过滤而来
+    // （此前由仅含当前天的 dayRecords 过滤，非当天桶恒空 → 剩余容量恒等于满容量）。
     final allDays = <int, List<TripItemRecord>>{
       for (var d = trip.startEpochDay; d <= trip.endEpochDay; d++)
         if (d != day)
-          d: [for (final r in dayRecords) if (r.dateEpochDay == d) r],
+          d: [for (final r in formalRecords) if (r.dateEpochDay == d) r],
     };
     final suggestions = rankAlternativeDays(
       daysByEpochDay: allDays,
@@ -410,40 +418,40 @@ class _AssemblePanelState extends ConsumerState<AssemblePanel> {
           ? '${full.round()} h'
           : '${full.toStringAsFixed(1)} h';
     }
-    final action = await showModalBottomSheet<String>(
+    // V2.9.0：裸 showModalBottomSheet → 统一可拖拽抽屉（全局透明 sheet
+    // 主题下裸弹层内容会与底页重叠）。
+    final action = await showDraggableSheet<String>(
       context: context,
-      useRootNavigator: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(Spacing.lg),
-              child: Text(
-                '当天装不下「${candidate.name}」（还剩 $rem 分钟）',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-            for (final d in suggestions)
-              ListTile(
-                leading: const Icon(Icons.event_rounded, size: 20),
-                title: Text(
-                    '换到第 ${d - trip.startEpochDay + 1} 天（还剩 ${h(rankAlternativeRem(allDays[d] ?? const [], pace))}）'),
-                onTap: () => Navigator.pop(ctx, 'day:$d'),
-              ),
+      initialChildSize: 0.44,
+      minChildSize: 0.3,
+      builder: (ctx, sheetScroll) => ListView(
+        controller: sheetScroll,
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.sm, Spacing.lg, Spacing.xl),
+        children: [
+          Text(
+            '当天装不下「${candidate.name}」（还剩 $rem 分钟）',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: Spacing.sm),
+          for (final d in suggestions)
             ListTile(
-              leading: const Icon(Icons.bookmark_border_rounded, size: 20),
-              title: const Text('转为备胎（挂当天）'),
-              onTap: () => Navigator.pop(ctx, 'backup'),
+              leading: const Icon(Icons.event_rounded, size: 20),
+              title: Text(
+                  '换到第 ${d - trip.startEpochDay + 1} 天（还剩 ${h(rankAlternativeRem(allDays[d] ?? const [], pace))}）'),
+              onTap: () => Navigator.pop(ctx, 'day:$d'),
             ),
-            ListTile(
-              leading: const Icon(Icons.close_rounded, size: 20),
-              title: const Text('取消'),
-              onTap: () => Navigator.pop(ctx, 'cancel'),
-            ),
-          ],
-        ),
+          ListTile(
+            leading: const Icon(Icons.bookmark_border_rounded, size: 20),
+            title: const Text('转为备胎（挂当天）'),
+            onTap: () => Navigator.pop(ctx, 'backup'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.close_rounded, size: 20),
+            title: const Text('取消'),
+            onTap: () => Navigator.pop(ctx, 'cancel'),
+          ),
+        ],
       ),
     );
     if (action == null || !mounted) return;
@@ -480,11 +488,14 @@ class _DayOutline extends StatelessWidget {
     required this.records,
     required this.highlightId,
     required this.failedId,
+    // V2.9.0：窄屏上下布局时空态文案改为「点击上方」。
+    this.vertical = false,
   });
 
   final List<TripItemRecord> records;
   final String? highlightId;
   final String? failedId;
+  final bool vertical;
 
   @override
   Widget build(BuildContext context) {
@@ -500,7 +511,10 @@ class _DayOutline extends StatelessWidget {
       });
     if (sorted.isEmpty) {
       return Center(
-        child: Text('当天还没有安排——点击左侧候选自动落点',
+        // V2.9.0：文案随布局方向切换（窄屏池在上、时间轴在下）。
+        child: Text(
+            vertical ? '当天还没有安排——点击上方候选自动落点' : '当天还没有安排——点击左侧候选自动落点',
+            textAlign: TextAlign.center,
             style: TextStyle(
                 fontSize: AppFontSizes.caption,
                 color: scheme.onSurfaceVariant)),

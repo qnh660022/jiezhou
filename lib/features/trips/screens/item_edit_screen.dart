@@ -28,6 +28,7 @@ import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
+import '../widgets/range_calendar_sheet.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
 
 /// 安排编辑页（路由 extra 传 {tripId, item?}）
@@ -66,6 +67,9 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
   bool _saving = false;
   int? _dateEpochDay;
   String? _editId;
+  // V2.9.0：编辑模式记住原 sortOrder —— saveItem 全字段写回，
+  // 此前硬编码 0 会把用户拖拽排序重置。
+  int _sortOrder = 0;
   Trip? _trip;
   // V2.8.3.5：备注默认折叠成一行。
   bool _noteOpen = false;
@@ -77,6 +81,7 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
       final it = widget.item!;
       _editId = it.id;
       _type = it.type;
+      _sortOrder = it.sortOrder; // V2.9.0：透传原顺序，编辑不再重置拖拽排序
       _nameCtrl.text = it.name;
       _addrCtrl.text = it.address;
       _noteCtrl.text = it.note;
@@ -188,11 +193,18 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
     if (_saving) return;
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) { _toast('请填写名称'); return; }
+    // V2.9.0：费用解析失败不再静默丢数据 —— 有非空输入但解析不出数值时
+    // 给出明确提示并中止保存（空输入 = 未填费用，仍合法存 null）。
+    final costInput = _costCtrl.text.trim();
+    final costYuan = costInput.isEmpty ? null : double.tryParse(costInput);
+    if (costInput.isNotEmpty && costYuan == null) {
+      _toast('费用「$costInput」不是有效金额，请修正后再保存');
+      return;
+    }
+    final costCents = costYuan != null ? (costYuan * 100).round() : null;
     setState(() => _saving = true);
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
-      final costYuan = double.tryParse(_costCtrl.text.trim());
-      final costCents = costYuan != null ? (costYuan * 100).round() : null;
       final tripId = widget.tripId!;
       if (_editId != null) {
         final item = TripItem(
@@ -214,7 +226,7 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
           toAddress: _toAddrCtrl.text.trim().isEmpty ? '' : _toAddrCtrl.text.trim(),
           toLat: _toLat, toLng: _toLng,
           flightNo: _flightCtrl.text.trim().isEmpty ? '' : _flightCtrl.text.trim().toUpperCase(),
-          sortOrder: 0, createdAt: now, updatedAt: now,
+          sortOrder: _sortOrder, createdAt: now, updatedAt: now,
         );
         await ref.read(tripsRepoProvider).saveItem(item);
         await _syncLinkedBillAmount(item, costCents);
@@ -256,7 +268,6 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
     }
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     final isTransport = _type == 'transport';
@@ -1065,14 +1076,18 @@ class _ItemEditScreenState extends ConsumerState<ItemEditScreen> {
     if (trip == null) return;
     final current = (_dateEpochDay ?? trip.startEpochDay)
         .clamp(trip.startEpochDay, trip.endEpochDay);
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: epochDayToDate(current),
-      firstDate: epochDayToDate(trip.startEpochDay),
-      lastDate: epochDayToDate(trip.endEpochDay),
-      helpText: '选择安排日期',
+    // V2.9.0：系统 showDatePicker 未本地化 → 统一走自绘月历（单日=起终同天）。
+    final result = await showRangeCalendarSheet(
+      context,
+      initialMonth: epochDayToDate(current),
+      startDay: current,
+      endDay: current,
+      mode: RangeCalendarMode.single,
+      title: '选择安排日期',
     );
-    if (selected != null) setState(() => _dateEpochDay = dateToEpochDay(selected));
+    if (result != null && mounted) {
+      setState(() => _dateEpochDay = result.startDay);
+    }
   }
 
   void _showCurrencySheet() {

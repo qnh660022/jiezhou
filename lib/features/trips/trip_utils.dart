@@ -108,6 +108,15 @@ String hhmm(int totalMinutes) {
   return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
 }
 
+/// 文件名清洗：路径非法字符与控制字符（回车/换行/制表）替换为下划线，
+/// 再去首尾空白（V2.9.0 抽出为纯函数，供备份导出等场景复用与回归测试）。
+///
+/// 注意字符类里 `\r\n\t` 必须是真实控制字符：此前调用点把整个正则写成
+/// raw string `r'[\\/:*?"<>|\\r\\n\\t]'`，匹配的是字面反斜杠+字母，
+/// 文件名里的小写 r/n/t 会被误替换成下划线。
+String sanitizeFileName(String name) =>
+    name.replaceAll(RegExp(r'[\\/:*?"<>|\r\n\t]'), '_').trim();
+
 // ============================ 行程状态机 ============================
 
 enum TripLifeStatus { ongoing, upcoming, planning, ended, archived }

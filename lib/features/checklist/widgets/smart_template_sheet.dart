@@ -24,11 +24,20 @@ class SmartTemplateSheet extends ConsumerStatefulWidget {
     required this.trip,
     required this.existing,
     required this.onImported,
+    this.scrollController,
   });
 
   final Trip trip;
+
+  /// 初始已存条目快照（仅作初值；导入后以 [_SmartTemplateSheetState._existing]
+  /// 的最新清单为准，见 V2.9.0 注）。
   final List<ChecklistItem> existing;
   final VoidCallback onImported;
+
+  /// V2.9.0:外层 showDraggableSheet 传入的滚动控制器——替换原每次 build 新建的
+  /// ScrollController(泄漏,且弃用抽屉自身的 controller 导致抽屉无法拖拽收起)。
+  /// 可空:桌面工作台以 Dialog 形态复用本组件(无抽屉控制器,GridView 自管滚动)。
+  final ScrollController? scrollController;
 
   @override
   ConsumerState<SmartTemplateSheet> createState() => _SmartTemplateSheetState();
@@ -36,6 +45,10 @@ class SmartTemplateSheet extends ConsumerStatefulWidget {
 
 class _SmartTemplateSheetState extends ConsumerState<SmartTemplateSheet> {
   Set<String> _favs = const {};
+
+  /// V2.9.0:去重集合改用可更新的最新清单——初值取 widget.existing,导入成功后
+  /// 从仓储回读,同会话「先导入场景 A 再开 B」不再因快照过期而重复落库。
+  late List<ChecklistItem> _existing = widget.existing;
 
   List<ScenarioTemplate> get _scenarios => kScenarioTemplates;
 
@@ -59,8 +72,8 @@ class _SmartTemplateSheetState extends ConsumerState<SmartTemplateSheet> {
       BuildContext ctx, ScenarioTemplate tpl, Map<String, List<String>> chosen) async {
     final repo = ref.read(checklistRepoProvider);
     final tripId = widget.trip.id;
-    final existingLabels = {for (final e in widget.existing) e.label.trim()};
-    var order = widget.existing.length;
+    final existingLabels = {for (final e in _existing) e.label.trim()};
+    var order = _existing.length;
     final companions = <ChecklistItemsCompanion>[];
     chosen.forEach((catKey, labels) {
       for (final raw in labels) {
@@ -83,6 +96,9 @@ class _SmartTemplateSheetState extends ConsumerState<SmartTemplateSheet> {
       return;
     }
     await repo.importBatch(companions);
+    // V2.9.0:导入成功后从仓储回读最新清单,更新去重基准;外层经 onImported 触发刷新。
+    _existing = await repo.getAllByScope('trip', tripId: tripId);
+    if (mounted) setState(() {});
     if (ctx.mounted) {
       Navigator.of(ctx).pop();
       widget.onImported();
@@ -92,7 +108,8 @@ class _SmartTemplateSheetState extends ConsumerState<SmartTemplateSheet> {
 
   void _openPreview(ScenarioTemplate tpl) {
     HapticFeedback.selectionClick();
-    final existingLabels = {for (final e in widget.existing) e.label.trim()};
+    // V2.9.0:预览去重集合同样取最新清单 _existing(不再是抽屉打开时刻的快照)。
+    final existingLabels = {for (final e in _existing) e.label.trim()};
     showDraggableSheet(
       context: context,
       initialChildSize: 0.68,
@@ -197,7 +214,9 @@ class _SmartTemplateSheetState extends ConsumerState<SmartTemplateSheet> {
         const SizedBox(height: Spacing.md),
         Flexible(
           child: GridView.builder(
-            controller: ScrollController(),
+            // V2.9.0:改用外层传入的 scrollController(原每次 build 新建 ScrollController
+            // 泄漏,且覆盖了 DraggableScrollableSheet 的 controller,抽屉无法拖拽收起)。
+            controller: widget.scrollController,
             shrinkWrap: true,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
@@ -228,8 +247,9 @@ class _SmartTemplateSheetState extends ConsumerState<SmartTemplateSheet> {
                         const Spacer(),
                         GestureDetector(
                           onTap: () => _toggleFav(t.key),
+                          // V2.9.0:星标色收敛到 scheme.tertiary(原硬编码 Colors.amber)。
                           child: Icon(fav ? Icons.star_rounded : Icons.star_border_rounded,
-                              size: 18, color: fav ? Colors.amber : scheme.onSurfaceVariant),
+                              size: 18, color: fav ? scheme.tertiary : scheme.onSurfaceVariant),
                         ),
                       ]),
                       const Spacer(),

@@ -1,5 +1,8 @@
-/// 手机端访问拦截页：Web 版仅支持桌面访问。
-/// 手机浏览器打开 → 显示此页，引导使用电脑或前往官网下载 APK。
+/// 窄窗拦截页：Web 版仅支持桌面宽屏布局。
+///
+/// 两种场景（V2.9.0 起区分文案，此前桌面窄窗也提示「请使用电脑浏览器」自相矛盾）：
+/// * 手机浏览器打开 → 引导使用电脑或前往官网下载 APK；
+/// * 桌面浏览器窗口过窄 → 提示拉宽窗口即可进入。
 library;
 import 'package:flutter/material.dart';
 
@@ -12,7 +15,10 @@ import '../../theme/tokens.dart';
 const String kWebsiteDownloadUrl = kOfficialWebsite;
 
 class MobileNotSupportedScreen extends StatelessWidget {
-  const MobileNotSupportedScreen({super.key});
+  const MobileNotSupportedScreen({super.key, this.narrowDesktop = false});
+
+  /// true = 桌面浏览器窗口过窄（提示拉宽）；false = 手机浏览器（引导下载）。
+  final bool narrowDesktop;
 
   @override
   Widget build(BuildContext context) {
@@ -35,31 +41,45 @@ class MobileNotSupportedScreen extends StatelessWidget {
                     gradient: CoverGradients.forest,
                     shape: BoxShape.circle,
                   ),
-                  child: const Text('📱', style: TextStyle(fontSize: 34)),
+                  child: Icon(
+                    narrowDesktop
+                        ? Icons.desktop_windows_rounded
+                        : Icons.smartphone_rounded,
+                    size: 34,
+                    color: scheme.onPrimary,
+                  ),
                 ),
                 const SizedBox(height: 24),
-                Text('Web 版暂不支持手机端访问',
+                Text(
+                    narrowDesktop
+                        ? '浏览器窗口太窄了'
+                        : 'Web 版暂不支持手机端访问',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         fontSize: 19, fontWeight: FontWeight.w800, color: scheme.onSurface)),
                 const SizedBox(height: 12),
-                Text('请使用电脑浏览器访问，\n或前往官网下载 APK 安装到手机。',
+                Text(
+                    narrowDesktop
+                        ? '芥舟 Web 版为桌面宽屏布局，\n请把窗口拉宽到 1024px 以上再访问。'
+                        : '请使用电脑浏览器访问，\n或前往官网下载 APK 安装到手机。',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, height: 1.6, color: scheme.onSurfaceVariant)),
-                const SizedBox(height: 28),
-                if (kWebsiteDownloadUrl.isNotEmpty)
-                  FilledButton.icon(
-                    onPressed: () => openExternal(kWebsiteDownloadUrl),
-                    style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 28, vertical: 14)),
-                    icon: const Icon(Icons.download_rounded, size: 20),
-                    label: const Text('前往官网下载 APK'),
-                  )
-                else
-                  Text('官网地址配置中…',
-                      style:
-                          TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                if (!narrowDesktop) ...[
+                  const SizedBox(height: 28),
+                  if (kWebsiteDownloadUrl.isNotEmpty)
+                    FilledButton.icon(
+                      onPressed: () => openExternal(kWebsiteDownloadUrl),
+                      style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 28, vertical: 14)),
+                      icon: const Icon(Icons.download_rounded, size: 20),
+                      label: const Text('前往官网下载 APK'),
+                    )
+                  else
+                    Text('官网地址配置中…',
+                        style:
+                            TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                ],
               ],
             ),
           ),

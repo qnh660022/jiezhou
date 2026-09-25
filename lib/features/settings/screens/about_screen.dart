@@ -113,7 +113,8 @@ class AboutScreen extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.shield_outlined, color: scheme.primary),
                 title: const Text('数据只存在你的本机'),
-                subtitle: const Text('纯本地离线运行，不上传、不共享你的任何数据'),
+                // V2.9.0:口径修正——与云同步/旅伴协作功能保持一致(默认本机,开启后才上传)。
+                subtitle: const Text('数据默认只存本机；开启云同步/旅伴协作后，才按你的选择上传'),
                 trailing: Icon(Icons.chevron_right_rounded,
                     size: 20, color: scheme.onSurfaceVariant),
                 onTap: () {

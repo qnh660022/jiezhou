@@ -14,12 +14,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/db/database.dart'
-    show Trip, WishlistItemsCompanion;
+    show WishlistItemsCompanion;
 import '../../../data/providers.dart';
 import '../../../domain/models.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../wishlist_providers.dart';
+import 'day_pick_sheet.dart';
 import '../../../theme/app_icons.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
 
@@ -62,12 +64,16 @@ String wishlistGroupLabel(String cityKey,
     cityKey.isEmpty ? '未分类' : (cityNameOf?.call(cityKey) ?? cityKey);
 
 /// 公开补时长弹层（装配台 NeedDuration 流程复用）；取消返回 null。
+/// V2.9.0：裸 showModalBottomSheet → 统一可拖拽抽屉（透明 sheet 主题下
+/// 裸弹层内容会与底页重叠）。
 Future<int?> showWishlistDurationSheet(BuildContext context) =>
-    showModalBottomSheet<int>(
+    showDraggableSheet<int>(
       context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      builder: (_) => _WishDurationSheet(),
+      initialChildSize: 0.44,
+      minChildSize: 0.3,
+      builder: (sheetContext, _) => _WishDurationSheet(
+        onDone: (v) => Navigator.of(sheetContext).pop(v),
+      ),
     );
 
 /// 想去池面板。
@@ -237,11 +243,11 @@ class _WishlistPanelState extends ConsumerState<WishlistPanel> {
       _toast('该行程还没有日期，先去编辑行程设置日期');
       return;
     }
-    final day = await showModalBottomSheet<int>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      builder: (_) => _PoolPlaceSheet(trip: trip),
+    final day = await showDayPickSheet(
+      context,
+      startDay: trip.startEpochDay,
+      endDay: trip.endEpochDay,
+      title: '排到哪一天？',
     );
     if (day == null || !mounted) return;
     try {
@@ -261,12 +267,7 @@ class _WishlistPanelState extends ConsumerState<WishlistPanel> {
   /// 补时长（未估时）；[thenPlace] = 补完继续走落卡。
   Future<void> _pickDuration(WishlistRecord record,
       {required bool thenPlace}) async {
-    final picked = await showModalBottomSheet<int>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      builder: (_) => _WishDurationSheet(),
-    );
+    final picked = await showWishlistDurationSheet(context);
     if (picked == null || !mounted) return;
     await ref
         .read(wishlistRepoProvider)
@@ -511,9 +512,8 @@ class _WishEntry extends StatelessWidget {
               record.durationMin == null ? '未估时' : '${record.durationMin} 分钟',
               style: TextStyle(
                 fontSize: AppFontSizes.caption,
-                color: record.durationMin == null
-                    ? scheme.error
-                    : scheme.onSurfaceVariant,
+                // V2.9.0：「未估时」是中性状态，不再误用 scheme.error 红色。
+                color: scheme.onSurfaceVariant,
               ),
             ),
             if (canEdit && !dim)
@@ -564,46 +564,16 @@ class _WishEntry extends StatelessWidget {
 }
 
 /// 「排到第 N 天」选天弹层。
-class _PoolPlaceSheet extends StatelessWidget {
-  const _PoolPlaceSheet({required this.trip});
-
-  final Trip trip;
-
-  @override
-  Widget build(BuildContext context) {
-    final n = trip.endEpochDay - trip.startEpochDay + 1;
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                Spacing.lg, Spacing.md, Spacing.lg, Spacing.xs),
-            child: Text('排到哪一天？',
-                style: Theme.of(context).textTheme.titleMedium),
-          ),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: n,
-              itemBuilder: (context, i) {
-                final day = trip.startEpochDay + i;
-                return ListTile(
-                  title: Text('第 ${i + 1} 天'),
-                  onTap: () => Navigator.pop(context, day),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+/// V2.9.0：实现收编到共享组件 day_pick_sheet.dart（1 基 D 序号 + 月日 +
+/// 星期 + 当前天高亮），本文件不再自绘列表。
 
 /// 补时长弹层：四档 chips + 自定义 10–720 分钟（越界拒绝）。
 class _WishDurationSheet extends StatefulWidget {
+  const _WishDurationSheet({this.onDone});
+
+  /// V2.9.0：容器接管 pop（拖拽抽屉里 pop 的是抽屉自身的 context）。
+  final ValueChanged<int>? onDone;
+
   @override
   State<_WishDurationSheet> createState() => _WishDurationSheetState();
 }
@@ -627,8 +597,10 @@ class _WishDurationSheetState extends State<_WishDurationSheet> {
   }
 
   void _confirm() {
+    void done(int v) =>
+        widget.onDone != null ? widget.onDone!(v) : Navigator.pop(context, v);
     if (_picked != null) {
-      Navigator.pop(context, _picked);
+      done(_picked!);
       return;
     }
     final v = parseWishlistDuration(_ctrl.text);
@@ -636,7 +608,7 @@ class _WishDurationSheetState extends State<_WishDurationSheet> {
       setState(() => _error = '请输入 10–720 之间的分钟数');
       return;
     }
-    Navigator.pop(context, v);
+    done(v);
   }
 
   @override

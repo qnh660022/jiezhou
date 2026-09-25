@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../data/db/database.dart';
 import '../../../data/seed/item_types.dart';
@@ -98,10 +99,14 @@ class _TodayPlanScreenState extends ConsumerState<TodayPlanScreen> {
       body: !itemsAsync.hasValue
           ? const Center(child: CircularProgressIndicator())
           : items.isEmpty
-              ? const EmptyState(
+              ? EmptyState(
                   icon: AppIcons.calendar,
                   title: '今天还没有安排',
                   message: '去行程页给今天添两个想去的地方吧',
+                  // V2.9.0:空态闭环——补「去行程页添加」直达该行程详情(extra 传
+                  // 行程 id,与 trips_home 打开方式一致)。
+                  actionLabel: '去行程页添加',
+                  onAction: () => context.push('/trips/detail', extra: widget.tripId),
                 )
               : ListView(
                   padding: const EdgeInsets.only(bottom: Spacing.xxxl),

@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/db/database.dart';
 import '../../../data/repo/observability_repo.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
+import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../theme/tokens.dart';
 import '../observability_providers.dart';
 import '../../../theme/app_icons.dart';
@@ -31,10 +33,8 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
     final scheme = Theme.of(context).colorScheme;
     final async = ref.watch(auditLogsProvider(_filter));
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('变更记录'),
-        centerTitle: false,
-      ),
+      // V2.9.0:顶栏统一玻璃形态。
+      appBar: GlassAppBar(title: '变更记录'),
       body: Column(
         children: [
           _FilterBar(
@@ -45,8 +45,9 @@ class _AuditLogScreenState extends ConsumerState<AuditLogScreen> {
           Expanded(
             child: async.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) => const EmptyState(
-                  icon: Icons.error_outline_rounded, title: '读不出变更记录', message: '稍后再试试'),
+              // V2.9.0:错误态给重试出口(此前只让用户「稍后再试」)。
+              error: (e, st) => const ErrorState(
+                  title: '读不出变更记录', message: '稍后再试试'),
               data: (logs) {
                 if (logs.isEmpty) {
                   return const EmptyState(

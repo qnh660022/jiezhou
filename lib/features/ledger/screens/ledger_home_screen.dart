@@ -11,6 +11,7 @@ import '../../../data/providers.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
 import '../../../shared/widgets/pressable_scale.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/money_text.dart';
@@ -64,12 +65,13 @@ class LedgerHomeScreen extends ConsumerWidget {
             ),
             HeaderIconButton(
               icon: Icons.swap_horizontal_circle_rounded,
-              tooltip: '切换旅行团',
+              // V2.9.0:用语统一 ——「旅行团」改「账本」。
+              tooltip: '切换账本',
               onTap: () => _openGroupSwitcher(context, ref),
             ),
             HeaderIconButton(
               icon: Icons.group_add_rounded,
-              tooltip: '新建旅行团',
+              tooltip: '新建账本',
               onTap: () => context.pushNamed('group-edit'),
             ),
             Consumer(
@@ -101,9 +103,15 @@ class LedgerHomeScreen extends ConsumerWidget {
             duration: const Duration(milliseconds: 300),
             child: groupAsync.when(
               loading: () => const _HomeSkeleton(key: ValueKey('home-skeleton')),
-              error: (e, _) => const KeyedSubtree(
-                key: ValueKey('home-error'),
-                child: EmptyState(icon: Icons.error_outline_rounded, title: '加载失败了', message: '下拉重试或稍后再来看看'),
+              // V2.9.0:错误态收口 ErrorState —— 提供真实可点的「重试」,
+              // 不再提示「下拉重试」却无任何重试入口。
+              error: (e, s) => KeyedSubtree(
+                key: const ValueKey('home-error'),
+                child: ErrorState(
+                  onRetry: () => ref.invalidate(activeGroupProvider),
+                  error: e,
+                  stackTrace: s,
+                ),
               ),
               data: (group) {
                 if (group == null) {
@@ -113,7 +121,8 @@ class LedgerHomeScreen extends ConsumerWidget {
                       icon: AppIcons.coins,
                       title: copy(CopyTokens.ledgerEmpty),
                       message: copy(CopyTokens.ledgerEmptyAction),
-                      actionLabel: '新建旅行团',
+                      // V2.9.0:用语统一 ——「新建旅行团」→「新建账本」。
+                      actionLabel: '新建账本',
                       onAction: () => context.pushNamed('group-edit'),
                     ),
                   );
@@ -468,7 +477,8 @@ class _LedgerBody extends ConsumerWidget {
     for (final g in groups) {
       if (g.id == groupId) return g;
     }
-    return LedgerGroupView(id: groupId, name: '旅行团', icon: '🧭', budgetEnabled: false);
+    // V2.9.0:用语统一 —— 兜底名「旅行团」→「账本」。
+    return LedgerGroupView(id: groupId, name: '账本', icon: '🧭', budgetEnabled: false);
   }
 }
 
@@ -598,7 +608,8 @@ class _GlassGroupCard extends StatelessWidget {
                         _HeroChip(
                           label: '预算 $budgetPercent%',
                           color: (budgetPercent ?? 0) >= 80 ? scheme.error : scheme.primary,
-                          onTap: () => context.push('/ledger/budget'),
+                          // V2.9.0:修复未注册路径 /ledger/budget —— 改按路由名跳转。
+                          onTap: () => context.pushNamed('budget'),
                         ),
                       ],
                     ],
@@ -646,7 +657,8 @@ class _UnsettledBadge extends StatelessWidget {
                 color: scheme.onErrorContainer,
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, size: 14, color: Colors.transparent),
+            // V2.9.0:清理透明 chevron 占位 hack —— 用定宽间距替代。
+            const SizedBox(width: 10),
           ],
         ),
       ),
@@ -734,20 +746,21 @@ class _BudgetCard extends StatelessWidget {
                               children: [
                                 CountUpText(
                                   value: budget.spentCents,
-                                  formatter: (v) => formatMoneyForDisplay(v),
+                                  // V2.9.0:金额展示收敛 MoneyFormat。
+                                  formatter: (v) => MoneyFormat.display(v),
                                   style: AppTextStyles.money(context,
                                       fontSize: AppFontSizes.title,
                                       color: over ? scheme.error : scheme.onSurface),
                                 ),
                                 const SizedBox(width: 4),
-                                Text('/ ' + formatMoneyForDisplay(budget.totalCents),
+                                Text('/ ' + MoneyFormat.display(budget.totalCents),
                                     style: Theme.of(context).textTheme.bodySmall),
                               ],
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              over ? '超支 ' + formatMoneyForDisplay(-budget.remainingCents)
-                                   : '还剩 ' + formatMoneyForDisplay(budget.remainingCents),
+                              over ? '超支 ' + MoneyFormat.display(-budget.remainingCents)
+                                   : '还剩 ' + MoneyFormat.display(budget.remainingCents),
                               style: TextStyle(
                                 fontSize: AppFontSizes.caption,
                                 color: over ? scheme.error : scheme.onSurfaceVariant,
@@ -790,15 +803,7 @@ class _BudgetCard extends StatelessWidget {
   }
 }
 
-String formatMoneyForDisplay(int cents) =>
-    (cents < 0 ? '-' : '') + '¥' + _fmtAbs(cents);
-
-String _fmtAbs(int cents) {
-  final abs = cents.abs();
-  final yuan = abs ~/ 100;
-  final fen = (abs % 100).toString().padLeft(2, '0');
-  return yuan.toString() + '.' + fen;
-}
+// V2.9.0:本地 formatMoneyForDisplay/_fmtAbs 退役,金额展示统一走 MoneyFormat。
 
 // ---------------------------------------------------------------------------
 // 成员余额榜
@@ -1269,29 +1274,20 @@ Future<void> _openGroupSwitcher(BuildContext context, WidgetRef ref) async {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('换个团记账', style: Theme.of(context).textTheme.titleLarge),
+                Text('换个账本记账', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 2),
-                Text('选择要开始记账的旅行团',
+                // V2.9.0:用语统一 ——「旅行团」改「账本」。
+                Text('选择要开始记账的账本',
                     style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
           ),
-          // V2.8.1 S7：团管理去重 —— 「全部」直跳 /ledger/groups（设置页入口保留为正门）。
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.xs, Spacing.xl, Spacing.xs),
-            child: OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(sheetContext).pop();
-                context.push('/ledger/groups');
-              },
-              icon: const Icon(Icons.grid_view_rounded, size: 18),
-              label: const Text('全部旅行团'),
-            ),
-          ),
+          // V2.9.0:去重 —— 移除「全部旅行团」按钮(与抽屉底部「全部」同目标,
+          // 双入口同目标,按工单保留底部入口)。
           Flexible(
             child: groups.isEmpty
                 ? Center(
-                    child: Text('还没有团，先新建一个吧', style: Theme.of(context).textTheme.bodySmall))
+                    child: Text('还没有账本，先新建一个吧', style: Theme.of(context).textTheme.bodySmall))
                 : ListView.separated(
                     controller: scrollController,
                     padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.xs, Spacing.xl, Spacing.xs),
@@ -1364,7 +1360,10 @@ Future<void> _openGroupSwitcher(BuildContext context, WidgetRef ref) async {
                   ),
           ),
           Padding(
-            padding: EdgeInsets.fromLTRB(Spacing.xl, Spacing.lg, Spacing.xl, Spacing.xl + 84),
+            // V2.9.0:底部硬编码 Spacing.xl+84 让位改用 AppBottomLayout.navBarHeight
+            // (悬浮胶囊底栏自身高度,不含安全区)。
+            padding: EdgeInsets.fromLTRB(
+                Spacing.xl, Spacing.lg, Spacing.xl, Spacing.xl + AppBottomLayout.navBarHeight),
             child: Row(
               children: [
                 Expanded(
@@ -1484,7 +1483,7 @@ class _OverBudgetBanner extends StatelessWidget {
                             color: scheme.onError,
                             fontWeight: FontWeight.w700,
                             fontSize: AppFontSizes.body)),
-                    Text('已用 ¥${(budget.spentCents / 100).toStringAsFixed(2)} / 预算 ¥${(budget.totalCents / 100).toStringAsFixed(2)}',
+                    Text('已用 ' + MoneyFormat.display(budget.spentCents) + ' / 预算 ' + MoneyFormat.display(budget.totalCents),
                         style: TextStyle(
                             color: scheme.onError.withValues(alpha: 0.9),
                             fontSize: AppFontSizes.caption)),

@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -104,19 +105,32 @@ class _TravelAssistantAppState extends ConsumerState<TravelAssistantApp>
     final fontMode = ref.watch(fontStyleProvider);
     final radiusDensity = ref.watch(radiusDensityProvider);
     final isSystem = brightness == ThemeBrightnessMode.system;
-    final isDark =
-        brightness == ThemeBrightnessMode.dark || family == ThemeFamily.night;
+    // V2.9.0：夜航族仅在用户**显式**选深色时强制暗板；「跟随系统」+
+    // 夜航族原先被 family 分支恒判为暗，「跟随系统」静默失效（开关 UI 仍
+    // 显示已选中）。跟随系统时交回 ThemeMode.system，按平台亮度走该族
+    // 浅板/深板（与下方注释的 V2.6 直选口径一致）。
+    final isDark = brightness == ThemeBrightnessMode.dark ||
+        (family == ThemeFamily.night && !isSystem);
     return MaterialApp.router(
       title: kAppName,
       debugShowCheckedModeBanner: false,
       routerConfig: widget.router ?? appRouter,
       // Web 版仅支持桌面（宽屏）；手机浏览器直接显示拦截页。
-      // 例外：只读分享页 /s/<token> 与邀请页 /invite 用移动布局直接渲染。
+      // 例外：只读分享页 /s/<token>、邀请页 /invite 与锁屏 /lock 用移动布局直接渲染。
       builder: (context, child) {
         if (kIsWeb && MediaQuery.sizeOf(context).width < 1024) {
           final path = GoRouter.of(context).routerDelegate.currentConfiguration.uri.toString();
-          final isPublicRoute = path.startsWith('/s/') || path.startsWith('/invite');
-          if (!isPublicRoute) return const MobileNotSupportedScreen();
+          final isPublicRoute = path.startsWith('/s/') ||
+              path.startsWith('/invite') ||
+              path.startsWith('/lock');
+          if (!isPublicRoute) {
+            // V2.9.0：区分「手机浏览器」与「窗口过窄的桌面浏览器」——后者
+            // 提示拉宽窗口，不再出现「请使用电脑浏览器访问」的自相矛盾文案。
+            final narrowDesktop = defaultTargetPlatform == TargetPlatform.macOS ||
+                defaultTargetPlatform == TargetPlatform.windows ||
+                defaultTargetPlatform == TargetPlatform.linux;
+            return MobileNotSupportedScreen(narrowDesktop: narrowDesktop);
+          }
         }
         return child ?? const SizedBox.shrink();
       },

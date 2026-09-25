@@ -15,6 +15,7 @@ import '../../../shared/app_meta.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
@@ -40,7 +41,10 @@ class TripsHomeScreen extends ConsumerStatefulWidget {
 
 class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
   final ScrollController _scroll = ScrollController();
-  bool _showArchived = false;
+
+  /// V2.9.0：已归档行展开态改为 per-trip（此前共享一个布尔，展开任一行
+  /// 等于展开全部）。
+  final Set<String> _expandedArchivedIds = <String>{};
 
   // 流与 build 解耦（防反复刷新）：只建一次，drift 流可安全重复订阅
   Stream<List<Trip>>? _tripsStream;
@@ -74,11 +78,6 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
           // kIsWeb 降级已内置于组件，勿在此重复判平台）
           const JoinByQrTile(compact: true),
           IconButton(
-            tooltip: '局域网同步（同 Wi-Fi 快照合并）',
-            onPressed: () => context.pushNamed('lan-sync'),
-            icon: const Icon(Icons.wifi_tethering_rounded),
-          ),
-          IconButton(
             tooltip: '行程模板库',
             onPressed: () => context.push('/trips/templates'),
             icon: const Icon(Icons.inventory_2_outlined),
@@ -99,8 +98,13 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
             return const _HomeSkeleton();
           }
           if (snap.hasError) {
-            return EmptyState(
-                icon: Icons.error_outline_rounded, title: '加载失败', message: '${snap.error}');
+            // V2.9.0：错误态统一 ErrorState（原始异常不进 UI 文案）；
+            // 重试 = 丢弃旧流重建订阅。
+            return ErrorState(
+              onRetry: () => setState(() => _tripsStream = null),
+              error: snap.error,
+              stackTrace: snap.stackTrace,
+            );
           }
           final trips = snap.data ?? const <Trip>[];
           if (trips.isEmpty) {
@@ -197,8 +201,13 @@ class _TripsHomeScreenState extends ConsumerState<TripsHomeScreen> {
             index: stagger++,
             child: _ArchivedRow(
               trip: t,
-              expanded: _showArchived,
-              onToggle: () => setState(() => _showArchived = !_showArchived),
+              expanded: _expandedArchivedIds.contains(t.id),
+              onToggle: () => setState(() {
+                // V2.9.0：per-trip 展开态
+                if (!_expandedArchivedIds.remove(t.id)) {
+                  _expandedArchivedIds.add(t.id);
+                }
+              }),
             ),
           ),
         ));
@@ -715,9 +724,9 @@ class _TripOpsSheet extends ConsumerWidget {
               Navigator.of(context).pop();
               try {
                 final bytes = await repo.exportTripBackupBytes(trip.id);
-                final base = trip.name
-                    .replaceAll(RegExp(r'[\\/:*?"<>|\\r\\n\\t]'), '_')
-                    .trim();
+                // V2.9.0：文件名清洗抽成纯函数 sanitizeFileName（此前内联
+                // 正则把 `\\r` 写成字面反斜杠+r，名字里的小写 r/n/t 被误替换）。
+                final base = sanitizeFileName(trip.name);
                 await shareFile(
                   bytes,
                   '${base.isEmpty ? '行程' : base}_backup.tat',

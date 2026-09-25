@@ -105,7 +105,7 @@ void main() {
             budgetEnabled: const Value(true), budgetCents: const Value(100000)));
     await pumpApp(tester);
     // 切到预算团（经切团抽屉）
-    await tester.tap(find.byTooltip('切换旅行团'));
+    await tester.tap(find.byTooltip('切换账本'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('预算团').first);
     await tester.pumpAndSettle();
@@ -131,7 +131,7 @@ void main() {
       createdAt: 100,
     ));
     await pumpApp(tester);
-    await tester.tap(find.byTooltip('切换旅行团'));
+    await tester.tap(find.byTooltip('切换账本'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('超支团').first);
     await tester.pumpAndSettle();
@@ -140,13 +140,13 @@ void main() {
     expect(find.textContaining('超支'), findsWidgets, reason: '超支提示存在');
   });
 
-  testWidgets('5. 切团抽屉：「全部旅行团」直跳 /ledger/groups', (tester) async {
+  testWidgets('5. 切团抽屉：底部「全部」直跳 /ledger/groups(V2.9.0 双入口去重)', (tester) async {
     await pumpApp(tester);
-    await tester.tap(find.byTooltip('切换旅行团'));
+    await tester.tap(find.byTooltip('切换账本'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('全部旅行团'));
+    await tester.tap(find.text('全部'));
     await tester.pumpAndSettle();
-    expect(find.text('旅行团管理'), findsOneWidget, reason: '直跳团管理页');
+    expect(find.text('账本管理'), findsOneWidget, reason: '直跳账本管理页');
   });
 
   testWidgets('6. 团卡左滑 → L2 删除确认弹层（裸 harness 直接渲染团管理页）', (tester) async {
@@ -168,16 +168,16 @@ void main() {
     expect(find.byType(Dismissible), findsWidgets, reason: '团卡挂 Dismissible');
     await tester.drag(find.text('团').first, const Offset(-400, 0));
     await tester.pumpAndSettle();
-    expect(find.text('删除旅行团？'), findsOneWidget, reason: '左滑接 L2 强确认');
+    expect(find.text('删除账本？'), findsOneWidget, reason: '左滑接 L2 强确认');
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
   });
 
   testWidgets('7. 扫码入口统一组件：团管理页使用 JoinByQrTile', (tester) async {
     await pumpApp(tester);
-    await tester.tap(find.byTooltip('切换旅行团'));
+    await tester.tap(find.byTooltip('切换账本'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('全部旅行团'));
+    await tester.tap(find.text('全部'));
     await tester.pumpAndSettle();
     expect(find.byType(JoinByQrTile), findsOneWidget, reason: '三处入口收敛为同一组件');
   });

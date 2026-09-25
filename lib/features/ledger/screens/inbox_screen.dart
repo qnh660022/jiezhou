@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/money.dart';
 import '../../../domain/models.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -261,6 +262,14 @@ class _ConvertedTile extends ConsumerWidget {
             tooltip: '移除记录',
             icon: Icon(Icons.delete_outline_rounded, size: 18, color: scheme.error),
             onPressed: () async {
+              // V2.9.0:删除前强确认 —— 此前一键直删无确认。
+              final ok = await showDangerConfirm(
+                context: context,
+                title: '移除这条暂存记录？',
+                body: '移除「${(item.note ?? '').isEmpty ? '一笔暂存记录' : item.note!}」？共 1 条，移除后不可恢复。',
+                confirmLabel: '删除',
+              );
+              if (!ok) return;
               final messenger = ScaffoldMessenger.of(context);
               try {
                 await deleteInboxItem(ref, item.id);

@@ -11,9 +11,7 @@ import 'package:travel_assistant/shared/app_meta.dart' show kAppVersionLabel;
 import 'package:travel_assistant/shared/widgets/money_text.dart'
     show MoneyFormat;
 import 'package:travel_assistant/features/trips/screens/trip_detail_screen.dart';
-import 'package:travel_assistant/features/trips/widgets/trip_detail_tabs.dart';
 import 'package:travel_assistant/theme/app_icons.dart';
-import 'package:travel_assistant/theme/tokens.dart';
 
 Widget _host(Widget child) => MaterialApp(home: Scaffold(body: Center(child: child)));
 
@@ -125,13 +123,7 @@ void main() {
       expect(src.contains('GuideRouteArgs'), isTrue);
     });
 
-    test('TripDetailTabs.kTabs 四页签定义（viewer/editor 可见性口径不变）', () {
-      expect(TripDetailTabs.kTabs.length, 4);
-      expect(TripDetailTabs.kTabs[0].label, '时间轴');
-      expect(TripDetailTabs.kTabs[3].label, '锦囊');
-      expect(TripDetailTabs.kTabs[0].icon, AppIcons.clock);
-    });
-
+    // V2.9.0：TripDetailTabs.kTabs 四页签定义测试随死代码删除而移除。
     test('锁屏抖动触发已接线（S2 收尾回归）', () {
       final src = File('lib/features/lock/lock_screen.dart').readAsStringSync();
       expect(src.contains('_shake.forward(from: 0)'), isTrue);

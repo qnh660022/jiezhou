@@ -13,6 +13,7 @@ import '../../../export/share_helper.dart';
 import '../../../shared/widgets/app_snack_bar.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/swipeable_bill_tile.dart';
@@ -26,7 +27,6 @@ import '../widgets/bill_detail_sheet.dart';
 import '../widgets/category_icon_box.dart';
 import '../widgets/conflict_badge.dart';
 import '../widgets/stagger_in.dart';
-import 'expense_csv_import_screen.dart';
 import '../../../theme/app_icons.dart';
 
 /// 🧾 消费 Tab：粘性日期分组账单流 + 多维筛选 + 合计栏 + CSV 导出。
@@ -189,12 +189,21 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        LedgerLargeHeader(title: '消费', actions: [
+        // V2.9.0:用语统一 ——「消费」页面标题→「账单」。
+        LedgerLargeHeader(title: '账单', actions: [
           if (context.canPop())
             HeaderIconButton(
               icon: Icons.arrow_back_ios_new_rounded,
               tooltip: '返回',
               onTap: () => context.pop(),
+            ),
+          // V2.9.0:批量多选可见入口 —— 一键全选当前筛选结果进入批量模式,
+          // 不再仅靠长按发现(与长按行为并存);viewer 不可见。
+          if (canWrite)
+            HeaderIconButton(
+              icon: Icons.checklist_rounded,
+              tooltip: '全选',
+              onTap: () => _enterBatchSelectAll(filtered),
             ),
           HeaderIconButton(
             icon: Icons.donut_small_rounded,
@@ -212,11 +221,11 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             tooltip: '导出 CSV',
             onTap: () => _exportCsv(filtered),
           ),
+          // V2.9.0:CSV 导入改走路由表(顶层全屏),不再裸 MaterialPageRoute。
           HeaderIconButton(
             icon: Icons.file_upload_outlined,
             tooltip: 'CSV 导入',
-            onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ExpenseCsvImportScreen())),
+            onTap: () => context.pushNamed('expense-csv-import'),
           ),
         ]),
         Padding(
@@ -381,12 +390,21 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         children: [
           _FilterPill(
             label: '全部',
-            selected: _categoryFilter.isEmpty && _memberFilter.isEmpty,
+            // V2.9.0:「全部」= 所有筛选全空(含时间/支付方式),点按清空全部
+            // —— 此前只重置分类/成员,日期与支付方式一旦设置即无法清除。
+            selected: _categoryFilter.isEmpty &&
+                _memberFilter.isEmpty &&
+                _payFilter.isEmpty &&
+                _fromEpochDay == null &&
+                _toEpochDay == null,
             onTap: () {
               HapticFeedback.selectionClick();
               setState(() {
                 _categoryFilter = '';
                 _memberFilter = '';
+                _payFilter.clear();
+                _fromEpochDay = null;
+                _toEpochDay = null;
               });
             },
           ),
@@ -629,6 +647,18 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   void _enterBatchMode(String id) {
     HapticFeedback.selectionClick();
     setState(() => _selected.add(id));
+  }
+
+  /// V2.9.0:顶栏「全选」—— 一键全选当前筛选结果进入批量模式;
+  /// 已全选时再点则清空并退出批量。入口已按 canWrite 隐藏,viewer 不可达。
+  void _enterBatchSelectAll(List<ExpenseRecord> bills) {
+    if (bills.isEmpty) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      final allSelected = bills.every((e) => _selected.contains(e.id));
+      _selected.clear();
+      if (!allSelected) _selected.addAll(bills.map((e) => e.id));
+    });
   }
 
   /// 单笔删除：L2 危险确认（含数量）→ repo 删 + 墓碑。

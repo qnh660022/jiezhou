@@ -7,7 +7,6 @@ import 'features/ai/screens/ai_chat_screen.dart';
 import 'features/ai/screens/ai_settings_screen.dart';
 import 'features/checklist/desktop_checklist_workbench.dart';
 import 'features/checklist/screens/checklist_screen.dart';
-import 'features/checklist/screens/item_edit_screen.dart';
 import 'features/desktop/desktop_shell.dart';
 import 'features/desktop/desktop_utils.dart' show isDesktopWeb;
 import 'features/lock/lock_screen.dart';
@@ -17,6 +16,7 @@ import 'features/trips/desktop_trips_workbench.dart' as trips_wb;
 import 'features/ledger/screens/audit_log_screen.dart';
 import 'features/ledger/screens/budget_screen.dart';
 import 'features/ledger/screens/categories_screen.dart';
+import 'features/ledger/screens/expense_csv_import_screen.dart';
 import 'features/ledger/screens/expense_edit_screen.dart';
 import 'features/ledger/screens/expenses_screen.dart';
 import 'features/ledger/screens/fund_screen.dart';
@@ -57,6 +57,7 @@ import 'features/trips/screens/trip_map_screen.dart';
 import 'features/trips/screens/trip_share_screen.dart';
 import 'features/trips/screens/trip_templates_screen.dart';
 import 'features/trips/screens/trips_home_screen.dart';
+import 'shared/widgets/empty_state.dart';
 import 'shared/widgets/floating_capsule_nav_bar.dart';
 
 /// 应用根路由表：
@@ -66,19 +67,27 @@ import 'shared/widgets/floating_capsule_nav_bar.dart';
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
   redirect: appLockRedirect,
+  // V2.9.0：统一 404 兜底。此前坏链 / 未注册路径（如 Web 端敲 /ai）直接落
+  // Flutter 默认错误页，与玻璃设计语言完全脱节。
+  errorBuilder: (context, state) => _RouteNotFoundScreen(uri: state.uri),
   routes: buildAppRoutes(),
 );
 
 /// V2.7.1 S7.2（F3）：启动锁的**唯一**拦截点。
 ///
-/// * 锁状态未加载（`AppLockGate.ready == false`）时不拦——开屏页负责 `load()`；
-/// * `lockEnabled && !unlocked` → 重定向 `/lock`；
+/// * 锁状态未加载（`AppLockGate.ready == false`）时**不应发生**——V2.9.0 起
+///   `load()` 在 `main()` 里于 `runApp` 前完成；保留兜底放行仅为测试注入容错。
+/// * `lockEnabled && !unlocked` → 重定向 `/lock`，并记录被打断的深链目的地，
+///   解锁后由锁屏回跳（否则邀请码 / 分享口令在「深链 → 锁」链路上丢失）；
 /// * `/lock` 自身放行，避免自锁循环；锁已解除时把 `/lock` 弹回开屏。
 /// * 只拦冷启动这一次，**不做**「进入账本二级校验」（§S7.2 不做清单）。
 String? appLockRedirect(BuildContext context, GoRouterState state) {
   if (!AppLockGate.ready) return null;
   final onLock = state.matchedLocation == '/lock';
-  if (AppLockGate.locked && !onLock) return '/lock';
+  if (AppLockGate.locked && !onLock) {
+    AppLockGate.capturePendingLocation(state.uri.toString());
+    return '/lock';
+  }
   if (!AppLockGate.locked && onLock) return '/';
   return null;
 }
@@ -124,13 +133,6 @@ List<RouteBase> buildAppRoutes() => [
             builder: (context, state) => isDesktopWeb(context)
                 ? const DesktopChecklistWorkbench()
                 : const ChecklistScreen(),
-            routes: [
-              GoRoute(
-                path: 'item-edit',
-                name: 'item-edit',
-                builder: (context, state) => const ItemEditScreen(),
-              ),
-            ],
           ),
         ]),
         // ============ 行程 ============
@@ -385,6 +387,14 @@ List<RouteBase> buildAppRoutes() => [
           name: 'expense-edit',
           builder: (context, state) => const ExpenseEditScreen(),
         ),
+        // V2.9.0：CSV 导入收编进路由表（此前两处入口裸 MaterialPageRoute 直推，
+        // 与全 App go_router 导航两套规则并存）。
+        GoRoute(
+          path: 'csv-import',
+          name: 'expense-csv-import',
+          builder: (context, state) =>
+              const Scaffold(body: ExpenseCsvImportScreen()),
+        ),
         GoRoute(
           path: 'stats',
           name: 'stats',
@@ -473,6 +483,30 @@ class HomeShell extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// V2.9.0：路由 404 兜底页。坏链 / 未注册路径统一落这里，替代 Flutter
+/// 默认错误页；提供回行程首页的唯一出路。
+class _RouteNotFoundScreen extends StatelessWidget {
+  const _RouteNotFoundScreen({required this.uri});
+
+  final Uri uri;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = uri.path;
+    return Scaffold(
+      body: EmptyState(
+        icon: Icons.explore_off_rounded,
+        title: '这条航线不存在',
+        message: path == '/' || path.isEmpty
+            ? '页面地址有误，可能已下线或链接不完整。'
+            : '「$path」没有对应的页面，可能已下线或链接有误。',
+        actionLabel: '回行程首页',
+        onAction: () => context.go('/trips'),
       ),
     );
   }

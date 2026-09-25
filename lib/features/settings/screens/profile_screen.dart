@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../data/providers.dart';
+import '../../../core/date_utils.dart' show dateToEpochDay;
 import '../../../data/sync/sync_control_providers.dart'
     show currentUserEmailProvider, currentUserIdProvider, syncStatusProvider;
 import '../../../data/sync/sync_models.dart' show SyncStatus, SyncStatusKind;
@@ -21,7 +22,6 @@ import '../../../shared/widgets/sync_status_capsule.dart'
 import '../../../shared/travel_quotes.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../theme/tokens.dart';
-import '../../ledger/ledger_models.dart';
 import '../../ledger/ledger_providers.dart';
 import '../../../shared/copy_tokens.dart';
 
@@ -35,6 +35,10 @@ bool _profileHit(String query, String title, [String? subtitle]) {
   if (q.isEmpty) return true;
   return title.contains(q) || (subtitle ?? '').contains(q);
 }
+
+/// V2.9.0:分组头过滤——组内任一子项命中才显示分组头,搜索后不再剩空分组头。
+bool _profileGroupHit(String query, List<(String, String?)> entries) =>
+    entries.any((e) => _profileHit(query, e.$1, e.$2));
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -133,31 +137,35 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
           ),
-        _StaggerIn(
-          index: 2,
-          child: Consumer(
-            builder: (context, ref, _) {
-              final enabled =
-                  ref.watch(budgetAlertsEnabledProvider).value ?? true;
-              return _ProfileTile(
-                icon: Icons.notifications_active_outlined,
-                title: '预算预警',
-                subtitle: '超支时在账本页提醒',
-                switchValue: enabled,
-                onSwitchChanged: (v) async {
-                  HapticFeedback.selectionClick();
-                  await ref.read(prefsRepoProvider).setBudgetAlertsEnabled(v);
-                  ref.invalidate(budgetAlertsEnabledProvider);
-                },
-                // V2.8.1 S1：tile 整体可点 toggle（原空 onTap 修复）；
-                // 开关自身的 onSwitchChanged 不经此处，不会双重触发。
-                onTap: () async {
-                  final next = !enabled;
-                  await ref.read(prefsRepoProvider).setBudgetAlertsEnabled(next);
-                  ref.invalidate(budgetAlertsEnabledProvider);
-                },
-              );
-            },
+        // V2.9.0:预算预警 tile 纳入组内搜索过滤(原漏包 Visibility 常驻)。
+        Visibility(
+          visible: _profileHit(ref.watch(_profileSearchQueryProvider), '预算预警', '超支时在账本页提醒'),
+          child: _StaggerIn(
+            index: 2,
+            child: Consumer(
+              builder: (context, ref, _) {
+                final enabled =
+                    ref.watch(budgetAlertsEnabledProvider).value ?? true;
+                return _ProfileTile(
+                  icon: Icons.notifications_active_outlined,
+                  title: '预算预警',
+                  subtitle: '超支时在账本页提醒',
+                  switchValue: enabled,
+                  onSwitchChanged: (v) async {
+                    HapticFeedback.selectionClick();
+                    await ref.read(prefsRepoProvider).setBudgetAlertsEnabled(v);
+                    ref.invalidate(budgetAlertsEnabledProvider);
+                  },
+                  // V2.8.1 S1：tile 整体可点 toggle（原空 onTap 修复）；
+                  // 开关自身的 onSwitchChanged 不经此处，不会双重触发。
+                  onTap: () async {
+                    final next = !enabled;
+                    await ref.read(prefsRepoProvider).setBudgetAlertsEnabled(next);
+                    ref.invalidate(budgetAlertsEnabledProvider);
+                  },
+                );
+              },
+            ),
           ),
         ),
         Visibility(
@@ -213,7 +221,16 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
         // 数据与隐私分组
-        const SectionHeader(title: '数据与隐私'),
+        // V2.9.0:分组头纳入过滤——组内任一子项命中才显示,搜索后不剩空分组头。
+        Visibility(
+          visible: _profileGroupHit(ref.watch(_profileSearchQueryProvider), const [
+            ('启动锁', '冷启动时用 6 位 PIN 解锁'),
+            ('隐私说明', null),
+            ('清除本地缓存', '清理临时文件与在线缓存，不影响数据'),
+            ('恢复默认设置', '重置外观与开关，保留团/账单/行程'),
+          ]),
+          child: const SectionHeader(title: '数据与隐私'),
+        ),
         Visibility(
             visible: _profileHit(ref.watch(_profileSearchQueryProvider), '启动锁', '冷启动时用 6 位 PIN 解锁'),
             child: _StaggerIn(
@@ -262,7 +279,16 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
         // 其他分组
-        const SectionHeader(title: '其他'),
+        // V2.9.0:分组头纳入过滤(同「数据与隐私」)。
+        Visibility(
+          visible: _profileGroupHit(ref.watch(_profileSearchQueryProvider), const [
+            ('关于', null),
+            ('官方网站', null),
+            ('检查更新', null),
+            ('意见反馈', 'feedback@jiezhou.app'),
+          ]),
+          child: const SectionHeader(title: '其他'),
+        ),
         Visibility(
             visible: _profileHit(ref.watch(_profileSearchQueryProvider), '关于'),
             child: _StaggerIn(
@@ -479,9 +505,12 @@ class ProfileScreen extends ConsumerWidget {
 
   Future<void> _confirmResetDefaults(BuildContext context, WidgetRef ref) async {
     final ok = await _confirm(context, '恢复默认设置',
-        '将把外观主题与预警开关重置为默认，已保存的团、账单和行程不受影响。确定继续？');
+        '将把外观主题、字体风格与预警开关重置为默认，已保存的团、账单和行程不受影响。确定继续？');
     if (!ok || !context.mounted) return;
     await ref.read(themeProvider.notifier).setTheme(ThemeKeys.green);
+    // V2.9.0:补齐字体风格与圆角密度复位(默认 现代无衬线 / 标准),与文案口径一致。
+    await ref.read(fontStyleProvider.notifier).set(FontMode.modern);
+    await ref.read(radiusDensityProvider.notifier).set(RadiusDensity.standard);
     await ref.read(prefsRepoProvider).setBudgetAlertsEnabled(true);
     ref.invalidate(budgetAlertsEnabledProvider);
     if (!context.mounted) return;
@@ -512,8 +541,19 @@ class _StatusSummaryCard extends ConsumerWidget {
         ref.watch(syncStatusProvider).value?.lastSyncedAt;
     final groupName = ref.watch(activeGroupProvider).value?.name;
     final trips = ref.watch(tripsInGroupProvider).value;
-    final activeTrips =
-        trips?.where((t) => !t.archived).length ?? 0;
+    // V2.9.0:「进行中行程」改用 today 域同款判据——设备今日落在行程区间内
+    // (TripSpan.containsDeviceDay:未归档 + start>0 + end>=start + today∈[start,end])。
+    // 原统计全部未归档行程,与今日域口径不一致;就地复刻同判据,不引依赖环。
+    final today = dateToEpochDay(DateTime.now());
+    final activeTrips = trips
+            ?.where((t) =>
+                !t.archived &&
+                t.startEpochDay > 0 &&
+                t.endEpochDay >= t.startEpochDay &&
+                today >= t.startEpochDay &&
+                today <= t.endEpochDay)
+            .length ??
+        0;
 
     Widget chip(IconData icon, String label, String value) {
       return Expanded(

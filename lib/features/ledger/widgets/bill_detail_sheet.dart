@@ -105,7 +105,8 @@ class BillDetailSheet extends ConsumerWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    settled ? '已两清 ✓' : '待结清 · 点此标记两清',
+                    // V2.9.0:用语统一 ——「两清」→「已结清」。
+                    settled ? '已结清 ✓' : '待结清 · 点击标记已结清',
                     style: TextStyle(
                         fontSize: AppFontSizes.caption,
                         fontWeight: FontWeight.w700,
@@ -394,7 +395,7 @@ class _LinkedTripSectionState extends ConsumerState<_LinkedTripSection> {
                         value: 'unlink',
                         child: Row(children: [
                           Icon(Icons.link_off_rounded,
-                              size: 16, color: Color(0xFFD9553F)),
+                              size: 16, color: SemanticColors.expense),
                           SizedBox(width: Spacing.sm),
                           Text('解除关联'),
                         ]),
@@ -437,13 +438,8 @@ class _LinkedTripSectionState extends ConsumerState<_LinkedTripSection> {
   }
 }
 
-/// int 分 → 不带千分位的元字符串（抽屉内轻量展示用）
-String formatPlainYuan(int cents) {
-  final abs = cents.abs();
-  final yuan = abs ~/ 100;
-  final fen = (abs % 100).toString().padLeft(2, '0');
-  return (cents < 0 ? '-' : '') + yuan.toString() + '.' + fen;
-}
+/// int 分 → 元字符串（V2.9.0:统一走 MoneyFormat 千分位口径）
+String formatPlainYuan(int cents) => MoneyFormat.fenToYuan(cents);
 
 /// 明细行
 class DetailLine extends StatelessWidget {

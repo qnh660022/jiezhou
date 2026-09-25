@@ -9,7 +9,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
+import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
 import '../../../theme/tokens.dart';
@@ -34,7 +36,8 @@ class GroupListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: GlassAppBar(
-        title: '旅行团管理',
+        // V2.9.0:用语统一 ——「旅行团管理」→「账本管理」。
+        title: '账本管理',
         actions: [
           // V2.8.1 S7：扫码入口统一组件
           const JoinByQrTile(compact: true),
@@ -62,13 +65,19 @@ class GroupListScreen extends ConsumerWidget {
             )
           : groupsAsync.when(
               loading: () => const SizedBox.shrink(),
-              error: (e, _) => const EmptyState(icon: Icons.error_outline_rounded, title: '加载失败'),
+              // V2.9.0:错误态收口 ErrorState,提供真实重试入口。
+              error: (e, s) => ErrorState(
+                onRetry: () => ref.invalidate(groupsProvider),
+                error: e,
+                stackTrace: s,
+              ),
               data: (groups) => groups.isEmpty
                   ? EmptyState(
                       icon: AppIcons.members,
                       title: '一个团都还没有',
                       message: '先建个团，再拉上伙伴们一起记',
-                      actionLabel: '新建旅行团',
+                      // V2.9.0:用语统一 ——「新建旅行团」→「新建账本」。
+                      actionLabel: '新建账本',
                       onAction: () => context.pushNamed('group-edit'),
                     )
                   : ListView.builder(
@@ -194,7 +203,7 @@ class GroupListScreen extends ConsumerWidget {
                                       : g.isPersonal
                                           ? '只记自己的每一笔'
                                           : g.budgetEnabled
-                                              ? '预算已开启 · 目标 ¥' + _yuan(g.budgetCents ?? 0)
+                                              ? '预算已开启 · 目标 ¥' + MoneyFormat.fenToYuan(g.budgetCents ?? 0)
                                               : '轻点切换为当前团',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
@@ -231,14 +240,14 @@ class GroupListScreen extends ConsumerWidget {
           heroTag: 'fab-group-add',
           onPressed: () => context.pushNamed('group-edit'),
           icon: const Icon(Icons.group_add_rounded),
-          label: const Text('新建团'),
+          // V2.9.0:用语统一 ——「新建团」→「新建账本」。
+          label: const Text('新建账本'),
         ),
       ),
     );
   }
 
-  String _yuan(int cents) =>
-      (cents ~/ 100).toString() + '.' + (cents % 100).toString().padLeft(2, '0');
+  // V2.9.0:本地 _yuan 退役,金额展示统一走 MoneyFormat。
 
   // ---------------------------------------------------------------------------
   // 单团长按操作
@@ -318,7 +327,7 @@ class GroupListScreen extends ConsumerWidget {
             ListTile(
               leading: Icon(Icons.delete_outline_rounded,
                   color: Theme.of(context).colorScheme.error),
-              title: Text('删除旅行团',
+              title: Text('删除账本',
                   style: TextStyle(color: Theme.of(context).colorScheme.error)),
               subtitle: const Text('连同该团全部账单、成员与结算一并删除，不可恢复'),
               onTap: () {
@@ -337,7 +346,7 @@ class GroupListScreen extends ConsumerWidget {
       BuildContext context, WidgetRef ref, LedgerGroupView g) async {
     final ok = await showDangerConfirm(
       context: context,
-      title: '删除旅行团？',
+      title: '删除账本？',
       body: '将删除「${g.name}」及其 3 类数据：全部账单、成员与结算记录，不可恢复。',
       confirmLabel: '删除',
     );

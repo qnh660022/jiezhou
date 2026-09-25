@@ -77,7 +77,7 @@ Future<void> showCaptureInboxSheet(
               }
             } catch (e) {
               if (context.mounted) {
-                showAppSnackBar(context, '记录失败：${e.toString()}', tone: SnackTone.destructive);
+                showAppSnackBar(context, '记录失败，请稍后重试', tone: SnackTone.destructive);
               }
             }
           },

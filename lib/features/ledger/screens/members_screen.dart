@@ -7,6 +7,8 @@ import '../../../domain/models.dart';
 import '../../../data/sync/sync_control_providers.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
@@ -60,8 +62,12 @@ class MembersScreen extends ConsumerWidget {
                         SkeletonListTile(),
                       ],
                     ),
-                    error: (e, _) =>
-                        const EmptyState(icon: Icons.error_outline_rounded, title: '成员加载失败'),
+                    // V2.9.0:错误态收口 ErrorState,提供真实重试入口。
+                    error: (e, s) => ErrorState(
+                      onRetry: () => ref.invalidate(membersProvider),
+                      error: e,
+                      stackTrace: s,
+                    ),
                     data: (list) {
                       if (list.isEmpty) {
                         return ListView(children: [
@@ -144,24 +150,38 @@ class MembersScreen extends ConsumerWidget {
               controller: controller,
               autofocus: true,
               maxLength: 12,
-              decoration: InputDecoration(hintText: 'TA 的名字或称呼'),
+              // V2.9.0:输入框提示 —— 名字留空时按钮置灰,不再静默 return。
+              decoration: const InputDecoration(
+                labelText: 'TA 的名字或称呼',
+                helperText: '填好名字后「加入」才会亮起',
+              ),
           ),
           const SizedBox(height: Spacing.lg),
-          FilledButton(
-              onPressed: () async {
-                final name = controller.text.trim();
-                if (name.isEmpty) return;
-                Navigator.of(sheetContext).pop();
-                HapticFeedback.lightImpact();
-                try {
-                  await addMember(ref, groupId, name);
-                } catch (_) {
-                  if (context.mounted) {
-                    showAppSnackBar(context, '添加失败，再试一次', tone: SnackTone.destructive);
-                  }
-                }
-              },
-            child: const Text('加入'),
+          // V2.9.0:名为空时按钮禁用（监听输入框实时置灰）。
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              final canSubmit = value.text.trim().isNotEmpty;
+              return FilledButton(
+              onPressed: canSubmit
+                  ? () async {
+                      final name = controller.text.trim();
+                      if (name.isEmpty) return;
+                      Navigator.of(sheetContext).pop();
+                      HapticFeedback.lightImpact();
+                      try {
+                        await addMember(ref, groupId, name);
+                      } catch (e, s) {
+                        debugPrint('addMember failed: $e\n$s');
+                        if (context.mounted) {
+                          showAppSnackBar(context, '添加失败，再试一次', tone: SnackTone.destructive);
+                        }
+                      }
+                    }
+                  : null,
+              child: const Text('加入'),
+              );
+            },
           ),
         ],
       ),
@@ -275,66 +295,34 @@ class MemberRow extends ConsumerWidget {
   Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
     HapticFeedback.selectionClick();
     final hasHistory = expenseCount > 0;
-    await showDraggableSheet<void>(
+    // V2.9.0:自绘确认弹层收口 L2 危险确认（body 含影响数量）;按钮用语「删除/取消」。
+    // S2 G1：有历史账单时物理删除被仓储拒绝，走软删除（保留历史）。
+    final ok = await showDangerConfirm(
       context: context,
-      initialChildSize: 0.34,
-      minChildSize: 0.28,
-      builder: (sheetContext, __) => Padding(
-        padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.xxl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('移除 ' + member.name + '？', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: Spacing.sm),
-            // S2 G1：有历史账单时物理删除被仓储拒绝，引导到软删除（保留历史）。
-            Text(hasHistory
-                ? 'TA 参与 ' + expenseCount.toString() +
-                    ' 笔账单。为保住历史账目，将采用「移除成员（保留历史）」：TA 不再出现在记账选择里，历史账单与结算结果不变。'
-                : '移除后 TA 名下没有历史包袱，可直接删除。',
-                style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: Spacing.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('算了'),
-                  ),
-                ),
-                const SizedBox(width: Spacing.md),
-                Expanded(
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.error,
-                        foregroundColor: Theme.of(context).colorScheme.onError),
-                    onPressed: () async {
-                      Navigator.of(sheetContext).pop();
-                      final messenger = ScaffoldMessenger.of(context);
-                      try {
-                        if (hasHistory) {
-                          await archiveMember(ref, member.id);
-                          messenger.showSnackBar(
-                              SnackBar(content: Text('已移除 ' + member.name + '（保留历史）')));
-                        } else {
-                          await removeMember(ref, member.id);
-                          messenger.showSnackBar(
-                              SnackBar(content: Text('已移除 ' + member.name)));
-                        }
-                      } on StateError catch (e) {
-                        // 兜底：公款池管理人等约束 → 明确提示，不静默失败。
-                        messenger.showSnackBar(SnackBar(content: Text(e.message)));
-                      }
-                    },
-                    child: Text(hasHistory ? '移除（保留历史）' : '移除'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      title: '移除 ' + member.name + '？',
+      body: hasHistory
+          ? 'TA 参与 ' + expenseCount.toString() +
+              ' 笔账单。为保住历史账目，将采用「移除成员（保留历史）」：TA 不再出现在记账选择里，历史账单与结算结果不变。'
+          : '将移除 1 名成员，TA 名下没有历史包袱，移除后不可恢复。',
+      confirmLabel: '删除',
+      icon: Icons.person_remove_outlined,
     );
+    if (!ok || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (hasHistory) {
+        await archiveMember(ref, member.id);
+        messenger.showSnackBar(
+            SnackBar(content: Text('已移除 ' + member.name + '（保留历史）')));
+      } else {
+        await removeMember(ref, member.id);
+        messenger.showSnackBar(
+            SnackBar(content: Text('已移除 ' + member.name)));
+      }
+    } on StateError catch (e) {
+      // 兜底：公款池管理人等约束 → 明确提示，不静默失败。
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 }
 
@@ -365,12 +353,17 @@ class _InviteTile extends ConsumerWidget {
               style: const TextStyle(fontSize: AppFontSizes.caption)),
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: () => signedIn
-              ? showModalBottomSheet(
+              // V2.9.0:邀请弹层收口统一抽屉入口（InviteCompanionSheet 已不再自带
+              // SheetSurface,由 SheetContainer 提供玻璃底面）。
+              ? showDraggableSheet<void>(
                   context: context,
-                  // V2.8.3.1：对齐统一弹层入口（根导航 + 统一 barrier）。
-                  useRootNavigator: true,
-                  barrierColor: Colors.black.withValues(alpha: 0.38),
-                  builder: (_) => InviteCompanionSheet(groupId: groupId!),
+                  initialChildSize: 0.55,
+                  minChildSize: 0.35,
+                  builder: (sheetContext, scrollController) =>
+                      SingleChildScrollView(
+                    controller: scrollController,
+                    child: InviteCompanionSheet(groupId: groupId!),
+                  ),
                 )
               : context.push('/profile/cloud'),
         ),

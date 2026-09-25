@@ -76,9 +76,12 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
 
   Widget _buildBody(Trip trip, List<TripItem> items) {
     final scheme = Theme.of(context).colorScheme;
+    // V2.9.0：导出摘要与 PDF 生成同口径 —— 备选卡（backupOf != null）不进
+    // 摘要与计数（此前摘要未过滤，与 PDF 内容不一致）。
+    final formal = items.where((it) => it.backupOf == null).toList();
     // Group items by day
     final byDay = <int, List<TripItem>>{};
-    for (final it in items) {
+    for (final it in formal) {
       (byDay[it.dateEpochDay] ??= []).add(it);
     }
     final days = byDay.keys.toList()..sort();
@@ -161,11 +164,11 @@ class _TripExportScreenState extends ConsumerState<TripExportScreen> {
             loading: _generating,
             expanded: true,
             icon: Icons.picture_as_pdf_rounded,
-            onPressed: items.isEmpty
+            onPressed: formal.isEmpty
                 ? null
                 : () => _generateAndShare(trip, items),
           ),
-          if (items.isEmpty)
+          if (formal.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: Spacing.sm),
               child: Text(

@@ -268,7 +268,14 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                             const SizedBox(height: Spacing.sm),
                             _CategoryPie(
                                 breakdown: breakdown,
-                                range: (_range, _customFrom, _customTo)),
+                                // V2.9.0:下钻改传换算后的区间边界 —— 此前仅
+                                // custom 透传,选「本月/今年」下钻丢失时间范围,
+                                // 两页数字对不上。
+                                bounds: _bounds.fromEpochDay == null &&
+                                        _bounds.toEpochDay == null
+                                    ? null
+                                    : (_bounds.fromEpochDay,
+                                        _bounds.toEpochDay)),
                           ],
                         )),
                     StaggeredSection(
@@ -613,8 +620,8 @@ class _BudgetHero extends StatelessWidget {
     );
   }
 
-  String _yuan(int cents) =>
-      (cents ~/ 100).toString() + '.' + (cents % 100).toString().padLeft(2, '0');
+  // V2.9.0:金额统一走 MoneyFormat(千分位口径,替代就地四则拼串)。
+  String _yuan(int cents) => MoneyFormat.fenToYuan(cents);
 }
 
 // ---------------------------------------------------------------------------
@@ -638,7 +645,9 @@ class _InsightsCapsule extends ConsumerWidget {
     var curCount = 0;
     for (final e in all) {
       if (e.type == ExpenseType.prepay) continue;
-      final amt = e.amountCents.abs();
+      // V2.9.0:金额带符号累加 —— refund 以负数冲减,与统计口径一致
+      // (此前 abs() 把退款算成正向支出,分类环比虚增)。
+      final amt = e.amountCents;
       if (e.dateEpochDay >= curStart) {
         curCount++;
         curMap[e.categoryKey] = (curMap[e.categoryKey] ?? 0) + amt;
@@ -722,19 +731,19 @@ List<double> pieSweepValues(List<double> cents, double t) {
 }
 
 class _CategoryPie extends StatelessWidget {
-  const _CategoryPie({required this.breakdown, this.range});
+  const _CategoryPie({required this.breakdown, this.bounds});
 
   final List<CategoryShareView> breakdown;
 
-  /// V2.8.1 S8：下钻携带当前时间范围（null=不限时）
-  final (StatsRange, int?, int?)? range;
+  /// V2.8.1 S8：下钻携带当前时间范围；V2.9.0 起由调用方传入换算后的
+  /// (from, to) epochDay 边界（null=不限时），任何档位都不再丢范围。
+  final (int?, int?)? bounds;
 
   void _drill(BuildContext context, String categoryKey) {
     HapticFeedback.selectionClick();
     final query = StringBuffer('category=')..write(Uri.encodeQueryComponent(categoryKey));
-    if (range != null && range!.$1 == StatsRange.custom &&
-        range!.$2 != null && range!.$3 != null) {
-      query.write('&from=${range!.$2}&to=${range!.$3}');
+    if (bounds != null && bounds!.$1 != null && bounds!.$2 != null) {
+      query.write('&from=${bounds!.$1}&to=${bounds!.$2}');
     }
     context.push('/expenses?$query');
   }

@@ -857,8 +857,10 @@ class _SharedBillsSectionState extends ConsumerState<SharedBillsSection>
 
   void _showDetail(ExpenseRecord e) {
     final scheme = Theme.of(context).colorScheme;
+    // V2.9.0:useRootNavigator —— 弹层盖过任何悬浮底栏(与其余弹层同一口径)。
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       builder: (ctx) => SheetSurface(
         child: SafeArea(
           child: FutureBuilder<List<LedgerMember>>(

@@ -8,7 +8,9 @@ import 'package:go_router/go_router.dart';
 import '../../../data/providers.dart';
 import '../../../data/seed/checklist_templates.dart';
 import '../../../data/db/database.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/error_state.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
 import '../../../theme/theme_provider.dart';
@@ -106,7 +108,14 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
       stream: _watchTrips,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const ChecklistSkeleton();
-        if (snapshot.hasError) return EmptyState(icon: Icons.error_outline_rounded, title: '加载失败', message: snapshot.error.toString());
+        // V2.9.0:错误态收口 ErrorState,异常原文不再进 UI(只进调试日志)。
+        if (snapshot.hasError) {
+          return ErrorState(
+            error: snapshot.error,
+            stackTrace: snapshot.stackTrace,
+            onRetry: () => setState(() => _tripsStream = null),
+          );
+        }
         final trips = snapshot.data ?? [];
         if (trips.isEmpty) return EmptyState(icon: AppIcons.clip, title: copy(CopyTokens.checklistEmpty), message: '创建行程后就可以整理行李啦', actionLabel: '去创建行程', onAction: () => context.push('/trips/edit'));
         // 不在 build 中直接改 state（会触发失活元素重建断言）：
@@ -169,9 +178,11 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
         Padding(padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.sm),
           child: StaggerIn(delay: Duration.zero, child: ChecklistProgressCard(total: total, done: doneCount, headerLabel: isLuggage ? '打包进度' : '待办进度'))),
         Expanded(child: ListView.builder(
-          // 底部留白统一 120：Tab 根页需让出悬浮胶囊底栏高度
-          padding: const EdgeInsets.fromLTRB(
-              Spacing.xl, Spacing.xs, Spacing.xl, Spacing.huge * 2 + Spacing.xxl),
+          // V2.9.0:底部让位改 AppBottomLayout 统一口径(胶囊底栏高度 + 底部安全区),
+          // 替换 Spacing.huge*2+Spacing.xxl 魔法数(≈120 且不含安全区)。
+          padding: EdgeInsets.fromLTRB(
+              Spacing.xl, Spacing.xs, Spacing.xl,
+              AppBottomLayout.withSafeArea(context, AppBottomLayout.navBarHeight)),
           itemCount: grouped.length + (isLuggage ? 1 : 0),
           itemBuilder: (context, sectionIndex) {
             if (isLuggage && sectionIndex == grouped.length) return Padding(padding: const EdgeInsets.only(top: Spacing.md), child: _AddMoreButton(onTap: () => _showAddEditSheet(isLuggage: true)));
@@ -179,13 +190,17 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
             final catKey = entry.key;
             final catItems = entry.value;
             final category = findChecklistCategory(catKey);
+            // V2.9.0:展示序(done 沉底 + sortOrder)在构造分区前算好,展示与重排
+            // 共用同一份列表,修复 onReorder 把索引套在未排序 catItems 上的错位。
+            final displayItems = List<ChecklistItem>.from(catItems)
+              ..sort((a, b) { if (a.done != b.done) return a.done ? 1 : -1; return a.sortOrder.compareTo(b.sortOrder); });
             final catDone = catItems.where((i) => i.done).length;
             return StaggerIn(delay: Duration(milliseconds: 80 * sectionIndex), child: _CategorySection(
-              category: category, done: catDone, total: catItems.length, items: catItems,
+              category: category, done: catDone, total: catItems.length, items: displayItems,
               onToggle: (item) => _toggleItem(item),
               onEdit: (item) => _showAddEditSheet(isLuggage: isLuggage, editItem: item),
               onDelete: (item) => _deleteItem(item),
-              onReorder: (oldIdx, newIdx) => _reorderItems(catItems, oldIdx, newIdx),
+              onReorder: (oldIdx, newIdx) => _reorderItems(displayItems, oldIdx, newIdx),
               onAddFromTemplate: () => _showTemplateSheet(catKey, isLuggage),
               onAdd: () => _showAddEditSheet(isLuggage: isLuggage, presetCategory: catKey),
             ));
@@ -219,18 +234,23 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('已删除「' + item.label + '」'),
         duration: const Duration(seconds: 5),
-        action: SnackBarAction(label: '撤销', onPressed: () async { await repo.addItem(item.tripId, item.scope, item.category, item.label, item.sortOrder); }),
+        // V2.9.0:撤销回填 done——已完成条目删除后撤销,恢复原完成态而不是回到未完成。
+        action: SnackBarAction(label: '撤销', onPressed: () async { await repo.addItem(item.tripId, item.scope, item.category, item.label, item.sortOrder, done: item.done); }),
       ));
     }
   }
 
+  /// V2.9.0:重排计算改为基于展示序(调用方传入的 [items] 已按 done 沉底 + sortOrder
+  /// 排好),修复有勾选条目时拖拽索引套在未排序列表上的错位。
+  /// 同时移除手动 `newIndex-1` 回缩:本页用的是 onReorderItem 回调,框架在
+  /// `_handleReorderItem` 里已做过「移除后回缩」(SDK reorderable_list.dart),
+  /// 再减一次会双重回缩,向下拖拽落点偏上一格。
   Future<void> _reorderItems(List<ChecklistItem> items, int oldIndex, int newIndex) async {
     if (oldIndex == newIndex) return;
     final repo = ref.read(checklistRepoProvider);
     HapticFeedback.mediumImpact();
-    final adjustedNew = newIndex > oldIndex ? newIndex - 1 : newIndex;
     final moved = items.removeAt(oldIndex);
-    items.insert(adjustedNew, moved);
+    items.insert(newIndex, moved);
     for (var i = 0; i < items.length; i++) await repo.reorderItem(items[i].id, i);
   }
 
@@ -289,7 +309,9 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
           })),
           const SizedBox(height: Spacing.md),
           SizedBox(width: double.infinity, child: FilledButton(
-            onPressed: selectedItems.isEmpty ? null : () async { HapticFeedback.lightImpact(); final scope = isLuggage ? 'trip' : 'global'; final existing = isLuggage && _selectedTripId != null ? await repo.getAllByScope(scope, tripId: _selectedTripId) : await repo.getAllByScope(scope); var order = existing.length; for (final tplText in selectedItems) { await repo.addItem(_selectedTripId, scope, categoryKey, tplText, order++); } if (ctx.mounted) Navigator.of(ctx).pop(); },
+            // V2.9.0:与智能模板库同一去重口径——按已有 label(trim 后全等)跳过,
+            // 全部已存在时提示且不落库;global 条目由仓储层强制 tripId=null。
+            onPressed: selectedItems.isEmpty ? null : () async { HapticFeedback.lightImpact(); final scope = isLuggage ? 'trip' : 'global'; final existing = isLuggage && _selectedTripId != null ? await repo.getAllByScope(scope, tripId: _selectedTripId) : await repo.getAllByScope(scope); final existingLabels = {for (final e in existing) e.label.trim()}; final fresh = selectedItems.where((t) => !existingLabels.contains(t.trim())).toList(); if (fresh.isEmpty) { if (ctx.mounted) showAppSnackBar(ctx, '所选条目都已存在，无需导入'); return; } var order = existing.length; for (final tplText in fresh) { await repo.addItem(_selectedTripId, scope, categoryKey, tplText, order++); } if (ctx.mounted) Navigator.of(ctx).pop(); },
             style: FilledButton.styleFrom(shape: const RoundedRectangleBorder(borderRadius: AppRadius.button)),
             child: Padding(padding: const EdgeInsets.symmetric(vertical: Spacing.md), child: Text('导入 ' + selectedItems.length.toString() + ' 项')),
           )),
@@ -320,6 +342,7 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
         builder: (ctx, scrollCtrl) => SmartTemplateSheet(
           trip: trip,
           existing: existing,
+          scrollController: scrollCtrl,
           onImported: () {
             if (mounted) {
               // 触发当前行程流重建（流缓存键不变，靠 drift 数据流自动刷新）
@@ -348,7 +371,8 @@ class _ChecklistScreenState extends ConsumerState<ChecklistScreen> {
             final trip = trips[i];
             final isCurrent = trip.id == _selectedTripId;
             return ListTile(leading: Text(trip.emoji, style: const TextStyle(fontSize: 24)), title: Text(trip.name), subtitle: Text(trip.destination), trailing: isCurrent ? Icon(Icons.check_circle_rounded, color: Theme.of(context).colorScheme.primary) : null, enabled: !isCurrent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.inputValue)),
-              onTap: isCurrent ? null : () async { if (_selectedTripId == null) return; await repo.copyFromTrip(trip.id, _selectedTripId!); if (ctx.mounted) { Navigator.of(ctx).pop(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已从「' + trip.name + '」复制清单'))); } },
+              // V2.9.0:复制失败不再静默——包 try/catch 给 L1 失败提示(异常原文不进 UI)。
+              onTap: isCurrent ? null : () async { if (_selectedTripId == null) return; try { await repo.copyFromTrip(trip.id, _selectedTripId!); } catch (e) { debugPrint('copyFromTrip failed: $e'); if (ctx.mounted) showAppSnackBar(ctx, '复制清单失败，请稍后重试', tone: SnackTone.destructive); return; } if (ctx.mounted) { Navigator.of(ctx).pop(); showAppSnackBar(context, '已从「' + trip.name + '」复制清单'); } },
             );
           })),
         ]));
@@ -393,8 +417,9 @@ class _CategorySection extends StatelessWidget {
         else ReorderableListView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), onReorderItem: (oldIndex, newIndex) { onReorder(oldIndex, newIndex); }, itemCount: items.length,
           proxyDecorator: (child, index, animation) { return AnimatedBuilder(animation: animation, builder: (context, _) { final t = animation.value; return Transform.scale(scale: 1.0 + 0.06 * (1 - t), child: Opacity(opacity: 0.85 + 0.15 * t, child: child)); }); },
           itemBuilder: (context, index) {
-            final sorted = List<ChecklistItem>.from(items)..sort((a, b) { if (a.done != b.done) return a.done ? 1 : -1; return a.sortOrder.compareTo(b.sortOrder); });
-            final item = sorted[index];
+            // V2.9.0:items 已是展示序(done 沉底 + sortOrder),不再重复排序——
+            // 与 onReorder 回写 sortOrder 的目标顺序保持一致。
+            final item = items[index];
             return ChecklistItemTile(key: ValueKey(item.id), item: ChecklistItemView(id: item.id, text: item.label, done: item.done), index: index, onToggle: () => onToggle(item), onEdit: () => onEdit(item), onDeleteConfirmed: () => onDelete(item));
           },
         ),

@@ -62,9 +62,10 @@ class _TodayCockpitScreenState extends ConsumerState<TodayCockpitScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final scope = ref.watch(todayScopeProvider(widget.tripId));
-    final tripName =
-        ref.watch(tripSpansWithGroupProvider).value?[widget.tripId]?.name ??
-            '今日';
+    final tripLink = ref.watch(tripSpansWithGroupProvider).value?[widget.tripId];
+    final tripName = tripLink?.name ?? '今日';
+    // V2.9.0:上游行程关联的账本 id——「记一笔」跳转带上,落库不再落到全局激活账本。
+    final groupId = tripLink?.groupId;
 
     if (scope == null) {
       return Scaffold(
@@ -148,8 +149,11 @@ class _TodayCockpitScreenState extends ConsumerState<TodayCockpitScreen> {
               icon: Icons.edit_note_rounded,
               expanded: true,
               // 记账页带当日日期（epochDay），保存后回驾驶舱。
-              onPressed: () =>
-                  context.push('/expenses/edit?date=$day'),
+              // V2.9.0:再带上游行程关联的 groupId,避免落库取全局激活账本记错本;
+              // groupId 为空时不带该参数(记账页参数支持由并行改动实现)。
+              onPressed: () => context.push(groupId == null || groupId.isEmpty
+                  ? '/expenses/edit?date=$day'
+                  : '/expenses/edit?date=$day&groupId=$groupId'),
             ),
           ),
         ),
@@ -332,10 +336,13 @@ class _SpendSummaryCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: Spacing.md),
+                // V2.9.0:改跳行程编辑页——行程与账本的挂接在行程编辑页完成,
+                // 原来只跳「建账本表单」,建完卡面依旧不可用(extra 传行程 id,
+                // 与 trips_home 打开既有行程编辑的方式一致)。
                 SecondaryButton(
                   label: '去关联账本',
                   icon: Icons.link_rounded,
-                  onPressed: () => context.pushNamed('group-edit'),
+                  onPressed: () => context.push('/trips/edit', extra: tripId),
                 ),
               ],
             )

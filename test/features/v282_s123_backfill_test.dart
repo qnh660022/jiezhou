@@ -14,12 +14,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:travel_assistant/features/settings/screens/splash_screen.dart';
 import 'package:travel_assistant/features/lock/lock_screen.dart';
-import 'package:travel_assistant/features/trips/widgets/cover_watermark.dart';
 import 'package:travel_assistant/platform/app_lock.dart';
 import 'package:travel_assistant/shared/widgets/brand_waves.dart';
 import 'package:travel_assistant/shared/widgets/empty_state.dart';
 import 'package:travel_assistant/shared/widgets/floating_capsule_nav_bar.dart';
-import 'package:travel_assistant/shared/widgets/glass_surface.dart';
 import 'package:travel_assistant/theme/app_icons.dart';
 import 'package:travel_assistant/theme/theme_provider.dart'
     show sharedPreferencesProvider;
@@ -293,29 +291,7 @@ void main() {
   // ===========================================================================
   // S3：封面图标水印
   // ===========================================================================
-  group('S3 CoverWatermark', () {
-    testWidgets('icon 模式：52px 白 45% 图标', (tester) async {
-      await tester.pumpWidget(_host(const CoverWatermark(icon: AppIcons.compass)));
-      final icon = tester.widget<Icon>(find.byIcon(AppIcons.compass));
-      expect(icon.size, 52);
-      expect(icon.color, Colors.white.withValues(alpha: 0.45));
-    });
-
-    testWidgets('icon 为空回落 emoji（白 45%）', (tester) async {
-      await tester.pumpWidget(_host(const CoverWatermark(emoji: '🏝️')));
-      final text = tester.widget<Text>(find.text('🏝️'));
-      expect(text.style?.color, Colors.white.withValues(alpha: 0.45));
-    });
-
-    testWidgets('child 直通（调用方自带视差内容时不二次包装）', (tester) async {
-      const key = Key('parallax');
-      await tester.pumpWidget(_host(const CoverWatermark(
-        child: SizedBox(key: key),
-      )));
-      expect(find.byKey(key), findsOneWidget);
-      expect(find.byType(CoverWatermark), findsOneWidget);
-    });
-  });
+  // V2.9.0：S3 CoverWatermark 组件测试随死代码删除而移除（组件本体已退役）。
 
   group('S3 行程卡水印接线（文件断言 · V2.8.3.2 回退后口径）', () {
     test('行程首页回退 v2.7：水印回落原生 emoji，不再走 CoverWatermark', () {

@@ -24,7 +24,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/date_utils.dart';
 import '../../../data/guide/guide_models.dart';
 import '../../../data/db/database.dart' show Trip;
 import '../../../data/guide/guide_providers.dart';
@@ -38,11 +37,13 @@ import '../../../platform/open_external.dart';
 import '../../../shared/copy_tokens.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/app_icons.dart';
 import '../../../theme/tokens.dart';
 import '../guide_city_picker.dart';
 import '../guide_widgets.dart';
+import '../widgets/day_pick_sheet.dart';
 
 class TripGuideScreen extends ConsumerStatefulWidget {
   const TripGuideScreen({
@@ -350,39 +351,67 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
   Widget build(BuildContext context) {
     final results = _display ?? _offline;
     final showTabs = (results?.length ?? 0) > 1;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(copy('guide.title')),
-        actions: [
-          IconButton(
-            onPressed: _refreshing ? null : _reload,
-            icon: _refreshing
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.refresh_rounded),
-            tooltip: '刷新在线内容',
-          ),
-          PopupMenuButton<String>(
-            onSelected: (v) {
-              final key = results?.isNotEmpty == true
-                  ? results!.first.location?.key
-                  : widget.cityKey;
-              if (v == 'clear-ai' && key != null) _clearAiContent(key);
-              if (v == 'pick') _pickCity();
-            },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(
-                  value: 'pick', child: Text(copy('guide.switchCity'))),
-              if (results?.isNotEmpty == true && results!.first.isAiImported)
-                PopupMenuItem(
-                    value: 'clear-ai', child: Text(copy('guide.clearAi'))),
+    // V2.9.0：多城 TabBar 迁入 GlassAppBar.bottom。DefaultTabController 必须包住
+    // Scaffold（TabBar 在 AppBar、TabBarView 在 body，两者都要能找到控制器）。
+    return DefaultTabController(
+      // 非多城态占位 1，满足控制器长度断言；此时 TabBar/TabBarView 都不渲染。
+      length: showTabs ? results!.length : 1,
+      child: KeyedSubtree(
+        key: _tabHostKey,
+        child: Scaffold(
+          appBar: GlassAppBar(
+            title: copy('guide.title'),
+            bottom: showTabs
+                ? TabBar(
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    // V2.9.0：「添加城市」改为不占 tab 位的 AppBar 动作 ——
+                    // 此前 n+1 个 tab 对 n 页 TabBarView，点「添加城市」后
+                    // 取消会把控制器停在越界 index，内容空白。
+                    tabs: [
+                      for (final r in results!) Tab(text: r.location?.name ?? ''),
+                    ],
+                  )
+                : null,
+            actions: [
+              IconButton(
+                onPressed: _refreshing ? null : _reload,
+                icon: _refreshing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.refresh_rounded),
+                tooltip: '刷新在线内容',
+              ),
+              // V2.9.0：多城时「添加城市」入口（追加一个城市 tab）。
+              if (showTabs)
+                IconButton(
+                  onPressed: () => _pickCity(append: true),
+                  icon: const Icon(Icons.add_rounded),
+                  tooltip: copy('guide.addCity'),
+                ),
+              PopupMenuButton<String>(
+                onSelected: (v) {
+                  final key = results?.isNotEmpty == true
+                      ? results!.first.location?.key
+                      : widget.cityKey;
+                  if (v == 'clear-ai' && key != null) _clearAiContent(key);
+                  if (v == 'pick') _pickCity();
+                },
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                      value: 'pick', child: Text(copy('guide.switchCity'))),
+                  if (results?.isNotEmpty == true && results!.first.isAiImported)
+                    PopupMenuItem(
+                        value: 'clear-ai', child: Text(copy('guide.clearAi'))),
+                ],
+              ),
             ],
           ),
-        ],
+          body: _buildBody(context, results, showTabs),
+        ),
       ),
-      body: _buildBody(context, results, showTabs),
     );
   }
 
@@ -424,62 +453,40 @@ class _TripGuideScreenState extends ConsumerState<TripGuideScreen> {
         ),
       );
     }
-    return KeyedSubtree(
-    key: _tabHostKey,
-    child: DefaultTabController(
-      length: results.length,
-      child: Column(children: [
-        TabBar(
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          tabs: [
-            for (final r in results) Tab(text: r.location?.name ?? ''),
-            Tab(
-              icon: const Icon(Icons.add_rounded, size: 18),
-              text: copy('guide.addCity'),
-            ),
-          ],
-          onTap: (i) {
-            if (i == results.length) _pickCity(append: true);
-          },
+    // V2.9.0：控制器已由 build 顶层的 DefaultTabController 提供，这里只渲染
+    // 与 tab 数严格相等的页数（越界空白不复存在）。
+    return TabBarView(children: [
+      for (final r in results)
+        RefreshIndicator(
+          onRefresh: _reload,
+          child: _CityGuideView(
+            result: r,
+            tripId: widget.tripId,
+            onlineDone: _display != null,
+            collapsed: _collapsed,
+            onToggleSection: (sk) {
+              final cityKey = r.location?.key ?? '';
+              setState(() => _collapsed['$cityKey|$sk'] =
+                  !(_collapsed['$cityKey|$sk'] ?? false));
+              _persistCollapsed(cityKey);
+            },
+            onJumpSection: (sk) => _jumpToSection(r.location?.key ?? '', sk),
+            sectionAnchor: (sk, child) =>
+                _sectionAnchor(r.location?.key ?? '', sk, child),
+            itemAnchorKey: (sk, item) {
+              final cityKey = r.location?.key ?? '';
+              final name =
+                  (item['name'] ?? item['title'] ?? '').toString();
+              if (name.isEmpty) return null;
+              return _itemKeys.putIfAbsent(
+                  '$cityKey|$sk|n:$name', () => GlobalKey());
+            },
+            onClearAi: r.isAiImported
+                ? () => _clearAiContent(r.location?.key ?? '')
+                : null,
+          ),
         ),
-        Expanded(
-          child: TabBarView(children: [
-            for (final r in results)
-              RefreshIndicator(
-                onRefresh: _reload,
-                child: _CityGuideView(
-                  result: r,
-                  tripId: widget.tripId,
-                  onlineDone: _display != null,
-                  collapsed: _collapsed,
-                  onToggleSection: (sk) {
-                    final cityKey = r.location?.key ?? '';
-                    setState(() => _collapsed['$cityKey|$sk'] =
-                        !(_collapsed['$cityKey|$sk'] ?? false));
-                    _persistCollapsed(cityKey);
-                  },
-                  onJumpSection: (sk) => _jumpToSection(r.location?.key ?? '', sk),
-                  sectionAnchor: (sk, child) =>
-                      _sectionAnchor(r.location?.key ?? '', sk, child),
-                  itemAnchorKey: (sk, item) {
-                    final cityKey = r.location?.key ?? '';
-                    final name =
-                        (item['name'] ?? item['title'] ?? '').toString();
-                    if (name.isEmpty) return null;
-                    return _itemKeys.putIfAbsent(
-                        '$cityKey|$sk|n:$name', () => GlobalKey());
-                  },
-                  onClearAi: r.isAiImported
-                      ? () => _clearAiContent(r.location?.key ?? '')
-                      : null,
-                ),
-              ),
-          ]),
-        ),
-      ]),
-    ),
-    );
+    ]);
   }
 
   Widget _loadingList() => ListView(
@@ -951,17 +958,21 @@ class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
   Future<void> _onPlace(GuideRef guideRef) async {
     final tid = await _ensureTripId();
     if (tid == null || !mounted) return;
-    // V2.8.3.4：弹层同时回传「第几天」，提示文案不再直接打 dateEpochDay
-    //（dateEpochDay 是 1970 起的绝对天数，2026 年 ≈ 20690 —— 原提示会显示
-    // 「已排入第 20690 天」，用户以为排到了两万多天后）。
-    final picked = await showModalBottomSheet<(int, int, int)>(
+    // V2.9.0：选天换装统一组件（day_pick_sheet，1 基 D 序号 + 月日 + 星期 +
+    // 安排数）；时段选择随后二级弹层。
+    final rawDay = await showDraggableSheet<int>(
       context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      builder: (_) => _GuidePlaceSheet(tripId: tid),
+      initialChildSize: 0.5,
+      minChildSize: 0.36,
+      builder: (sheetContext, scrollController) => _GuidePlaceSheet(
+        tripId: tid,
+        scrollController: scrollController,
+        onPicked: (day) => Navigator.of(sheetContext).pop(day),
+      ),
     );
-    if (picked == null || !mounted) return;
-    final (rawDay, rawDayNo, slot) = picked;
+    if (rawDay == null || !mounted) return;
+    final slot = await _slotPicker();
+    if (!mounted) return;
     // 兜底夹取：天序号必须落在行程区间内，任何异常值都不会写进库里。
     final trip = await ref.read(tripsRepoProvider).getById(tid);
     if (!mounted) return;
@@ -969,7 +980,7 @@ class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
         ? rawDay
         : rawDay.clamp(trip.startEpochDay, trip.endEpochDay);
     final dayNo = trip == null || trip.endEpochDay < trip.startEpochDay
-        ? rawDayNo
+        ? rawDay - (trip?.startEpochDay ?? 0) + 1
         : (day - trip.startEpochDay + 1);
     // §8.3 去重：同 guideRef 同日已存在 → 确认弹层（跨天不去重）
     final sameDay = await ref
@@ -1006,81 +1017,8 @@ class _GuideEntryActionsState extends ConsumerState<_GuideEntryActions> {
     }
   }
 
-  /// 「先想去」：入想去池（S6 面板展示；落卡即移出）。
-  Future<void> _onWish(GuideRef guideRef) async {
-    final tid = await _ensureTripId();
-    if (tid == null || !mounted) return;
-    setState(() => _busy = true);
-    try {
-      final tag = (widget.item['tag'] ?? '').toString();
-      await ref.read(wishlistRepoProvider).addItem(
-            tripId: tid,
-            cityKey: widget.cityKey,
-            name: _name,
-            address: _address,
-            type: _type,
-            durationMin: _duration,
-            tag: tag.isEmpty ? null : tag,
-            guideRef: guideRef.format(),
-          );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('已加入想去')));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-}
-
-/// 「直接排」选天 + 可选时段弹层（§8.3）。
-/// V2.8.2 S4：天序列表 → 天卡网格（D1–Dn：天数+日期+星期+当天安排数 badge，
-/// 3 列）；二级时段弹层视觉统一为 chips 行。
-class _GuidePlaceSheet extends ConsumerStatefulWidget {
-  const _GuidePlaceSheet({required this.tripId});
-
-  final String tripId;
-
-  @override
-  ConsumerState<_GuidePlaceSheet> createState() => _GuidePlaceSheetState();
-}
-
-class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
-  Trip? _trip;
-
-  /// 各天安排数（key = epochDay）。
-  Map<int, int> _counts = const {};
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final repo = ref.read(tripsRepoProvider);
-    final trip = await repo.getById(widget.tripId);
-    final items = await repo.watchItems(widget.tripId).first;
-    if (!mounted) return;
-    setState(() {
-      _trip = trip;
-      _counts = {
-        for (final it in items)
-          it.dateEpochDay: (_counts[it.dateEpochDay] ?? 0) + 1,
-      };
-    });
-  }
-
-  Future<void> _pickDay(int day) async {
-    final slot = await _slotPicker();
-    if (!mounted) return;
-    // V2.8.3.4：一并回传天序号（1-based），宿主提示文案与落库值从此分离。
-    final trip = _trip;
-    final dayNo = trip == null ? day : day - trip.startEpochDay + 1;
-    Navigator.pop(context, (day, dayNo, slot));
-  }
-
   /// 可选时段：0 = 不指定。V2.8.2 S4：ListTile 列表 → chips 行。
+  /// V2.9.0：从 _GuidePlaceSheet 上移到宿主（选天已换装共享组件）。
   Future<int> _slotPicker() {
     const presets = [540, 720, 900, 1080];
     return showModalBottomSheet<int>(
@@ -1137,6 +1075,76 @@ class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
   String _fmtSlot(int m) =>
       '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
 
+  /// 「先想去」：入想去池（S6 面板展示；落卡即移出）。
+  Future<void> _onWish(GuideRef guideRef) async {    final tid = await _ensureTripId();
+    if (tid == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final tag = (widget.item['tag'] ?? '').toString();
+      await ref.read(wishlistRepoProvider).addItem(
+            tripId: tid,
+            cityKey: widget.cityKey,
+            name: _name,
+            address: _address,
+            type: _type,
+            durationMin: _duration,
+            tag: tag.isEmpty ? null : tag,
+            guideRef: guideRef.format(),
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('已加入想去')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+}
+
+/// 「直接排」选天弹层（§8.3）。
+/// V2.9.0：天卡网格换装共享组件 DayPickList（1 基 D 序号 + 日期 + 星期 +
+/// 当天安排数），本文件不再自绘天卡。
+class _GuidePlaceSheet extends ConsumerStatefulWidget {
+  const _GuidePlaceSheet({
+    required this.tripId,
+    required this.onPicked,
+    this.scrollController,
+  });
+
+  final String tripId;
+  final ValueChanged<int> onPicked;
+  final ScrollController? scrollController;
+
+  @override
+  ConsumerState<_GuidePlaceSheet> createState() => _GuidePlaceSheetState();
+}
+
+class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
+  Trip? _trip;
+
+  /// 各天安排数（key = epochDay）。
+  Map<int, int> _counts = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final repo = ref.read(tripsRepoProvider);
+    final trip = await repo.getById(widget.tripId);
+    final items = await repo.watchItems(widget.tripId).first;
+    if (!mounted) return;
+    setState(() {
+      _trip = trip;
+      _counts = {
+        for (final it in items)
+          it.dateEpochDay: (_counts[it.dateEpochDay] ?? 0) + 1,
+      };
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final trip = _trip;
@@ -1150,118 +1158,13 @@ class _GuidePlaceSheetState extends ConsumerState<_GuidePlaceSheet> {
           height: 120,
           child: Center(child: Text('该行程还没有日期，先去编辑行程设置日期')));
     }
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                Spacing.lg, Spacing.md, Spacing.lg, Spacing.xs),
-            child: Text('排到哪一天？',
-                style: Theme.of(context).textTheme.titleMedium),
-          ),
-          // V2.8.2 S4：天卡网格（3 列，D1–Dn）
-          Flexible(
-            child: GridView.builder(
-              shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(
-                  Spacing.lg, Spacing.xs, Spacing.lg, Spacing.xl),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: Spacing.sm,
-                mainAxisSpacing: Spacing.sm,
-                childAspectRatio: 1.0,
-              ),
-              itemCount: n,
-              itemBuilder: (context, i) {
-                final day = trip.startEpochDay + i;
-                return _DayCard(
-                  index: i + 1,
-                  epochDay: day,
-                  planCount: _counts[day] ?? 0,
-                  onTap: () => _pickDay(day),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 天卡：D 序 + 日期 + 星期 + 当天安排数 badge（3 列网格）。
-class _DayCard extends StatelessWidget {
-  const _DayCard({
-    required this.index,
-    required this.epochDay,
-    required this.planCount,
-    required this.onTap,
-  });
-
-  final int index;
-  final int epochDay;
-  final int planCount;
-  final VoidCallback onTap;
-
-  static const _weekdays = ['一', '二', '三', '四', '五', '六', '日'];
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final date = epochDayToDate(epochDay);
-    final weekday = _weekdays[date.weekday - 1];
-    return Material(
-      color: scheme.surfaceContainerLow.withValues(alpha: 0.7),
-      borderRadius: AppRadius.input,
-      child: InkWell(
-        borderRadius: AppRadius.input,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(Spacing.sm),
-          decoration: BoxDecoration(
-            borderRadius: AppRadius.input,
-            border: Border.all(
-                color: scheme.outlineVariant.withValues(alpha: 0.55)),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('D$index',
-                  style: TextStyle(
-                      fontSize: AppFontSizes.title,
-                      fontWeight: FontWeight.w800,
-                      color: scheme.primary)),
-              const SizedBox(height: 2),
-              Text('${date.month}/${date.day} · 周$weekday',
-                  style: TextStyle(
-                      fontSize: AppFontSizes.caption - 1,
-                      color: scheme.onSurfaceVariant)),
-              const SizedBox(height: Spacing.xs),
-              if (planCount > 0)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: scheme.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text('$planCount 个安排',
-                      style: TextStyle(
-                          fontSize: AppFontSizes.caption - 2,
-                          fontWeight: FontWeight.w600,
-                          color: scheme.primary)),
-                )
-              else
-                Text('暂无安排',
-                    style: TextStyle(
-                        fontSize: AppFontSizes.caption - 2,
-                        color: scheme.outline)),
-            ],
-          ),
-        ),
-      ),
+    return DayPickList(
+      startDay: trip.startEpochDay,
+      endDay: trip.endEpochDay,
+      itemCountOf: (day) => _counts[day] ?? 0,
+      title: '排到哪一天？',
+      scrollController: widget.scrollController,
+      onPicked: widget.onPicked,
     );
   }
 }
@@ -1322,7 +1225,7 @@ class TripGuideScreenBuilder extends ConsumerWidget {
       builder: (context, snap) {
         if (!snap.hasData) {
           return Scaffold(
-            appBar: AppBar(title: Text(copy('guide.title'))),
+            appBar: GlassAppBar(title: copy('guide.title')),
             body: const Center(child: CircularProgressIndicator()),
           );
         }

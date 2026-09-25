@@ -33,7 +33,11 @@ class PrivacyScreen extends StatelessWidget {
                     Text('我们的承诺', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: Spacing.sm),
                     Text(
-                      '「芥舟」是一款纯本地离线的工具应用。你的行程、清单、账本数据全部存储在你自己的设备上，我们不会收集、上传或共享你的任何个人数据。',
+                      // V2.9.0:口径修正——「纯本地离线、不上传任何数据」与云同步/
+                      // 旅伴协作功能矛盾;改为「默认只存本机,开启后才按你的选择上传」。
+                      '「芥舟」的数据默认只存本机：你的行程、清单、账本都保存在你自己的设备上，'
+                          '不开启云服务时不会离开你的手机。只有当你主动开启云同步或旅伴协作后，'
+                          '才会按你的选择上传相应数据，我们不会收集或共享你的个人数据。',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],

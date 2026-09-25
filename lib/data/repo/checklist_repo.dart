@@ -2,18 +2,36 @@
 library;
 import "package:drift/drift.dart";
 import "../db/database.dart";
-import "../db/tables.dart";
 import "../../core/uid.dart";
 class ChecklistRepository {
   ChecklistRepository(this.db);
   final AppDatabase db;
   Stream<List<ChecklistItem>> watchByTrip(String tid) => (db.select(db.checklistItems)..where((c)=>c.tripId.equals(tid)&c.scope.equals("trip"))..orderBy([(c)=>OrderingTerm.asc(c.sortOrder)])).watch();
   Stream<List<ChecklistItem>> watchGlobal() => (db.select(db.checklistItems)..where((c)=>c.scope.equals("global"))..orderBy([(c)=>OrderingTerm.asc(c.sortOrder)])).watch();
-  Future<void> addItem(String? tripId, String scope, String category, String text, int order) async { await db.into(db.checklistItems).insert(ChecklistItemsCompanion(id:Value(newId("check")),tripId:Value(tripId),scope:Value(scope),category:Value(category),label:Value(text),done:Value(false),sortOrder:Value(order))); }
+  /// V2.9.0:[done] 可选参数(默认 false,向后兼容)——删除撤销回填完成态用。
+  /// V2.9.0:scope 收口——global 条目强制 tripId 落 null,防止行李页持久化的
+  /// 选中行程 id 混入全局待办(此前 deleteTrip 按 tripId 级联会连带清光全局待办)。
+  Future<void> addItem(String? tripId, String scope, String category, String text, int order, {bool done = false}) async {
+    final effectiveTripId = scope == "global" ? null : tripId;
+    await db.into(db.checklistItems).insert(ChecklistItemsCompanion(id:Value(newId("check")),tripId:Value(effectiveTripId),scope:Value(scope),category:Value(category),label:Value(text),done:Value(done),sortOrder:Value(order)));
+  }
   Future<void> toggleDone(String id, bool done) async { await (db.update(db.checklistItems)..where((c)=>c.id.equals(id))).write(ChecklistItemsCompanion(done:Value(done))); }
   Future<void> deleteItem(String id) async { await (db.delete(db.checklistItems)..where((c)=>c.id.equals(id))).go(); }
   Future<void> importBatch(List<ChecklistItemsCompanion> items) async { await db.batch((b)=>b.insertAll(db.checklistItems,items)); }
-  Future<void> copyFromTrip(String src, String dst) async { final items=await (db.select(db.checklistItems)..where((c)=>c.tripId.equals(src))).get(); for(final i in items) { await db.into(db.checklistItems).insert(ChecklistItemsCompanion(id:Value(i.id+"_cp"),tripId:Value(dst),scope:Value("trip"),category:Value(i.category),label:Value(i.label),done:Value(false),sortOrder:Value(i.sortOrder))); } }
+  /// V2.9.0:复制行程清单三处收口——
+  /// ① 只复制 scope='trip' 的条目(防混入历史脏数据 global 行);
+  /// ② 新 id 用 newId("check") 生成(原 i.id+"_cp" 二次复制必撞唯一主键抛异常);
+  /// ③ 按目标清单已存 label 去重(trim 后全等跳过),重复复制不重复落库。
+  Future<void> copyFromTrip(String src, String dst) async {
+    final items=await (db.select(db.checklistItems)..where((c)=>c.tripId.equals(src)&c.scope.equals("trip"))).get();
+    final dstLabels={for (final e in await (db.select(db.checklistItems)..where((c)=>c.tripId.equals(dst)&c.scope.equals("trip"))).get()) e.label.trim()};
+    for(final i in items) {
+      final label=i.label.trim();
+      if (dstLabels.contains(label)) continue;
+      dstLabels.add(label);
+      await db.into(db.checklistItems).insert(ChecklistItemsCompanion(id:Value(newId("check")),tripId:Value(dst),scope:Value("trip"),category:Value(i.category),label:Value(i.label),done:Value(false),sortOrder:Value(i.sortOrder)));
+    }
+  }
   Future<void> updateItem(String id, {String? label, String? category}) async { final c = ChecklistItemsCompanion(label: label != null ? Value(label) : const Value.absent(), category: category != null ? Value(category) : const Value.absent()); await (db.update(db.checklistItems)..where((t)=>t.id.equals(id))).write(c); }
   Future<void> reorderItem(String id, int newSortOrder) async { await (db.update(db.checklistItems)..where((t)=>t.id.equals(id))).write(ChecklistItemsCompanion(sortOrder:Value(newSortOrder))); }
   /// V2.7.2 S9：城市锦囊「行前准备」转清单。

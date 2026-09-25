@@ -63,7 +63,7 @@ class _ExpenseCsvImportScreenState extends ConsumerState<ExpenseCsvImportScreen>
         _result = '';
       });
     } catch (e) {
-      _toast('解析失败：${e.toString()}');
+      _toast('解析失败：请检查 CSV 格式与表头');
     }
   }
 
@@ -219,7 +219,7 @@ class _ExpenseCsvImportScreenState extends ConsumerState<ExpenseCsvImportScreen>
       if (mounted) setState(() => _result = msg);
       _toast(msg);
     } catch (e) {
-      _toast('导入失败：${e.toString()}');
+      _toast('导入失败，请稍后重试');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

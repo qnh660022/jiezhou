@@ -117,7 +117,9 @@ class _LockScreenState extends State<LockScreen>
     if (!mounted) return;
     if (ok) {
       AppLockGate.markUnlocked();
-      context.go('/trips');
+      // V2.9.0：回跳被锁打断的深链目的地（邀请码 / 分享口令不再丢失）；
+      // 没有记录（常规冷启动）才落回行程首页。
+      context.go(AppLockGate.takePendingLocation() ?? '/trips');
       return;
     }
     setState(() {

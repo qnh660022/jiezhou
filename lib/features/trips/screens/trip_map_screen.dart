@@ -1,4 +1,4 @@
-// 📍 行程地图：flutter_map 按天标注 + polyline + 交通衔接 + 选点模式
+// 📍 行程地图：flutter_map 按天标注 + polyline + 交通衔接
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -12,12 +12,13 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/uid.dart';
 import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
-import '../../../data/services/travel_time_service.dart';
 
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../theme/tokens.dart';
+import '../trip_access.dart';
 import '../trip_utils.dart';
+import '../../../shared/widgets/app_snack_bar.dart';
 import '../trip_widgets.dart';
 
 /// 行程地图页
@@ -32,33 +33,33 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
   final MapController _mapCtrl = MapController();
   String? _tripId;
   int? _selectedDay; // null = show all
-  bool _pickMode = false;
-  LatLng? _pickedLocation;
-  TravelMode _travelMode = TravelMode.drive;
 
   // 流与 build 解耦（防反复刷新）：tripId 固定，流只建一次
   Stream<Trip?>? _tripStream;
   Stream<List<TripItem>>? _itemsStream;
 
+  /// V2.9.0：viewer 只读判定缓存（build 期写入，回调期同步读取）。
+  bool? _canWriteCache;
+  bool get _canWrite => _canWriteCache ?? true;
+
   /// 地图服务商配置（启动时读取一次，之后跟随 prefs 流变更失效重读）。
   Map<String, dynamic> _mapConfig = const {'provider': 'none', 'key': ''};
   bool _configLoaded = false;
 
-  /// 是否配置了可用 key：腾讯/高德需非空 key 才允许打开地图。
-  bool get _hasMapKey {
+  /// V2.9.0：语义统一 —— provider=none 即「OSM 免费地图，无需配置」
+  ///（与地图服务设置页口径一致），不再拦截；只有明确选择腾讯/高德
+  ///（确需 Key 的 provider）且 Key 为空时才引导去配置。
+  bool get _needsKeySetup {
     final provider = _mapConfig['provider'] as String? ?? 'none';
     final key = (_mapConfig['key'] as String? ?? '').trim();
-    return provider != 'none' && key.isNotEmpty;
+    return provider != 'none' && key.isEmpty;
   }
 
   @override
   Widget build(BuildContext context) {
     if (_tripId == null) {
       final arg = GoRouterState.of(context).extra;
-      if (arg is Map<String, dynamic>) {
-        _tripId = arg['tripId'] as String?;
-        _pickMode = arg['mode'] == 'pick';
-      } else if (arg is String) {
+      if (arg is String) {
         _tripId = arg;
       }
     }
@@ -69,26 +70,14 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
         body: const Center(child: Text('未找到行程')),
       );
     }
+    // V2.9.0：viewer 只读 —— 隐藏「插入交通衔接」写入口。
+    _canWriteCache = ref.watch(tripAccessProvider(tripId)).valueOrNull?.canWrite;
 
-    // 启动时一次性读取配置；若未配置可用的腾讯/高德 key，则直接拦截，
-    // 避免 flutter_map 空跑（瓦片加载失败、坐标系校对失败、坐标非法等情况
-    // 在中国大陆最常见）。地点搜索（poi_service）走 Photon/高德占位实现，
-    // 与本屏独立，不受影响。
+    // 启动时一次性读取配置；仅当选择了需 Key 的服务商（腾讯/高德）而 Key
+    // 为空时才拦截，避免 flutter_map 路线规划空跑。OSM 免费底图不再被拦。
+    // 地点搜索（poi_service）走 Photon/高德占位实现，与本屏独立，不受影响。
     return Scaffold(
-      appBar: GlassAppBar(
-        title: _pickMode ? '地图选点' : '行程地图',
-        actions: [
-          if (!_pickMode)
-            PopupMenuButton<TravelMode>(
-              icon: const Icon(Icons.directions_rounded),
-              onSelected: (m) => setState(() => _travelMode = m),
-              itemBuilder: (_) => [
-                for (final m in TravelMode.values)
-                  PopupMenuItem(value: m, child: Text(_modeLabel(m))),
-              ],
-            ),
-        ],
-      ),
+      appBar: GlassAppBar(title: '行程地图'),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _configLoaded
             ? Future.value(_mapConfig)
@@ -101,8 +90,8 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
             _mapConfig = snap.data ?? const {'provider': 'none', 'key': ''};
             _configLoaded = true;
           }
-          if (!_hasMapKey) {
-            return _MapKeyMissingView(pickMode: _pickMode);
+          if (_needsKeySetup) {
+            return const _MapKeyMissingView();
           }
           return _buildMap(tripId);
         },
@@ -200,10 +189,6 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
           options: MapOptions(
             initialCenter: center,
             initialZoom: points.isEmpty ? 5.0 : 12.0,
-            onTap: _pickMode ? (tapPos, latlng) {
-              setState(() => _pickedLocation = latlng);
-              HapticFeedback.lightImpact();
-            } : null,
           ),
           children: [
             TileLayer(
@@ -216,20 +201,11 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
             ),
             PolylineLayer(polylines: polylines),
             MarkerLayer(markers: markers),
-            if (_pickedLocation != null)
-              MarkerLayer(markers: [
-                Marker(
-                  point: _wgs84ToGcj02(_pickedLocation!),
-                  width: 40,
-                  height: 40,
-                  child: Icon(Icons.location_on_rounded, color: Theme.of(context).colorScheme.error, size: 36),
-                ),
-              ]),
           ],
         ),
 
         // Day filter chips
-        if (sortedDays.length > 1 && !_pickMode)
+        if (sortedDays.length > 1)
           Positioned(
             top: Spacing.md,
             left: 0, right: 0,
@@ -261,43 +237,9 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
             ),
           ),
 
-        // Pick mode bottom bar
-        if (_pickMode)
-          Positioned(
-            bottom: 0, left: 0, right: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(Spacing.xl, Spacing.lg, Spacing.xl, Spacing.xxxl),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_pickedLocation != null)
-                    Text('${_pickedLocation!.latitude.toStringAsFixed(4)}, ${_pickedLocation!.longitude.toStringAsFixed(4)}',
-                        style: TextStyle(fontSize: AppFontSizes.caption, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  const SizedBox(height: Spacing.sm),
-                  FilledButton.icon(
-                    onPressed: _pickedLocation == null
-                        ? null
-                        : () {
-                            HapticFeedback.mediumImpact();
-                            Navigator.of(context).pop({
-                              'lat': _pickedLocation!.latitude,
-                              'lng': _pickedLocation!.longitude,
-                            });
-                          },
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('确认选点'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
         // "Insert transport" FAB
-        if (!_pickMode && points.length >= 2)
+        // V2.9.0：viewer 隐藏（写操作）；_insertTransportBetweenPoints 内有兜底拦截。
+        if (_canWrite && points.length >= 2)
           Positioned(
             bottom: AppBottomLayout.withSafeArea(
               context,
@@ -354,6 +296,8 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
   }
 
   Future<void> _insertTransportBetweenPoints(Trip trip, List<_MapPoint> points) async {
+    // V2.9.0：viewer 兜底拦截（FAB 入口已按 canWrite 隐藏）。
+    if (!_canWrite) return;
     HapticFeedback.selectionClick();
     final repo = ref.read(tripsRepoProvider);
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -377,17 +321,8 @@ class _TripMapScreenState extends ConsumerState<TripMapScreen> {
       count++;
     }
     if (mounted) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('已插入 $count 条交通衔接')));
-    }
-  }
-
-  String _modeLabel(TravelMode m) {
-    switch (m) {
-      case TravelMode.walk: return '步行 🚶';
-      case TravelMode.drive: return '驾车 🚗';
-      case TravelMode.transit: return '公交 🚌';
+      // V2.9.0：收口到全 App 唯一轻提示形态（L1）。
+      showAppSnackBar(context, '已插入 $count 条交通衔接');
     }
   }
 }
@@ -398,13 +333,12 @@ class _MapPoint {
   final LatLng latlng;
 }
 
-/// 未配置地图 Key 时的引导页：说明原因 + 一键跳设置。
+/// 选择了需 Key 的服务商（腾讯/高德）但 Key 为空时的引导页：说明原因 + 一键跳设置。
+/// OSM 免费底图（provider=none）不再进入此页（V2.9.0：与设置页口径统一）。
 /// 不破坏外部"地点搜索"路径（poi_service 走免 key 的 Photon / Open-Meteo，
 /// 与本屏独立，故无需在搜索入口处也拦截）。
 class _MapKeyMissingView extends StatelessWidget {
-  const _MapKeyMissingView({required this.pickMode});
-
-  final bool pickMode;
+  const _MapKeyMissingView();
 
   @override
   Widget build(BuildContext context) {
@@ -418,12 +352,12 @@ class _MapKeyMissingView extends StatelessWidget {
             const Text('🗺️', style: TextStyle(fontSize: 56)),
             const SizedBox(height: Spacing.lg),
             Text(
-              pickMode ? '地图选点需要先配置 Key' : '行程地图需要先配置 Key',
+              '路线规划需要先配置 Key',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: Spacing.sm),
             Text(
-              '在「我的 → 地图服务设置」里填写腾讯地图或高德地图 Key 后即可打开。\n地点搜索不受影响，可继续使用。',
+              '你选择了腾讯/高德路线规划，需在「我的 → 地图服务设置」里填写 Key 后使用；\n切回「OSM (默认)」可免 Key 直接查看地图。',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppFontSizes.caption,

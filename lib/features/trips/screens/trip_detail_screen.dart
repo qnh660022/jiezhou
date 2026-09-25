@@ -12,7 +12,6 @@ import '../../../data/db/database.dart';
 import '../../../data/providers.dart';
 import '../../../data/repo/trips_repo.dart';
 import '../../../data/services/weather_service.dart';
-import '../../../domain/trip_bill_linker.dart';
 import '../../../domain/day_shift_engine.dart';
 import '../../ledger/ledger_providers.dart';
 import '../trip_access.dart';
@@ -26,7 +25,6 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/glass_app_bar.dart';
 import '../../../shared/widgets/money_text.dart';
 import '../../../shared/widgets/pressable_scale.dart';
-import '../../../shared/widgets/progress_ring.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/sheet.dart';
 import '../../../shared/widgets/skeleton_box.dart';
@@ -35,6 +33,7 @@ import '../../../theme/tokens.dart';
 import '../trip_utils.dart';
 import '../trip_widgets.dart';
 import '../widgets/day_ops_sheet.dart';
+import '../widgets/day_pick_sheet.dart';
 import '../guide_widgets.dart' show GuideRouteArgs;
 import 'item_detail_screen.dart';
 import 'item_edit_screen.dart';
@@ -369,33 +368,30 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                 final tripRow =
                     await repo.watchTrip(item.tripId).first;
                 if (tripRow == null || !sheetContext.mounted) return;
-                showDraggableSheet<DateTime>(
-                  context: sheetContext,
-                  initialChildSize: 0.5,
-                  minChildSize: 0.36,
-                  builder: (dayContext, __) => _DayPickSheet(
-                    startDay: tripRow.startEpochDay,
-                    endDay: tripRow.endEpochDay,
-                    onPicked: (target) async {
-                      Navigator.of(dayContext).pop();
-                      Navigator.of(sheetContext).pop();
-                      final all = await ref
-                          .read(tripsRepoProvider)
-                          .watchItems(item.tripId)
-                          .first;
-                      var maxSort = 0;
-                      for (final e in all) {
-                        if (e.dateEpochDay == target &&
-                            e.sortOrder > maxSort) {
-                          maxSort = e.sortOrder;
-                        }
-                      }
-                      await repo.saveItem(
-                          item.copyWith(dateEpochDay: target, sortOrder: maxSort + 10));
-                      if (mounted) _toast('已移动到 ${cnFullDate(target)}');
-                    },
-                  ),
+                // V2.9.0：统一选天弹层（1 基 D 序号 + 月日 + 星期 + 当前天高亮）。
+                final target = await showDayPickSheet(
+                  sheetContext,
+                  startDay: tripRow.startEpochDay,
+                  endDay: tripRow.endEpochDay,
+                  selectedDay: item.dateEpochDay,
+                  title: '移动到哪一天？',
                 );
+                if (target == null || !sheetContext.mounted) return;
+                Navigator.of(sheetContext).pop();
+                final all = await ref
+                    .read(tripsRepoProvider)
+                    .watchItems(item.tripId)
+                    .first;
+                var maxSort = 0;
+                for (final e in all) {
+                  if (e.dateEpochDay == target &&
+                      e.sortOrder > maxSort) {
+                    maxSort = e.sortOrder;
+                  }
+                }
+                await repo.saveItem(
+                    item.copyWith(dateEpochDay: target, sortOrder: maxSort + 10));
+                if (mounted) _toast('已移动到 ${cnFullDate(target)}');
               },
             ),
             SheetActionTile(
@@ -875,14 +871,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
     final days = byDay.keys.toList()..sort();
 
-    // 选中了具体某天：自动校正到存在的天；半天无安排则回退总览
-    if (_selectedDay != null && !days.contains(_selectedDay)) {
-      _selectedDay = null;
-    }
+    // 选中了具体某天：自动校正到存在的天；半天无安排则回退总览。
+    // V2.9.0：不再在 build 期直接改 _selectedDay 字段（无 setState 的状态突变），
+    // 改为计算生效值，字段仍由用户交互唯一驱动。
+    final effectiveSelectedDay =
+        (_selectedDay != null && days.contains(_selectedDay)) ? _selectedDay : null;
 
-    final showAll = _selectedDay == null;
-    final visibleDays =
-        showAll ? days : [for (final d in days) if (d == _selectedDay) d];
+    final showAll = effectiveSelectedDay == null;
+    final visibleDays = showAll
+        ? days
+        : [for (final d in days) if (d == effectiveSelectedDay) d];
 
     return Stack(
       children: [
@@ -896,7 +894,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               padding:
                   const EdgeInsets.fromLTRB(Spacing.xl, Spacing.md, Spacing.xl, Spacing.sm),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(999),
+                // V2.9.0：胶囊圆角就地收敛 AppRadius.capsule
+                borderRadius: AppRadius.capsule,
                 child: Container(
                   height: 6,
                   color: Theme.of(context).colorScheme.surfaceContainerHigh,
@@ -928,7 +927,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             trip: trip,
             days: days,
             items: items,
-            selected: _selectedDay,
+            selected: effectiveSelectedDay,
             onSelect: (d) {
               HapticFeedback.selectionClick();
               setState(() => _selectedDay = d);
@@ -1036,11 +1035,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           dayIndex: day - trip.startEpochDay + 1,
           day: day,
           count: list.length,
-          onInsertDay: () => _onInsertDay(context),
-          onRemoveDay: () =>
-              _onRemoveDay(context, day - trip.startEpochDay + 1, list.length),
+          // V2.9.0：viewer 隐藏增删天入口（组件契约口径：null = 不渲染），
+          // _onInsertDay/_onRemoveDay 函数体内另有兜底拦截。
+          onInsertDay: widget.canWrite ? () => _onInsertDay(context) : null,
+          onRemoveDay: widget.canWrite
+              ? () =>
+                  _onRemoveDay(context, day - trip.startEpochDay + 1, list.length)
+              : null,
           canRemoveDay: tripDays(trip.startEpochDay, trip.endEpochDay) >= 2,
-          onMultiSelect: widget.onEnterMultiSelect == null
+          // V2.9.0：天头菜单对 viewer 整体隐藏（多选批量同样是写操作前置）。
+          onMultiSelect: (!widget.canWrite || widget.onEnterMultiSelect == null)
               ? null
               : () => widget.onEnterMultiSelect!(list.first),
           backupCount: backups.length,
@@ -1105,28 +1109,34 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           },
           itemBuilder: (context, i) {
             final it = list[i];
+            // V2.9.0：viewer 不挂拖拽手势监听 —— 应拖不动，而非拖了再回滚；
+            // onReorder 里的 canWrite 早退保留为兜底。
+            final card = Padding(
+              padding: const EdgeInsets.only(top: Spacing.sm),
+              child: GestureDetector(
+                onTap: () => _openDetail(context, it),
+                onLongPress: () => widget.onItemLongPress(context, it, list),
+                child: _ItemTile(
+                  item: it,
+                  isFirst: i == 0,
+                  isLast: i == list.length - 1,
+                  linkedBillCents: latestUnsettledByItem[it.id]?.amountCents,
+                  onQuickBill: widget.onQuickBill,
+                  onOpenGuide: kIsWeb
+                      ? null
+                      : (it.guideRef == null || it.guideRef!.isEmpty)
+                          ? null
+                          : () => _openGuide(context, it),
+                ),
+              ),
+            );
+            if (!widget.canWrite) {
+              return KeyedSubtree(key: ValueKey(it.id), child: card);
+            }
             return ReorderableDelayedDragStartListener(
               key: ValueKey(it.id),
               index: i,
-              child: Padding(
-                padding: const EdgeInsets.only(top: Spacing.sm),
-                child: GestureDetector(
-                  onTap: () => _openDetail(context, it),
-                  onLongPress: () => widget.onItemLongPress(context, it, list),
-                  child: _ItemTile(
-                    item: it,
-                    isFirst: i == 0,
-                    isLast: i == list.length - 1,
-                    linkedBillCents: latestUnsettledByItem[it.id]?.amountCents,
-                    onQuickBill: widget.onQuickBill,
-                    onOpenGuide: kIsWeb
-                        ? null
-                        : (it.guideRef == null || it.guideRef!.isEmpty)
-                            ? null
-                            : () => _openGuide(context, it),
-                  ),
-                ),
-              ),
+              child: card,
             );
           },
         ),
@@ -1142,7 +1152,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               opacity: 0.55,
               child: GestureDetector(
                 onTap: () => _openDetail(context, it),
-                onLongPress: () => _showBackupOps(context, it, list),
+                // V2.9.0：viewer 隐藏备胎长按操作单入口（全部是写操作），
+                // _showBackupOps 函数体内另有兜底拦截。
+                onLongPress: widget.canWrite
+                    ? () => _showBackupOps(context, it, list)
+                    : null,
                 child: _ItemTile(
                   item: it,
                   isFirst: false,
@@ -1171,6 +1185,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   /// 备胎操作单（V2.7.2 S8）：一键替换 / 转正 / 退回想去 / 删除。
   Future<void> _showBackupOps(
       BuildContext context, TripItem backup, List<TripItem> formalOfDay) async {
+    // V2.9.0：viewer 兜底拦截（长按入口已按 canWrite 隐藏）。
+    if (!widget.canWrite) return;
     final repo = ref.read(tripsRepoProvider);
     final main = formalOfDay.firstOrNull;
     final action = await showModalBottomSheet<String>(
@@ -1268,6 +1284,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _onInsertDay(BuildContext context) async {
+    // V2.9.0：viewer 兜底拦截（入口已按 canWrite 隐藏，此处防其它路径误触）。
+    if (!widget.canWrite) return;
     final n = tripDays(trip.startEpochDay, trip.endEpochDay);
     if (n < 1) return;
     final k = await showDayInsertPicker(context, n: n);
@@ -1289,6 +1307,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _onRemoveDay(BuildContext context, int k, int affected) async {
+    // V2.9.0：viewer 兜底拦截（同上）。
+    if (!widget.canWrite) return;
     final n = tripDays(trip.startEpochDay, trip.endEpochDay);
     if (n < 2 || k < 1 || k > n) return;
     final mode = await showDayRemovePicker(
@@ -1396,11 +1416,14 @@ class _HeaderHero extends StatelessWidget {
                       height: 48,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        // V2.8.3.1：封面签条统一走 GlassTokens
-                        color: Colors.white.withValues(alpha: GlassTokens.coverPillFillAlpha),
-                        borderRadius: BorderRadius.circular(16),
+                        // V2.8.3.1：封面签条统一走 GlassTokens；
+                        // V2.9.0：封面白就地收敛 CoverGradients.onCover 令牌
+                        color: CoverGradients.onCover
+                            .withValues(alpha: GlassTokens.coverPillFillAlpha),
+                        borderRadius: AppRadius.input,
                         border: Border.all(
-                            color: Colors.white.withValues(alpha: GlassTokens.coverPillBorderAlpha)),
+                            color: CoverGradients.onCover.withValues(
+                                alpha: GlassTokens.coverPillBorderAlpha)),
                       ),
                       child:
                           Text(trip.emoji, style: const TextStyle(fontSize: 26, height: 1)),
@@ -1425,9 +1448,10 @@ class _HeaderHero extends StatelessWidget {
 }
 
 
-/// 天气条：FutureBuilder + 骨架降级，服务未实现/失败时整条隐藏
 /// V2.8.2 S1：天气 emoji → 图标渲染映射（数据字段 iconEmoji 只读不动）。
-/// 8 常见天气 + fallback；未知 emoji 原样显示（静默降级，guideRef 同哲学）。
+/// 8 常见天气 + fallback；未知 emoji 返回 null（调用方自行降级）。
+/// V2.9.0：所属的 _WeatherStrip 概览卡随 V2.8.3.3 版面调整退役，
+/// 本纯函数保留（含回归测试，天气功能后续宿主可复用）。
 IconData? weatherIconFor(String emoji) {
   final map = <String, IconData>{
     '☀️': Icons.wb_sunny_rounded,
@@ -1447,161 +1471,6 @@ IconData? weatherIconFor(String emoji) {
   };
   return map[emoji.trim()];
 }
-
-class _WeatherStrip extends StatelessWidget {
-  const _WeatherStrip({
-    required this.trip,
-    required this.items,
-    required this.ensureWeather,
-  });
-
-  final Trip trip;
-  final List<TripItem> items;
-  final Future<List<WeatherDay>?> Function(Trip, List<TripItem>) ensureWeather;
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<WeatherDay>?>(
-      future: ensureWeather(trip, items),
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return SizedBox(
-            height: 44,
-            child: Row(
-              children: [
-                for (var i = 0; i < 4; i++) ...[
-                  Expanded(child: SkeletonBox(height: 40, radius: AppRadius.inputValue)),
-                  SizedBox(width: Spacing.sm),
-                ],
-              ],
-            ),
-          );
-        }
-        final days = snap.data;
-        if (days == null || days.isEmpty) return const SizedBox.shrink();
-        final scheme = Theme.of(context).colorScheme;
-        // 去卡片化：作为「行程概览」卡内的内联内容
-        return SizedBox(
-          height: 44,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: days.length,
-            separatorBuilder: (_, __) => const SizedBox(width: Spacing.sm),
-            itemBuilder: (context, i) {
-              final d = days[i];
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerLow,
-                  borderRadius: AppRadius.capsule,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // V2.8.2 S1：天气图标渲染映射（未知 emoji 原样回退）
-                    if (weatherIconFor(d.iconEmoji) != null)
-                      Icon(weatherIconFor(d.iconEmoji),
-                          size: 16, color: scheme.onSurfaceVariant)
-                    else
-                      Text(d.iconEmoji, style: const TextStyle(fontSize: 16)),
-                    const SizedBox(width: 6),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${d.codeText} ${d.tempMax.round()}/${d.tempMin.round()}°',
-                            style: TextStyle(
-                                fontSize: AppFontSizes.caption,
-                                fontWeight: FontWeight.w600)),
-                        Text(cnMonthDay(d.date.millisecondsSinceEpoch ~/
-                                86400000),
-                            style: TextStyle(
-                                fontSize: AppFontSizes.caption - 1,
-                                color: scheme.onSurfaceVariant)),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// 清单进度环入口卡 → 跳转清单 Tab
-class _ChecklistEntryCard extends ConsumerStatefulWidget {
-  const _ChecklistEntryCard({required this.tripId});
-
-  final String tripId;
-
-  @override
-  ConsumerState<_ChecklistEntryCard> createState() =>
-      _ChecklistEntryCardState();
-}
-
-class _ChecklistEntryCardState extends ConsumerState<_ChecklistEntryCard> {
-  /// 进度流与 build 解耦：tripId 固定，仅初始化时建一次
-  late final Stream<int> _progressStream = ref
-      .read(checklistRepoProvider)
-      .watchByTrip(widget.tripId)
-      .map((list) => list.isEmpty
-          ? 0
-          : ((list.where((c) => c.done).length / list.length) * 100).round());
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    // 去卡片化：作为「行程概览」卡内的内联内容
-    return InkWell(
-      borderRadius: AppRadius.input,
-      onTap: () {
-        HapticFeedback.selectionClick();
-        context.go('/checklist');
-      },
-      child: Row(
-        children: [
-          StreamBuilder<int>(
-            stream: _progressStream,
-            builder: (context, snap) {
-              final pct = snap.data ?? 0;
-              return ProgressRing(
-                value: pct / 100,
-                size: 44,
-                strokeWidth: 5,
-                color: scheme.primary,
-                child: Text('$pct%',
-                    style: TextStyle(
-                        fontSize: AppFontSizes.caption - 1,
-                        fontWeight: FontWeight.w800)),
-              );
-            },
-          ),
-          const SizedBox(width: Spacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('行前清单',
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text('行李与待办一件不落',
-                    style: TextStyle(
-                        fontSize: AppFontSizes.caption,
-                        color: scheme.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right_rounded,
-              size: 20, color: scheme.onSurfaceVariant),
-        ],
-      ),
-    );
-  }
-}
-
 
 /// 多选模式的可勾选卡容器（V2.7.2 S4）：左侧勾选圈 + 原卡面
 class _SelectableTile extends StatelessWidget {
@@ -2057,259 +1926,6 @@ class _ItemTile extends StatelessWidget {
   }
 }
 
-/// 计划 vs 实际 费用对比卡（联动数据来自 tripBillsProvider）
-class _PlanActualCard extends StatelessWidget {
-  const _PlanActualCard({
-    required this.trip,
-    required this.items,
-    required this.bills,
-  });
-
-  final Trip trip;
-  final List<TripItem> items;
-  final List<Expense> bills;
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty && bills.isEmpty) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
-    // drift 行 -> 领域记录（统一走 expenseRecordOf：退款已归为负数，
-    // 计划 vs 实际 才会把退款正确冲减到实际支出里）
-    final records = [
-      for (final e in bills)
-        if (expenseRecordOf(e) != null) expenseRecordOf(e)!,
-    ];
-    final plans = [
-      for (final it in items)
-        TripPlanItem(
-          id: it.id,
-          name: it.name,
-          dateEpochDay: it.dateEpochDay,
-          costCents: it.costCents,
-          costCurrency: it.costCurrency,
-        ),
-    ];
-    final r = plannedVsActual(plans, records);
-    final diff = r.actualCents - r.plannedCents;
-
-    Widget cell(String label, int cents, Color? color) => Expanded(
-          child: Column(
-            children: [
-              Text(label,
-                  style: TextStyle(
-                      fontSize: AppFontSizes.caption,
-                      color: scheme.onSurfaceVariant)),
-              const SizedBox(height: 2),
-              MoneyText(cents, fontSize: AppFontSizes.bodyLarge, semanticColor: false),
-            ],
-          ),
-        );
-
-    // 去卡片化：作为「行程概览」卡内的内联内容
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          const Text('🧾', style: TextStyle(fontSize: 14)),
-          const SizedBox(width: Spacing.sm),
-          Text('费用 · 计划 vs 实际',
-              style: TextStyle(
-                  fontSize: AppFontSizes.caption,
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurfaceVariant)),
-          const Spacer(),
-          if (r.unlinkedCostItems > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.sm, vertical: 2),
-              decoration: BoxDecoration(
-                color: scheme.errorContainer.withValues(alpha: 0.6),
-                borderRadius: AppRadius.capsule,
-              ),
-              child: Text('${r.unlinkedCostItems} 项未入账',
-                  style: TextStyle(
-                      fontSize: AppFontSizes.caption - 2,
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onErrorContainer)),
-            ),
-        ]),
-        const SizedBox(height: Spacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            cell('计划（CNY）', r.plannedCents, null),
-            cell('实际', r.actualCents, null),
-            cell(diff > 0 ? '超支' : (diff < 0 ? '结余' : '持平'), diff,
-                diff > 0 ? scheme.error : scheme.primary),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// 行程概览：默认「缩略」成一行要点（天数 / 安排数 / 费用合计），
-/// 点开头才展示天气 / 清单 / 计划 vs 实际 全貌 —— 缩略 ≠ 隐藏。
-/// 选中具体某天时（showAll=false）只显示当天的一行速览。
-class _OverviewCard extends StatelessWidget {
-  const _OverviewCard({
-    required this.trip,
-    required this.items,
-    required this.bills,
-    required this.ensureWeather,
-    required this.tripId,
-    required this.showAll,
-    required this.selectedDay,
-    required this.expanded,
-    required this.onToggle,
-  });
-
-  final Trip trip;
-  final List<TripItem> items;
-  final List<Expense> bills;
-  final Future<List<WeatherDay>?> Function(Trip, List<TripItem>) ensureWeather;
-  final String tripId;
-
-  /// 是否处于「总览」态（横向选择栏首项）；false 表示只看某一天，概览精简
-  final bool showAll;
-
-  /// 当前选中的天（总览态为 null）
-  final int? selectedDay;
-
-  /// 总览态下是否展开全貌（默认缩略成一行要点）
-  final bool expanded;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    // 缩略态的一行要点：行程总览的「骨架信息」，绝不因缩略而消失
-    final dayCount = tripTotalDays(trip.startEpochDay, trip.endEpochDay);
-    var planCost = 0;
-    for (final it in items) {
-      if (it.costCents != null && it.costCurrency == 'CNY') {
-        planCost += it.costCents!;
-      }
-    }
-    final summaryParts = <String>[
-      '共 $dayCount 天',
-      '${items.length} 个安排',
-      if (planCost > 0) '计划 ¥${MoneyFormat.fenToYuan(planCost)}',
-    ];
-
-    return SectionCard(
-      padding: const EdgeInsets.fromLTRB(Spacing.lg, Spacing.md, Spacing.lg, Spacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 可点开的头部：总览主题 + 一行要点 + 展开/收起指示
-          InkWell(
-            onTap: showAll ? onToggle : null,
-            borderRadius: AppRadius.input,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  Text(
-                    showAll ? '行程概览' : '这一天',
-                    style: TextStyle(
-                        fontSize: AppFontSizes.body, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(width: Spacing.sm),
-                  if (!showAll)
-                    Text(
-                      _dayCaption(trip),
-                      style: TextStyle(
-                          fontSize: AppFontSizes.caption,
-                          color: scheme.onSurfaceVariant),
-                    )
-                  else
-                    Expanded(
-                      child: Text(
-                        summaryParts.join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: AppFontSizes.caption,
-                            color: scheme.onSurfaceVariant),
-                      ),
-                    ),
-                  if (showAll) ...[
-                    const SizedBox(width: Spacing.sm),
-                    AnimatedRotation(
-                      turns: expanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 180),
-                      child: Icon(Icons.keyboard_arrow_down_rounded,
-                          size: 20, color: scheme.onSurfaceVariant),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          if (!showAll)
-            _DayMiniSummary(items: items, day: selectedDay)
-          else if (expanded) ...[
-            const SizedBox(height: Spacing.sm),
-            _WeatherStrip(trip: trip, items: items, ensureWeather: ensureWeather),
-            const SizedBox(height: Spacing.md),
-            const Divider(height: 1),
-            const SizedBox(height: Spacing.sm),
-            _ChecklistEntryCard(tripId: tripId),
-            const SizedBox(height: Spacing.md),
-            const Divider(height: 1),
-            const SizedBox(height: Spacing.sm),
-            // S8 口径：备胎不参与「计划 vs 实际」计划侧汇总
-            _PlanActualCard(
-                trip: trip,
-                items:
-                    items.where((e) => e.backupOf == null).toList(),
-                bills: bills),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _dayCaption(Trip trip) {
-    final d = selectedDay;
-    if (d == null) return '';
-    return 'D${d - trip.startEpochDay + 1} · ${cnFullDate(d)}';
-  }
-}
-
-/// 「这一天」速览卡：当天安排数与计划费用的一行小结（缩略而不隐藏）
-class _DayMiniSummary extends StatelessWidget {
-  const _DayMiniSummary({required this.items, this.day});
-
-  final List<TripItem> items;
-
-  /// 选中的那天（epochDay）
-  final int? day;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    var count = 0;
-    var cost = 0;
-    for (final it in items) {
-      if (day != null && it.dateEpochDay != day) continue;
-      if (it.costCents != null && it.costCurrency == 'CNY') cost += it.costCents!;
-      count++;
-    }
-    return Padding(
-      padding: const EdgeInsets.only(top: Spacing.xs),
-      child: Text(
-        '$count 个安排' +
-            (cost > 0 ? ' · 计划 ¥${MoneyFormat.fenToYuan(cost)}' : ''),
-        style: TextStyle(
-            fontSize: AppFontSizes.caption, color: scheme.onSurfaceVariant),
-      ),
-    );
-  }
-}
-
 /// 横向滑动日期选择栏：最前固定「总览」，后面每一天一个胶囊；选中某天只看当天。
 class _DayPicker extends StatelessWidget {
   const _DayPicker({
@@ -2414,13 +2030,14 @@ class _DetailDock extends StatelessWidget {
               for (var i = 0; i < 2; i++)
                 Expanded(
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
+                    // V2.9.0：分段按钮圆角收敛 AppRadius.button
+                    borderRadius: AppRadius.button,
                     onTap: () => onChanged(i),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 9),
                       decoration: BoxDecoration(
                         color: index == i ? scheme.primary : Colors.transparent,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: AppRadius.button,
                       ),
                       child: Text(
                         i == 0 ? '时间线' : '攻略',
@@ -2596,11 +2213,14 @@ class _HeaderPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        // V2.8.3.1：封面签条统一走 GlassTokens
-        color: Colors.white.withValues(alpha: GlassTokens.coverPillFillAlpha),
+        // V2.8.3.1：封面签条统一走 GlassTokens；
+        // V2.9.0：封面白就地收敛 CoverGradients.onCover 令牌
+        color: CoverGradients.onCover
+            .withValues(alpha: GlassTokens.coverPillFillAlpha),
         borderRadius: AppRadius.capsule,
         border: Border.all(
-            color: Colors.white.withValues(alpha: GlassTokens.coverPillBorderAlpha)),
+            color: CoverGradients.onCover
+                .withValues(alpha: GlassTokens.coverPillBorderAlpha)),
       ),
       child: Text(text,
           style: TextStyle(
@@ -2608,75 +2228,6 @@ class _HeaderPill extends StatelessWidget {
               fontWeight: FontWeight.w700,
               fontFeatures: AppTextStyles.tabularFigures,
               color: CoverGradients.onCover)),
-    );
-  }
-}
-
-/// 移动安排到某天的日期列表抽屉
-class _DayPickSheet extends StatelessWidget {
-  const _DayPickSheet({
-    required this.startDay,
-    required this.endDay,
-    required this.onPicked,
-  });
-
-  final int startDay;
-  final int endDay;
-  final ValueChanged<int> onPicked;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding:
-          const EdgeInsets.fromLTRB(Spacing.xl, Spacing.sm, Spacing.xl, Spacing.xl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('移动到哪一天？',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: Spacing.md),
-          Flexible(
-            child: ListView.builder(
-              itemCount: endDay - startDay + 1,
-              itemBuilder: (context, i) {
-                final day = startDay + i;
-                final isCurrent = false;
-                return ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: AppRadius.input),
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: scheme.primaryContainer.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text('D$i',
-                        style: TextStyle(
-                            fontSize: AppFontSizes.caption - 1,
-                            fontWeight: FontWeight.w800,
-                            color: scheme.onPrimaryContainer)),
-                  ),
-                  title: Text(cnFullDate(day)),
-                  trailing: isCurrent
-                      ? Icon(Icons.check_rounded,
-                          size: 18, color: scheme.primary)
-                      : null,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    onPicked(day);
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -248,9 +248,11 @@ void main() {
           src.contains('rawDay.clamp(trip.startEpochDay, trip.endEpochDay)'),
           isTrue,
           reason: '落库前必须把天数夹取在行程区间内');
-      // 弹层回传 (epochDay, dayNo, slot) 三元组
-      expect(src.contains('showModalBottomSheet<(int, int, int)>'), isTrue);
-      expect(src.contains('Navigator.pop(context, (day, dayNo, slot))'), isTrue);
+      // V2.9.0：选天换装统一组件 day_pick_sheet（showDraggableSheet<int>，
+      // 回传 epochDay），时段由 _slotPicker 二级弹层 —— 行为要点不变：
+      // 提示仍是 1 基天号、落库前 clamp 行程区间。
+      expect(src.contains('showDraggableSheet<int>'), isTrue);
+      expect(src.contains('day_pick_sheet.dart'), isTrue);
     });
 
     test('15. 我的页移除「账本工具箱」入口', () {
